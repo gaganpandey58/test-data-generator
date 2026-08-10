@@ -24,8 +24,9 @@ class EntityConfig:
     """Describe one fully resolved enabled-entity generation request.
 
     Attributes:
-        name: Supported entity identifier, such as ``member`` or
-            ``claim_professional``.
+        name: Internal entity identifier, such as ``member`` or
+            ``claim_professional``. Claim stream names are derived from the
+            public ``claims.professional`` and ``claims.institutional`` keys.
         count: Exact number of rows the entity must emit.
         scenarios: Immutable-by-convention mapping of variation quantities.
         profile: GDF source-layout profile applied to generated records.
@@ -128,11 +129,10 @@ def load_config(path: Path) -> RunConfig:
 def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     """Expand the short root entity form into the detailed internal form.
 
-    The public short form keeps a run focused on the only values people usually
-    change: each selected entity's count and scenarios.  The detailed
-    ``entities`` form remains supported when a caller needs to explicitly
-    enable or disable a known entity. Source profile, schema, module, and
-    output filename are always internal defaults.
+    The public form keeps a run focused on the only values people usually
+    change: each selected entity's count and scenarios. Professional and
+    institutional claims are grouped under one ``claims`` object. Source
+    profile, schema, module, and output filename are always internal defaults.
 
     Args:
         raw_config: Schema-valid decoded root configuration.
@@ -142,16 +142,25 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         entity, including disabled entities that need stale-output cleanup.
     """
     defaults = _entity_defaults()
-    supplied_entities = raw_config.get("entities")
-    if isinstance(supplied_entities, dict):
-        entities = {name: {**defaults[name], **value} for name, value in supplied_entities.items()}
-        for name, default in defaults.items():
-            entities.setdefault(name, default)
-    else:
-        entities = {
-            name: {**default, "enabled": name in raw_config, **raw_config.get(name, {})}
-            for name, default in defaults.items()
-        }
+    entities = {name: dict(default) for name, default in defaults.items()}
+    for name in ("provider", "member"):
+        value = raw_config.get(name)
+        if isinstance(value, dict):
+            entities[name] = {**entities[name], "enabled": True, **value}
+
+    claims = raw_config.get("claims")
+    if isinstance(claims, dict):
+        for stream, entity_name in (
+            ("professional", "claim_professional"),
+            ("institutional", "claim_institutional"),
+        ):
+            value = claims.get(stream)
+            if isinstance(value, dict):
+                entities[entity_name] = {
+                    **entities[entity_name],
+                    "enabled": True,
+                    **value,
+                }
     return {
         "seed": raw_config.get("seed", 20260805),
         "output_directory": raw_config.get("output_directory", "./output"),
@@ -195,7 +204,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "count": 0,
             "profile": "claim-professional",
             "scenarios": {},
-            "schema": str(schema_root / "claim/claim-professional.schema.json"),
+            "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "healthcare_test_data.entities.claim",
             "filename": "professional-claims.jsonl",
         },
@@ -204,7 +213,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "count": 0,
             "profile": "claim-institutional",
             "scenarios": {},
-            "schema": str(schema_root / "claim/claim-institutional.schema.json"),
+            "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "healthcare_test_data.entities.claim",
             "filename": "institutional-claims.jsonl",
         },
@@ -355,19 +364,18 @@ def _validate_claim_relationships(entities: list[EntityConfig]) -> None:
 
 
 def _reject_legacy_claim_config(raw_config: Mapping[str, object]) -> None:
-    """Reject the former mixed-claim key with a direct migration message.
+    """Reject retired claim configuration keys with a direct migration message.
 
     Args:
         raw_config: Decoded root configuration before JSON Schema validation.
 
     Raises:
-        ConfigurationError: If the retired ``claim`` entity key is present.
+        ConfigurationError: If a retired claim or detailed-entity key is present.
     """
-    entities = raw_config.get("entities")
-    if "claim" in raw_config or (isinstance(entities, Mapping) and "claim" in entities):
+    retired = {"claim", "claim_professional", "claim_institutional", "entities"}
+    if retired & set(raw_config):
         raise ConfigurationError(
-            "Entity 'claim' is no longer supported; use 'claim_professional' "
-            "and/or 'claim_institutional'."
+            "Use 'claims.professional' and/or 'claims.institutional' for claim generation."
         )
 
 

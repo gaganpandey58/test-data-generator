@@ -9,30 +9,32 @@
     "count": 10,
     "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1}
   },
-  "claim_professional": {
-    "count": 10,
-    "scenarios": {
-      "new": 1,
-      "changed": 1,
-      "duplicate": 1,
-      "stale": 1,
-      "incomplete": 1,
-      "replacement": 1,
-      "void": 1,
-      "orphan_payment": 1
-    }
-  },
-  "claim_institutional": {
-    "count": 10,
-    "scenarios": {
-      "new": 1,
-      "changed": 1,
-      "duplicate": 1,
-      "stale": 1,
-      "incomplete": 1,
-      "replacement": 1,
-      "void": 1,
-      "orphan_payment": 1
+  "claims": {
+    "professional": {
+      "count": 10,
+      "scenarios": {
+        "new": 1,
+        "changed": 1,
+        "duplicate": 1,
+        "stale": 1,
+        "incomplete": 1,
+        "replacement": 1,
+        "void": 1,
+        "orphan_payment": 1
+      }
+    },
+    "institutional": {
+      "count": 10,
+      "scenarios": {
+        "new": 1,
+        "changed": 1,
+        "duplicate": 1,
+        "stale": 1,
+        "incomplete": 1,
+        "replacement": 1,
+        "void": 1,
+        "orphan_payment": 1
+      }
     }
   }
 }

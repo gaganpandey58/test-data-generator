@@ -80,16 +80,14 @@ The command prints the record count and final path for every enabled entity.
 
 ## Configuration
 
-`generator.config.json` is the only file you normally edit. The generator has
-two equally valid configuration styles:
-
-1. **Short form** for the common case: select entities, counts, and scenarios.
-2. **Detailed form** when you need to explicitly enable or disable entries.
+`generator.config.json` is the only file you normally edit. Add the entity or
+claim stream you want to generate, then set its exact `count` and optional
+scenario quantities. Omit it to skip it.
 
 `schema` and `module` are intentionally not configuration options. The
 generator selects the appropriate checked-in schema, entity implementation,
-layout, and output filename internally for `provider`, `member`,
-`claim_professional`, and `claim_institutional`.
+layout, and output filename internally. Claims stay in one `claims` object,
+but professional and institutional rows are still written to separate files.
 
 ### Minimal configuration
 
@@ -113,46 +111,6 @@ the other five are ordinary baseline records.
 
 In short form, omit an entity to skip it. `seed` defaults to `20260805`,
 `output_directory` defaults to `./output`, and default filenames are used.
-
-### Detailed configuration
-
-Use the `entities` form to explicitly enable or disable known entities. Output
-filenames and layouts are intentionally fixed so each entity always has the
-correct source shape.
-
-```json
-{
-  "seed": 20260805,
-  "output_directory": "./output",
-  "entities": {
-    "provider": {
-      "enabled": true,
-      "count": 10,
-      "scenarios": {"new": 1, "changed": 1}
-    },
-    "member": {
-      "enabled": true,
-      "count": 10,
-      "scenarios": {"duplicate": 1, "incomplete": 1}
-    },
-    "claim_institutional": {
-      "enabled": true,
-      "count": 20,
-      "scenarios": {
-        "changed": 1,
-        "replacement": 1,
-        "void": 1,
-        "orphan_payment": 1
-      }
-    }
-  }
-}
-```
-
-In detailed form, `enabled` and `count` are required for every listed entity.
-An entity marked `enabled: false` is skipped. The fixed output filenames are
-`providers.jsonl`, `members.jsonl`, `professional-claims.jsonl`, and
-`institutional-claims.jsonl`.
 
 ### Counts and scenario quantities
 
@@ -200,12 +158,24 @@ seed to generate a different, still deterministic, set of synthetic values.
 
 ### Claim entity selection
 
-Claims are two independently configurable entities. Use
-`claim_professional` to generate professional claims and
-`claim_institutional` to generate institutional claims. They may be enabled
-together or separately, and each gets its own fixed layout and JSONL file.
-The retired `claim` key is rejected with a migration message rather than
-silently choosing a claim type.
+Claims use one simple top-level object. Add `professional`, `institutional`,
+or both beneath `claims`; each contains only `count` and optional `scenarios`.
+They are generated separately into their fixed source-shaped JSONL files.
+
+```json
+{
+  "provider": {"count": 10},
+  "member": {"count": 10},
+  "claims": {
+    "professional": {"count": 10, "scenarios": {"replacement": 1}},
+    "institutional": {"count": 10, "scenarios": {"void": 1}}
+  }
+}
+```
+
+The old `claim`, `claim_professional`, `claim_institutional`, and `entities`
+keys are rejected. Use `claims.professional` and/or `claims.institutional`
+instead.
 
 ## Scenario variations
 

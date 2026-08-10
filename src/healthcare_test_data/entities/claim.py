@@ -6,13 +6,17 @@ records, contains its line-level detail and payment fields in the same JSON
 object, and applies configured claim scenarios to copied baseline rows.
 """
 
+import json
 from collections.abc import Mapping
 from datetime import date, timedelta
+from functools import lru_cache
+from pathlib import Path
 from random import Random
-from uuid import UUID, uuid5
+from typing import cast
 
 from healthcare_test_data.entities.member import generate_record as generate_member
 from healthcare_test_data.entities.provider import generate_record as generate_provider
+from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
 from healthcare_test_data.scenarios import Scenario, plan
 
@@ -52,7 +56,9 @@ def generate_record(
             entity_scenarios=entity_scenarios,
             entity_name=entity_name,
         )
-        return _mutate(baseline, scenario)
+        mutated = _mutate(baseline, scenario)
+        _hydrate_sample_shape(mutated, _claim_type(index, profile))
+        return mutated
 
     randomizer = Random(_record_seed(seed, index))
     member = _linked_member(seed, index, entity_counts, entity_scenarios)
@@ -158,6 +164,7 @@ def generate_record(
     if isinstance(address, Mapping):
         record["CH_PATIENT_ZIP"] = address.get("CM_MEMBER_ZIP", "")
     _remove_profile_exclusions(record, claim_type)
+    _hydrate_sample_shape(record, claim_type)
     return record
 
 
@@ -190,10 +197,7 @@ def _mutate(baseline: dict[str, object], scenario: Scenario) -> dict[str, object
         record["CH_CLAIM_PAID_DATE"] = "20250804"
         record["CH_CHECK_DATE"] = "20250804"
     elif scenario.name == "incomplete":
-        record.pop("CH_SUBSCRIBER_SSN", None)
-        record.pop("CH_REFERRING_PROVIDER_NPI", None)
-        record.pop("CH_PATIENT_ACCOUNT_CONTROL_NUMBER", None)
-        record.pop("CH_PATIENT_ZIP", None)
+        _blank_incomplete_fields(record)
     elif scenario.name == "replacement":
         record["CH_CLIENT_CLAIM_UNIQUE_ID"] = f"{record['CH_CLIENT_CLAIM_UNIQUE_ID']}-R2"
         record["CH_CLIENT_CLAIM_ID"] = f"{record['CH_CLIENT_CLAIM_ID']}-R2"
@@ -407,6 +411,176 @@ def _remove_profile_exclusions(record: dict[str, object], claim_type: str) -> No
             line.pop(field, None)
 
 
+def _hydrate_sample_shape(record: dict[str, object], claim_type: str) -> None:
+    """Add every field represented by the matching supplied EIP claim sample.
+
+    The source samples define the transport envelope consumers expect, but the
+    generator must never repeat the sample's member, provider, claim, or money
+    values.  This helper reads only each field's JSON value *type*, preserves
+    values generated above, and fills absent fields with an empty value of the
+    same type.  It is deliberately applied after profile exclusions because
+    the institutional sample includes a broader legacy envelope than the
+    compact GDF profile.
+
+    Args:
+        record: Synthetic claim envelope ready for source-shape completion.
+        claim_type: ``P`` for professional or ``O`` for institutional.
+
+    Raises:
+        AssertionError: If the generated claim has no dictionary detail row.
+    """
+    sample = dict(_sample_shape("P" if claim_type == "P" else "I"))
+    details = record["CLAIM_DETAIL"]
+    assert isinstance(details, list) and details and isinstance(details[0], dict)
+    sample_detail = sample.pop("CLAIM_DETAIL")
+    assert isinstance(sample_detail, list) and sample_detail and isinstance(sample_detail[0], dict)
+    for field, sample_value in sample.items():
+        record.setdefault(field, _empty_like(sample_value))
+    for field, sample_value in sample_detail[0].items():
+        details[0].setdefault(field, _empty_like(sample_value))
+    _coerce_sample_types(record, sample, sample_detail[0])
+
+
+def _blank_incomplete_fields(record: dict[str, object]) -> None:
+    """Represent omitted optional claim values without removing sample fields.
+
+    EIP files retain their header columns for incomplete rows. The selected
+    profile sample controls whether the source empty value is a string or a
+    numeric zero, so the variation remains structurally identical to its
+    baseline while intentionally failing a populated matching composite.
+
+    Args:
+        record: Claim record being converted to the incomplete scenario.
+
+    Raises:
+        AssertionError: If the claim type does not identify a supported sample.
+    """
+    claim_type = record.get("CH_CLAIM_TYPE")
+    sample_type = "P" if claim_type == "P" else "I" if claim_type == "O" else None
+    assert sample_type is not None
+    sample = _sample_shape(sample_type)
+    for field in (
+        "CH_SUBSCRIBER_SSN",
+        "CH_REFERRING_PROVIDER_NPI",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+        "CH_PATIENT_ZIP",
+    ):
+        if field in sample:
+            record[field] = _empty_like(sample[field])
+
+
+def _coerce_sample_types(
+    record: dict[str, object], sample: Mapping[str, object], sample_detail: Mapping[str, object]
+) -> None:
+    """Coerce populated source fields to the JSON types used by EIP samples.
+
+    GDF layouts describe field meaning and lengths, while the supplied EIP
+    payloads define the wire-level JSON type.  Some values such as NPI, ZIP,
+    control numbers, and monetary amounts intentionally differ by the 837P
+    and 837I sample.  This final normalization keeps generated values and
+    scenarios intact while making their serialized type match the selected
+    source stream exactly.
+
+    Args:
+        record: Generated claim envelope after sample-shape completion.
+        sample: Matching EIP claim root sample, keyed by field name.
+        sample_detail: First matching EIP claim-detail row, keyed by field.
+
+    Raises:
+        AssertionError: If the generated claim has no dictionary detail row.
+    """
+    for field, sample_value in sample.items():
+        if field in record:
+            record[field] = _coerce_like(record[field], sample_value)
+    details = record["CLAIM_DETAIL"]
+    assert isinstance(details, list) and details and isinstance(details[0], dict)
+    for field, sample_value in sample_detail.items():
+        if field in details[0]:
+            details[0][field] = _coerce_like(details[0][field], sample_value)
+
+
+def _coerce_like(value: object, sample_value: object) -> object:
+    """Return ``value`` represented with the source sample's JSON type.
+
+    Args:
+        value: Synthetic source value to preserve.
+        sample_value: Reference value used only for its JSON type.
+
+    Returns:
+        The original semantic value with the corresponding EIP JSON type.
+    """
+    if sample_value is None:
+        return None
+    if isinstance(sample_value, bool):
+        return bool(value)
+    if isinstance(sample_value, int):
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int | float):
+            return int(round(value))
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+        return 0
+    if isinstance(sample_value, float):
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return float(value)
+        return 0.0
+    if isinstance(sample_value, str):
+        return str(value)
+    if isinstance(sample_value, list):
+        return value if isinstance(value, list) else []
+    if isinstance(sample_value, dict):
+        return value if isinstance(value, dict) else {}
+    raise TypeError(f"Unsupported source JSON value type: {type(sample_value)!r}")
+
+
+@lru_cache(maxsize=2)
+def _sample_shape(profile_code: str) -> dict[str, object]:
+    """Load the checked-in source shape without reusing any source data values.
+
+    Keeping the field inventory adjacent to its provided EIP sample prevents a
+    second, manually maintained list of hundreds of institutional fields from
+    drifting.  Callers receive a copied JSON object and use it only to infer
+    keys and JSON types; generated content always comes from this module.
+
+    Args:
+        profile_code: ``P`` or ``I`` EIP claim sample identifier.
+
+    Returns:
+        Parsed source-shape mapping for the requested profile.
+    """
+    root = Path(__file__).resolve().parents[3]
+    path = root / "requirements" / f"claim_sample_data_{profile_code} 2.json"
+    return cast(dict[str, object], json.loads(path.read_text(encoding="utf-8")))
+
+
+def _empty_like(sample_value: object) -> object:
+    """Return a safe synthetic default with the supplied source JSON type.
+
+    Args:
+        sample_value: A value used only to identify the source field's type.
+
+    Returns:
+        Empty string, zero, false, empty collection, or ``None`` matching the
+        source JSON type.  No source value is copied into generated output.
+    """
+    if sample_value is None:
+        return None
+    if isinstance(sample_value, bool):
+        return False
+    if isinstance(sample_value, int):
+        return 0
+    if isinstance(sample_value, float):
+        return 0.0
+    if isinstance(sample_value, str):
+        return ""
+    if isinstance(sample_value, list):
+        return []
+    if isinstance(sample_value, dict):
+        return {}
+    raise TypeError(f"Unsupported source JSON value type: {type(sample_value)!r}")
+
+
 def _transport_headers(
     seed: int,
     index: int,
@@ -457,8 +631,8 @@ def _transport_headers(
         "cotiviti.source_format": f"edi_x12_{file_type}",
         "cotiviti.source_system": "PPC",
         "cotiviti.batch_id": batch,
-        "cotiviti.correlation_id": str(uuid5(UUID(int=seed), f"{namespace}:correlation")),
-        "cotiviti.message_id": str(uuid5(UUID(int=seed), f"{namespace}:message:{sequence}")),
+        "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
+        "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
         "cotiviti.message_seq": sequence,
         "cotiviti.produced_at": f"2026-08-05T00:{index % 60:02d}:00Z",
         "cotiviti.producer_version": "test-data-generator/1",
@@ -470,7 +644,7 @@ def _transport_headers(
         "otherAttributes": _other_attributes(claim_type, sequence),
     }
     if claim_type != "P":
-        headers["ROWID"] = str(uuid5(UUID(int=seed), f"{namespace}:row:{sequence}"))
+        headers["ROWID"] = deterministic_uuid4(seed, f"{namespace}:row:{sequence}")
     return headers
 
 

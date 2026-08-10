@@ -12,6 +12,7 @@ from random import Random
 
 from faker import Faker
 
+from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
 from healthcare_test_data.scenarios import Scenario
 
@@ -120,15 +121,10 @@ def generate_record(
                 )
             ],
             "CP_PROVIDER_NETWORKS": [_network(provider_id, master_id, start, randomizer)],
-            "PAYER_PLATFORM": "CHC-QNXT",
-            "PAYER": "CHC",
-            "INGESTION_DATE": "20260805",
-            "INGESTION_EPOCH": 1785945600 + index,
-            "ROWID": f"ROW{_digits(randomizer, 12)}",
-            "PUBLISHER_NAME": "synthetic_provider_generator",
             "CP_CUSTOM_FIELD_01": "SYNTHETIC",
         }
     )
+    record.update(_transport_headers(seed, index))
     return record
 
 
@@ -172,12 +168,12 @@ def _mutate(baseline: dict[str, object], scenario: Scenario) -> dict[str, object
         address["CP_PROVIDER_ADDRESS_START_DATE"] = "20190101"
     elif scenario.name == "incomplete":
         for field in _OPTIONAL_INCOMPLETE_FIELDS:
-            record.pop(field, None)
+            record[field] = ""
         addresses = record["CP_PROVIDER_ADDRESSES"]
         assert isinstance(addresses, list) and addresses
         address = addresses[0]
         assert isinstance(address, dict)
-        address.pop("CP_PROVIDER_ADDRESS_01", None)
+        address["CP_PROVIDER_ADDRESS_01"] = ""
     return record
 
 
@@ -265,6 +261,51 @@ def _network(provider_id: str, master_id: str, start: str, randomizer: Random) -
         }
     )
     return fields
+
+
+def _transport_headers(seed: int, index: int) -> dict[str, object]:
+    """Build the flattened Cotiviti envelope used by EIP provider samples.
+
+    Provider roster samples carry their EIP transport and GDF ingestion
+    attributes at the root of the provider record. Deterministic UUIDv4-format
+    identifiers preserve the source wire format without copying sample values.
+
+    Args:
+        seed: Shared deterministic generation seed.
+        index: Stable zero-based provider output position.
+
+    Returns:
+        Source-compatible Cotiviti and ingestion attributes for one provider.
+    """
+    sequence = index + 1
+    namespace = "provider"
+    return {
+        "cotiviti.dataset_id": "provider",
+        "cotiviti.tenant_id": "tnt_ppc_synthetic",
+        "cotiviti.schema_version": "gdf-ppc-v1",
+        "cotiviti.client_id": "synthetic.health.payer",
+        "cotiviti.client_system": "synthetic.health.payer",
+        "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
+        "cotiviti.produced_at": f"2026-08-05T00:{index % 60:02d}:00Z",
+        "cotiviti.source_format": "provider_roster",
+        "cotiviti.source_system": "PPC",
+        "cotiviti.batch_id": f"synthetic-provider-{seed}-{sequence:06d}",
+        "cotiviti.message_seq": sequence,
+        "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
+        "cotiviti.source.raw_file_ref": f"providers-{seed}-{sequence:06d}.csv",
+        "ROWID": deterministic_uuid4(seed, f"{namespace}:row:{sequence}"),
+        "PAYER": "CHC",
+        "PAYER_PLATFORM": "CHC-QNXT",
+        "CLIENT_DATA_PLATFORM": "QNXT",
+        "PUBLISHER_NAME": "client_provider_gdf",
+        "PRODUCT": "PPC",
+        "GDF_VERSION": "gdf-ppc-v1",
+        "FILE_TYPE": "PR",
+        "DATA_CATEGORY": "provider",
+        "LOB": "tnt_ppc_synthetic",
+        "INGESTION_DATE": "20260805",
+        "INGESTION_EPOCH": 1785888000 + sequence,
+    }
 
 
 def _copy_record(record: dict[str, object]) -> dict[str, object]:
