@@ -24,7 +24,8 @@ class EntityConfig:
     """Describe one fully resolved enabled-entity generation request.
 
     Attributes:
-        name: Supported entity identifier, such as ``member`` or ``claim``.
+        name: Supported entity identifier, such as ``member`` or
+            ``claim_professional``.
         count: Exact number of rows the entity must emit.
         scenarios: Immutable-by-convention mapping of variation quantities.
         profile: GDF source-layout profile applied to generated records.
@@ -75,6 +76,7 @@ def load_config(path: Path) -> RunConfig:
     """
     config_path = path.resolve()
     raw_config = _load_json(config_path, "configuration")
+    _reject_legacy_claim_config(raw_config)
     _validate_schema(raw_config)
     raw_config = _normalize_config(raw_config)
     try:
@@ -91,11 +93,11 @@ def load_config(path: Path) -> RunConfig:
             _validate_filename(name, raw_entity["filename"], output_directory)
             disabled_filenames.append(raw_entity["filename"])
             continue
-        profile = raw_entity.get("profile", "claim-professional" if name == "claim" else name)
+        profile = raw_entity["profile"]
         _validate_profile(name, profile)
         scenarios = raw_entity.get("scenarios", {})
         _validate_scenarios(name, scenarios, raw_entity["count"])
-        schema = _resolve_path(raw_entity["schema"], config_path.parent)
+        schema = Path(str(raw_entity["schema"]))
         if not schema.is_file():
             raise ConfigurationError(
                 f"Enabled entity {name!r} references missing schema file {schema}"
@@ -114,6 +116,7 @@ def load_config(path: Path) -> RunConfig:
             )
         )
     _validate_unique_filenames(entities)
+    _validate_claim_relationships(entities)
     return RunConfig(
         seed=seed,
         output_directory=output_directory,
@@ -127,7 +130,9 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
 
     The public short form keeps a run focused on the only values people usually
     change: each selected entity's count and scenarios.  The detailed
-    ``entities`` form remains supported for output filenames and profiles.
+    ``entities`` form remains supported when a caller needs to explicitly
+    enable or disable a known entity. Source profile, schema, module, and
+    output filename are always internal defaults.
 
     Args:
         raw_config: Schema-valid decoded root configuration.
@@ -185,14 +190,23 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "module": "healthcare_test_data.entities.member",
             "filename": "members.jsonl",
         },
-        "claim": {
+        "claim_professional": {
             "enabled": False,
             "count": 0,
             "profile": "claim-professional",
             "scenarios": {},
-            "schema": str(schema_root / "claim/claim.schema.json"),
+            "schema": str(schema_root / "claim/claim-professional.schema.json"),
             "module": "healthcare_test_data.entities.claim",
-            "filename": "claims.jsonl",
+            "filename": "professional-claims.jsonl",
+        },
+        "claim_institutional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-institutional",
+            "scenarios": {},
+            "schema": str(schema_root / "claim/claim-institutional.schema.json"),
+            "module": "healthcare_test_data.entities.claim",
+            "filename": "institutional-claims.jsonl",
         },
     }
 
@@ -241,7 +255,8 @@ def _validate_profile(entity: str, profile: object) -> None:
     permitted_profiles = {
         "provider": frozenset({"provider"}),
         "member": frozenset({"member"}),
-        "claim": frozenset({"claim-professional", "claim-institutional"}),
+        "claim_professional": frozenset({"claim-professional"}),
+        "claim_institutional": frozenset({"claim-institutional"}),
     }
     if not isinstance(profile, str) or profile not in available_profiles():
         raise ConfigurationError(f"Enabled entity {entity!r} uses an unknown layout profile")
@@ -271,7 +286,19 @@ def _validate_scenarios(entity: str, scenarios: object, count: int) -> None:
     supported_scenarios = {
         "provider": frozenset({"new", "changed", "duplicate", "stale", "incomplete"}),
         "member": frozenset({"new", "changed", "duplicate", "stale", "incomplete"}),
-        "claim": frozenset(
+        "claim_professional": frozenset(
+            {
+                "new",
+                "changed",
+                "duplicate",
+                "stale",
+                "incomplete",
+                "replacement",
+                "void",
+                "orphan_payment",
+            }
+        ),
+        "claim_institutional": frozenset(
             {
                 "new",
                 "changed",
@@ -319,9 +346,28 @@ def _validate_claim_relationships(entities: list[EntityConfig]) -> None:
         ConfigurationError: If enabled claims would reference an absent entity.
     """
     enabled_names = {entity.name for entity in entities}
-    if "claim" in enabled_names and not {"member", "provider"} <= enabled_names:
+    claim_entities = {"claim_professional", "claim_institutional"}
+    if enabled_names & claim_entities and not {"member", "provider"} <= enabled_names:
         raise ConfigurationError(
-            "Enabled claim generation requires enabled member and provider entities"
+            "Enabled professional or institutional claim generation requires "
+            "enabled member and provider entities"
+        )
+
+
+def _reject_legacy_claim_config(raw_config: Mapping[str, object]) -> None:
+    """Reject the former mixed-claim key with a direct migration message.
+
+    Args:
+        raw_config: Decoded root configuration before JSON Schema validation.
+
+    Raises:
+        ConfigurationError: If the retired ``claim`` entity key is present.
+    """
+    entities = raw_config.get("entities")
+    if "claim" in raw_config or (isinstance(entities, Mapping) and "claim" in entities):
+        raise ConfigurationError(
+            "Entity 'claim' is no longer supported; use 'claim_professional' "
+            "and/or 'claim_institutional'."
         )
 
 

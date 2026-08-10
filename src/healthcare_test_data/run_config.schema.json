@@ -7,14 +7,16 @@
     {"required": ["entities"]},
     {"required": ["provider"]},
     {"required": ["member"]},
-    {"required": ["claim"]}
+    {"required": ["claim_professional"]},
+    {"required": ["claim_institutional"]}
   ],
   "properties": {
     "seed": {"type": "integer"},
     "output_directory": {"type": "string", "minLength": 1},
     "provider": {"$ref": "#/$defs/shortEntity"},
     "member": {"$ref": "#/$defs/shortEntity"},
-    "claim": {"$ref": "#/$defs/shortEntity"},
+    "claim_professional": {"$ref": "#/$defs/shortEntity"},
+    "claim_institutional": {"$ref": "#/$defs/shortEntity"},
     "entities": {
       "type": "object",
       "minProperties": 1,
@@ -22,7 +24,8 @@
       "properties": {
         "provider": {"$ref": "#/$defs/detailedEntity"},
         "member": {"$ref": "#/$defs/detailedEntity"},
-        "claim": {"$ref": "#/$defs/detailedEntity"}
+        "claim_professional": {"$ref": "#/$defs/detailedEntity"},
+        "claim_institutional": {"$ref": "#/$defs/detailedEntity"}
       }
     }
   },
@@ -42,16 +45,14 @@
     "detailedEntity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "count", "filename"],
+      "required": ["enabled", "count"],
       "properties": {
         "enabled": {"type": "boolean"},
         "count": {"type": "integer", "minimum": 0},
-        "profile": {"type": "string", "minLength": 1},
         "scenarios": {
           "type": "object",
           "additionalProperties": {"type": "integer", "minimum": 0}
-        },
-        "filename": {"type": "string", "pattern": "\\.jsonl$"}
+        }
       },
       "allOf": [
         {

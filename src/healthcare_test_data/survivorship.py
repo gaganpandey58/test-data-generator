@@ -282,12 +282,14 @@ def _claim_profile(record: Mapping[str, object]) -> str | None:
 
     Returns:
         ``"professional"`` for type ``P``, ``"institutional"`` for type
-        ``I``, or ``None`` when no supported type is present.
+        ``O``, or ``None`` when no supported type is present.  The Cotiviti
+        institutional sample labels the claim class ``O`` while its transport
+        header uses ``FILE_TYPE: 837I``.
     """
     claim_type = record.get("CH_CLAIM_TYPE")
     if claim_type == "P":
         return "professional"
-    if claim_type == "I":
+    if claim_type in {"I", "O"}:
         return "institutional"
     return None
 

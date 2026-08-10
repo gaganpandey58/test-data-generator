@@ -1,36 +1,38 @@
 {
   "seed": 20260805,
   "output_directory": "./output",
-  "entities": {
-    "provider": {
-      "enabled": true,
-      "count": 10,
-      "profile": "provider",
-      "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1},
-      "filename": "providers.jsonl"
-    },
-    "member": {
-      "enabled": true,
-      "count": 10,
-      "profile": "member",
-      "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1},
-      "filename": "members.jsonl"
-    },
-    "claim": {
-      "enabled": true,
-      "count": 20,
-      "profile": "claim-professional",
-      "scenarios": {
-        "new": 1,
-        "changed": 1,
-        "duplicate": 1,
-        "stale": 1,
-        "incomplete": 1,
-        "replacement": 1,
-        "void": 1,
-        "orphan_payment": 1
-      },
-      "filename": "claims.jsonl"
+  "provider": {
+    "count": 10,
+    "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1}
+  },
+  "member": {
+    "count": 10,
+    "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1}
+  },
+  "claim_professional": {
+    "count": 10,
+    "scenarios": {
+      "new": 1,
+      "changed": 1,
+      "duplicate": 1,
+      "stale": 1,
+      "incomplete": 1,
+      "replacement": 1,
+      "void": 1,
+      "orphan_payment": 1
+    }
+  },
+  "claim_institutional": {
+    "count": 10,
+    "scenarios": {
+      "new": 1,
+      "changed": 1,
+      "duplicate": 1,
+      "stale": 1,
+      "incomplete": 1,
+      "replacement": 1,
+      "void": 1,
+      "orphan_payment": 1
     }
   }
 }

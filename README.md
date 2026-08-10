@@ -1,7 +1,8 @@
-# Healthcare Test Data Generator
+# Test Data Generator
 
 Generate deterministic, synthetic healthcare source data as JSON Lines (JSONL).
-The generator creates provider, member, and medical-claim records whose fields
+The generator creates provider, member, professional-claim, and
+institutional-claim records whose fields
 follow the checked-in GDF-derived layouts. It is intended for development,
 integration, and data-processing exercises where realistic field shapes,
 relationships, and non-happy-path variations are useful, without using real
@@ -17,7 +18,8 @@ the requested entity data files.
 | --- | --- | --- |
 | Provider | `providers.jsonl` | Provider identity, NPI/TIN, address, and network groups. |
 | Member | `members.jsonl` | Member/subscriber identity, address, enrollment, and PCP provider link. |
-| Claim | `claims.jsonl` | Medical-claim header and detail records, with payment amounts embedded in each claim. |
+| Professional claim | `professional-claims.jsonl` | Professional medical-claim header and detail records, with payment amounts embedded in each claim. |
+| Institutional claim | `institutional-claims.jsonl` | Institutional medical-claim header and detail records, with payment amounts embedded in each claim. |
 
 All output is synthetic. No real source record is copied into generated files.
 
@@ -27,7 +29,7 @@ All output is synthetic. No real source record is copied into generated files.
 flowchart TD
     A[Edit generator.config.json] --> B[Run generate command]
     B --> C[Load config and apply internal defaults]
-    C --> D[Validate entity counts, scenarios, profiles, and output names]
+    C --> D[Validate entity counts, scenarios, and required relationships]
     D --> E[Plan baseline and scenario record positions]
     E --> F[Generate deterministic source-shaped records]
     F --> G[Link member PCPs and claims to generated providers and members]
@@ -51,7 +53,7 @@ uv sync --extra dev
 ## Quick start
 
 The checked-in [generator.config.json](generator.config.json) generates all
-three entities. Run:
+four entity streams. Run:
 
 ```sh
 uv run python -m healthcare_test_data generate --config generator.config.json
@@ -70,7 +72,8 @@ the run creates:
 output/
 ├── providers.jsonl
 ├── members.jsonl
-└── claims.jsonl
+├── professional-claims.jsonl
+└── institutional-claims.jsonl
 ```
 
 The command prints the record count and final path for every enabled entity.
@@ -81,12 +84,12 @@ The command prints the record count and final path for every enabled entity.
 two equally valid configuration styles:
 
 1. **Short form** for the common case: select entities, counts, and scenarios.
-2. **Detailed form** when you also need to enable/disable entries explicitly,
-   choose a claim profile, or rename an output file.
+2. **Detailed form** when you need to explicitly enable or disable entries.
 
 `schema` and `module` are intentionally not configuration options. The
-generator selects the appropriate checked-in schema and entity implementation
-internally for `provider`, `member`, and `claim`.
+generator selects the appropriate checked-in schema, entity implementation,
+layout, and output filename internally for `provider`, `member`,
+`claim_professional`, and `claim_institutional`.
 
 ### Minimal configuration
 
@@ -113,8 +116,9 @@ In short form, omit an entity to skip it. `seed` defaults to `20260805`,
 
 ### Detailed configuration
 
-Use the `entities` form to control output filenames, explicitly disable a
-known entity, or select the institutional claim layout.
+Use the `entities` form to explicitly enable or disable known entities. Output
+filenames and layouts are intentionally fixed so each entity always has the
+correct source shape.
 
 ```json
 {
@@ -124,36 +128,31 @@ known entity, or select the institutional claim layout.
     "provider": {
       "enabled": true,
       "count": 10,
-      "profile": "provider",
-      "scenarios": {"new": 1, "changed": 1},
-      "filename": "providers.jsonl"
+      "scenarios": {"new": 1, "changed": 1}
     },
     "member": {
       "enabled": true,
       "count": 10,
-      "profile": "member",
-      "scenarios": {"duplicate": 1, "incomplete": 1},
-      "filename": "members.jsonl"
+      "scenarios": {"duplicate": 1, "incomplete": 1}
     },
-    "claim": {
+    "claim_institutional": {
       "enabled": true,
       "count": 20,
-      "profile": "claim-institutional",
       "scenarios": {
         "changed": 1,
         "replacement": 1,
         "void": 1,
         "orphan_payment": 1
-      },
-      "filename": "institutional-claims.jsonl"
+      }
     }
   }
 }
 ```
 
-In detailed form, `enabled`, `count`, and `filename` are required for every
-listed entity. An entity marked `enabled: false` is skipped. Enabled filenames
-must end in `.jsonl`, be unique, and remain inside `output_directory`.
+In detailed form, `enabled` and `count` are required for every listed entity.
+An entity marked `enabled: false` is skipped. The fixed output filenames are
+`providers.jsonl`, `members.jsonl`, `professional-claims.jsonl`, and
+`institutional-claims.jsonl`.
 
 ### Counts and scenario quantities
 
@@ -199,20 +198,14 @@ Use the same configuration and seed to reproduce the same records. Change the
 seed to generate a different, still deterministic, set of synthetic values.
 `20260805` is simply the repository's default seed value.
 
-### Profiles
+### Claim entity selection
 
-Profiles choose the source-shaped field set used by an entity.
-
-| Entity | Allowed profile | Notes |
-| --- | --- | --- |
-| Provider | `provider` | Provider root, address, and network fields. |
-| Member | `member` | Member root, address, enrollment, and COB fields. |
-| Claim | `claim-professional` | Professional claim fields, including place of service and procedure information. |
-| Claim | `claim-institutional` | Institutional claim fields, including type of bill, admission/discharge, and revenue information. |
-
-Provider and member profiles are fixed to their matching entity. Claim profile
-defaults to `claim-professional`; set `claim-institutional` in detailed form
-when that layout is needed.
+Claims are two independently configurable entities. Use
+`claim_professional` to generate professional claims and
+`claim_institutional` to generate institutional claims. They may be enabled
+together or separately, and each gets its own fixed layout and JSONL file.
+The retired `claim` key is rejected with a migration message rather than
+silently choosing a claim type.
 
 ## Scenario variations
 
@@ -221,22 +214,22 @@ objects. The output does not add a synthetic scenario label.
 
 | Scenario | Supported by | Generated behavior |
 | --- | --- | --- |
-| `new` | Provider, member, claim | An independently generated source record. |
-| `changed` | Provider, member, claim | A baseline record with a newer source update timestamp and changed source fields. |
-| `duplicate` | Provider, member, claim | A second copy of a baseline record. |
-| `stale` | Provider, member, claim | A baseline record with older source/update dates. |
-| `incomplete` | Provider, member, claim | A source-valid record with selected optional identity or contact fields absent. |
-| `replacement` | Claim | A later claim version with original/root claim lineage, adjustment information, and frequency code `7`. |
-| `void` | Claim | A claim variation marked with frequency code `8` and void status. |
-| `orphan_payment` | Claim | A payment-shaped variation whose identifying composite is deliberately changed so it does not match its claim. |
+| `new` | Provider, member, both claim entities | An independently generated source record. |
+| `changed` | Provider, member, both claim entities | A baseline record with a newer source update timestamp and changed source fields. |
+| `duplicate` | Provider, member, both claim entities | A second copy of a baseline record. |
+| `stale` | Provider, member, both claim entities | A baseline record with older source/update dates. |
+| `incomplete` | Provider, member, both claim entities | A source-valid record with selected optional identity or contact fields absent. |
+| `replacement` | Both claim entities | A later claim version with original/root claim lineage, adjustment information, and frequency code `7`. |
+| `void` | Both claim entities | A claim variation marked with frequency code `8` and void status. |
+| `orphan_payment` | Both claim entities | A payment-shaped variation whose identifying composite is deliberately changed so it does not match its claim. |
 
-Provider and member accept the first five scenarios. Claims accept all eight.
+Provider and member accept the first five scenarios. Both claim entities accept all eight.
 Unknown scenario names, negative quantities, and totals greater than `count`
 are rejected before output is created.
 
 ## Relationships in generated data
 
-When provider, member, and claim outputs are enabled together, relationships
+When provider, member, and either claim output are enabled together, relationships
 use identifiers from the generated records:
 
 - Each member enrollment's PCP provider ID cycles through the generated
@@ -258,11 +251,9 @@ written. Each entity file is first written to a temporary file beside its
 destination, then published only after the whole entity run succeeds. A failed
 entity generation does not replace that entity's previous output file.
 
-If a later detailed-form run disables a known entity, its prior configured
-JSONL file is removed after all enabled entities complete successfully.
-Unrelated files in the output directory are left unchanged. Keep output
-filenames relative to the output directory; absolute paths and directory
-traversal components are rejected.
+If a later detailed-form run disables a known entity, its fixed prior JSONL
+file is removed after all enabled entities complete successfully. Unrelated
+files in the output directory are left unchanged.
 
 Current scope and limitations:
 
@@ -271,7 +262,8 @@ Current scope and limitations:
   downstream matching or adjudication system.
 - Payment data is embedded in claim objects; there is no separate payment
   output.
-- The generator currently supports provider, member, and claim entities only.
+- The generator currently supports provider, member, professional claim, and
+  institutional claim entities only.
 
 ## Common commands
 
