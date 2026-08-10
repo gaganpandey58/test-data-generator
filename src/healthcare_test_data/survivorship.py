@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast
 
-from healthcare_test_data.config import SurvivorshipPolicy
 from healthcare_test_data.scenarios import Scenario
 
 
@@ -31,7 +30,6 @@ def evaluate(
     existing: Mapping[str, object],
     incoming: Mapping[str, object],
     scenario: Scenario,
-    policy: SurvivorshipPolicy,
 ) -> ExpectedDecision:
     """Determine an action by matching first and applying the recency gate second."""
     tier = _match_tier(existing, incoming)
@@ -40,11 +38,11 @@ def evaluate(
     if not _is_newer(existing, incoming):
         return ExpectedDecision(ExpectedAction.IGNORE, tier)
     if scenario.name == "void":
-        return ExpectedDecision(_policy_action(policy.void_action), tier)
+        return ExpectedDecision(ExpectedAction.IGNORE, tier)
     if _is_orphan_payment(existing) and _is_claim_transaction(incoming):
         return ExpectedDecision(ExpectedAction.LINK_PAYMENT, tier)
     if _is_verified(existing) and _is_provisional(incoming):
-        return ExpectedDecision(_verified_action(existing, policy), tier)
+        return ExpectedDecision(ExpectedAction.UPDATE, tier)
     return ExpectedDecision(ExpectedAction.UPDATE, tier)
 
 
@@ -269,22 +267,3 @@ def _source_tag(record: Mapping[str, object]) -> str:
         if value not in (None, ""):
             return str(value).lower()
     return ""
-
-
-def _verified_action(existing: Mapping[str, object], policy: SurvivorshipPolicy) -> ExpectedAction:
-    """Apply the configured 834/837 behavior against verified data."""
-    action = (
-        policy.claim_verified_action
-        if "CH_RECORD_TAG" in existing
-        else policy.member_verified_action
-    )
-    return _policy_action(action)
-
-
-def _policy_action(action: str) -> ExpectedAction:
-    """Translate validated config action text into the internal action enum."""
-    return {
-        "update": ExpectedAction.UPDATE,
-        "keep_both": ExpectedAction.KEEP_BOTH,
-        "ignore": ExpectedAction.IGNORE,
-    }[action]

@@ -1,19 +1,12 @@
 {
   "seed": 20260805,
   "output_directory": "./output",
-  "survivorship_policy": {
-    "member_verified_action": "update",
-    "claim_verified_action": "update",
-    "void_action": "ignore"
-  },
   "entities": {
     "provider": {
       "enabled": true,
       "count": 10,
       "profile": "provider",
       "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1},
-      "schema": "./schemas/provider/provider.schema.json",
-      "module": "healthcare_test_data.entities.provider",
       "filename": "providers.jsonl"
     },
     "member": {
@@ -21,8 +14,6 @@
       "count": 10,
       "profile": "member",
       "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1},
-      "schema": "./schemas/member/member.schema.json",
-      "module": "healthcare_test_data.entities.member",
       "filename": "members.jsonl"
     },
     "claim": {
@@ -39,8 +30,6 @@
         "void": 1,
         "orphan_payment": 1
       },
-      "schema": "./schemas/claim/claim.schema.json",
-      "module": "healthcare_test_data.entities.claim",
       "filename": "claims.jsonl"
     }
   }

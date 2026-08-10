@@ -12,15 +12,6 @@
   "properties": {
     "seed": {"type": "integer"},
     "output_directory": {"type": "string", "minLength": 1},
-    "survivorship_policy": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "member_verified_action": {"enum": ["update", "keep_both", "ignore"]},
-        "claim_verified_action": {"enum": ["update", "keep_both", "ignore"]},
-        "void_action": {"enum": ["update", "keep_both", "ignore"]}
-      }
-    },
     "provider": {"$ref": "#/$defs/shortEntity"},
     "member": {"$ref": "#/$defs/shortEntity"},
     "claim": {"$ref": "#/$defs/shortEntity"},
@@ -51,7 +42,7 @@
     "detailedEntity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "count", "schema", "module", "filename"],
+      "required": ["enabled", "count", "filename"],
       "properties": {
         "enabled": {"type": "boolean"},
         "count": {"type": "integer", "minimum": 0},
@@ -60,8 +51,6 @@
           "type": "object",
           "additionalProperties": {"type": "integer", "minimum": 0}
         },
-        "schema": {"type": "string", "minLength": 1},
-        "module": {"type": "string", "minLength": 1},
         "filename": {"type": "string", "pattern": "\\.jsonl$"}
       },
       "allOf": [

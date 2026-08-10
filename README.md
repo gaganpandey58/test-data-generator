@@ -26,6 +26,11 @@ The default configuration writes providers, members, and medical claims to
 Each file contains one JSON object per line. JSONL is the only output format
 supported by this release.
 
+`seed` is the starting number used to make generated values repeatable. Keep
+the same seed to generate the same data again; change it when you want a
+different, still deterministic, data set. `20260805` is simply the default
+seed value, not a date that affects the generated records.
+
 ## Configure records and scenarios
 
 The shortest configuration names only the entities to generate. Each `count`
@@ -57,7 +62,9 @@ linked member/provider values internally. The short form defaults the seed to
 `20260805`, writes to `./output`, and uses the checked-in schema, module,
 filename, and standard profile for each entity. `generator.config.json` shows
 the supported detailed `entities` form when you need to change those defaults
-or select the institutional claim profile.
+except schema and module, which are always hardcoded by entity. Use the
+detailed form to change an output filename or select the institutional claim
+profile.
 
 Supported profiles are `provider`, `member`, `claim-professional`, and
 `claim-institutional`. Provider and member entities use their matching single
@@ -68,12 +75,6 @@ Provider and member support `new`, `changed`, `duplicate`, `stale`, and
 `incomplete`. Claims support those five names plus `replacement`, `void`, and
 `orphan_payment`. An unknown scenario, negative quantity, or total larger than
 the entity count is rejected before output is created.
-
-The root `survivorship_policy` configures documented internal decisions for
-`member_verified_action`, `claim_verified_action`, and `void_action`. Each
-accepts `update`, `keep_both`, or `ignore`; the checked-in configuration shows
-the defaults. It affects validation of expected outcomes only and never adds a
-policy or scenario marker to generated JSONL.
 
 `make generate` runs the same command through the project's managed Python
 environment.

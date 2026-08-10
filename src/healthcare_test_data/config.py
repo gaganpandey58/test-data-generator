@@ -13,15 +13,6 @@ from healthcare_test_data.layouts import available_profiles, load_layout
 
 
 @dataclass(frozen=True)
-class SurvivorshipPolicy:
-    """Describe configurable decisions for documented survivorship ambiguities."""
-
-    member_verified_action: str
-    claim_verified_action: str
-    void_action: str
-
-
-@dataclass(frozen=True)
 class EntityConfig:
     """Describe one enabled entity generation request."""
 
@@ -42,7 +33,6 @@ class RunConfig:
     output_directory: Path
     entities: tuple[EntityConfig, ...]
     disabled_filenames: tuple[str, ...]
-    survivorship_policy: SurvivorshipPolicy
 
 
 def load_config(path: Path) -> RunConfig:
@@ -103,7 +93,6 @@ def load_config(path: Path) -> RunConfig:
         output_directory=output_directory,
         entities=tuple(entities),
         disabled_filenames=tuple(disabled_filenames),
-        survivorship_policy=_load_survivorship_policy(raw_config.get("survivorship_policy", {})),
     )
 
 
@@ -112,7 +101,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
 
     The public short form keeps a run focused on the only values people usually
     change: each selected entity's count and scenarios.  The detailed
-    ``entities`` form remains supported for custom paths and profiles.
+    ``entities`` form remains supported for output filenames and profiles.
 
     Args:
         raw_config: Schema-valid decoded root configuration.
@@ -134,7 +123,6 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     return {
         "seed": raw_config.get("seed", 20260805),
         "output_directory": raw_config.get("output_directory", "./output"),
-        "survivorship_policy": raw_config.get("survivorship_policy", {}),
         "entities": entities,
     }
 
@@ -276,32 +264,6 @@ def _validate_scenarios(entity: str, scenarios: object, count: int) -> None:
         raise ConfigurationError(
             f"Non-new scenarios for enabled entity {entity!r} require at least one baseline record"
         )
-
-
-def _load_survivorship_policy(raw_policy: object) -> SurvivorshipPolicy:
-    """Normalize the optional root survivorship policy.
-
-    Args:
-        raw_policy: Decoded policy mapping from the root configuration.
-
-    Returns:
-        Fully populated survivorship policy.
-
-    Raises:
-        ConfigurationError: If the policy does not use supported actions.
-    """
-    if not isinstance(raw_policy, dict):
-        raise ConfigurationError("survivorship_policy must be an object")
-    defaults = {
-        "member_verified_action": "update",
-        "claim_verified_action": "update",
-        "void_action": "ignore",
-    }
-    values = {**defaults, **raw_policy}
-    allowed = {"update", "keep_both", "ignore"}
-    if any(value not in allowed for value in values.values()):
-        raise ConfigurationError("survivorship_policy contains an unsupported action")
-    return SurvivorshipPolicy(**values)
 
 
 def _validate_claim_relationships(entities: list[EntityConfig]) -> None:
