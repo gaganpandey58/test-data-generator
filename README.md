@@ -88,19 +88,12 @@ contain `.` or `..` path components, and must resolve inside that directory.
 When a later run disables a known entity, its old JSONL file is removed after a
 successful generation. Other files in the output directory are not touched.
 
-## Verify the project
+## Check the code
 
-Run all quality gates and generated-record smoke checks without private input:
+Run formatting, linting, and type checking:
 
 ```sh
 make verify
-```
-
-To additionally validate an external three-record provider JSONL file, pass it
-explicitly to the provider smoke:
-
-```sh
-uv run python tools/provider_generator_smoke.py --sample /path/to/providers.jsonl
 ```
 
 ## Add a future entity
@@ -154,7 +147,5 @@ extensions, so they are deliberately not added to this small generator.
 - `schemas/<entity>/<entity>.schema.json` — the source-compatible JSON Schema.
 - `src/healthcare_test_data/entities/<entity>.py` — readable synthetic data
   construction for one entity.
-- `tools/` — manual smoke checks used by `make verify`.
-
 Generated output and IDE metadata are intentionally ignored. No `tests/` or
 `samples/` directory is part of this project.
