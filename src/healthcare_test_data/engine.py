@@ -61,6 +61,7 @@ def run_entity(
         accepts_entity_scenarios = _accepts_entity_scenarios(generate_record)
         accepts_scenario = _accepts_scenario(generate_record)
         accepts_profile = _accepts_profile(generate_record)
+        accepts_entity_name = _accepts_entity_name(generate_record)
         scenario_plan = plan(entity.count, entity.scenarios, seed)
         validator = _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +86,8 @@ def run_entity(
                     accepts_scenario,
                     entity.profile,
                     accepts_profile,
+                    entity.name,
+                    accepts_entity_name,
                 )
                 try:
                     validator.validate(record)
@@ -197,6 +200,22 @@ def _accepts_profile(generate_record: Callable[..., dict[str, object]]) -> bool:
     return True
 
 
+def _accepts_entity_name(generate_record: Callable[..., dict[str, object]]) -> bool:
+    """Determine whether a generator accepts its resolved entity identity.
+
+    Args:
+        generate_record: Entity record generator loaded from its module.
+
+    Returns:
+        ``True`` when the callable accepts an ``entity_name`` keyword argument.
+    """
+    try:
+        inspect.signature(generate_record).bind(0, 0, entity_name=None)
+    except TypeError:
+        return False
+    return True
+
+
 def _generate_record(
     generate_record: Callable[..., dict[str, object]],
     seed: int,
@@ -209,6 +228,8 @@ def _generate_record(
     accepts_scenario: bool,
     profile: str,
     accepts_profile: bool,
+    entity_name: str,
+    accepts_entity_name: bool,
 ) -> dict[str, object]:
     """Call an entity generator with only the context it supports.
 
@@ -228,6 +249,8 @@ def _generate_record(
         accepts_scenario: Whether the callable accepts the scenario keyword.
         profile: Configured source-layout profile identifier.
         accepts_profile: Whether the callable accepts the profile keyword.
+        entity_name: Resolved configuration identity for this output stream.
+        accepts_entity_name: Whether the callable accepts the identity keyword.
 
     Returns:
         One unvalidated record for the engine to validate and serialize.
@@ -237,6 +260,8 @@ def _generate_record(
         kwargs["scenario"] = scenario
     if accepts_profile:
         kwargs["profile"] = profile
+    if accepts_entity_name:
+        kwargs["entity_name"] = entity_name
     if accepts_entity_scenarios:
         kwargs["entity_scenarios"] = entity_scenarios
     if kwargs:

@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "healthcare-test-data"
+name = "test-data-generator"
 version = "0.1.0"
-description = "Configuration-driven synthetic healthcare test data generation."
+description = "Configuration-driven synthetic test data generation for healthcare entities."
 requires-python = ">=3.12"
 dependencies = [
     "Faker>=26",

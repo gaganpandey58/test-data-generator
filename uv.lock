@@ -69,7 +69,7 @@ wheels = [
 ]
 
 [[package]]
-name = "healthcare-test-data"
+name = "test-data-generator"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
