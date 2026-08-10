@@ -1,4 +1,10 @@
-"""Generate source-shaped provider records with deterministic scenario variations."""
+"""Generate deterministic, source-shaped provider records.
+
+This module owns provider root, address, and network field construction for
+the checked-in GDF provider profile.  It also applies scenario mutations to a
+copied baseline record so duplicate, changed, stale, and incomplete rows stay
+valid examples of the same provider rather than unrelated synthetic records.
+"""
 
 from collections.abc import Mapping
 from datetime import date, timedelta

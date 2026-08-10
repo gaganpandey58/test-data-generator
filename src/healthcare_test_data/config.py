@@ -1,4 +1,11 @@
-"""Load the small, file-based configuration for synthetic data generation."""
+"""Load, normalize, and validate the public generator configuration.
+
+The external JSON config remains deliberately short: callers choose entities,
+record counts, optional scenarios, a seed, and an output directory.  This
+module expands those choices into immutable internal entity definitions with
+hardcoded schema, module, profile, and filename defaults, then validates paths
+and relationships before generation can begin.
+"""
 
 import json
 from dataclasses import dataclass
@@ -14,7 +21,17 @@ from healthcare_test_data.layouts import available_profiles, load_layout
 
 @dataclass(frozen=True)
 class EntityConfig:
-    """Describe one enabled entity generation request."""
+    """Describe one fully resolved enabled-entity generation request.
+
+    Attributes:
+        name: Supported entity identifier, such as ``member`` or ``claim``.
+        count: Exact number of rows the entity must emit.
+        scenarios: Immutable-by-convention mapping of variation quantities.
+        profile: GDF source-layout profile applied to generated records.
+        schema: Absolute JSON Schema path used to validate each output row.
+        module: Dotted module path exposing the entity record generator.
+        filename: Safe JSONL filename relative to the output directory.
+    """
 
     name: str
     count: int
@@ -27,7 +44,14 @@ class EntityConfig:
 
 @dataclass(frozen=True)
 class RunConfig:
-    """Describe the enabled entities and shared settings for one generator run."""
+    """Describe the resolved settings needed for one complete generator run.
+
+    Attributes:
+        seed: Deterministic seed shared by every enabled entity generator.
+        output_directory: Absolute directory used for generated JSONL files.
+        entities: Ordered, enabled entity requests ready for the engine.
+        disabled_filenames: Known generated filenames to remove after success.
+    """
 
     seed: int
     output_directory: Path
@@ -42,7 +66,9 @@ def load_config(path: Path) -> RunConfig:
         path: Path to the root JSON configuration.
 
     Returns:
-        Resolved shared settings and enabled entity definitions.
+        Resolved shared settings and enabled entity definitions. Paths are
+        made absolute so later generation is independent of the working
+        directory.
 
     Raises:
         ConfigurationError: If the configuration or an enabled schema is invalid.
@@ -107,7 +133,8 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         raw_config: Schema-valid decoded root configuration.
 
     Returns:
-        A detailed configuration with defaults for every known entity.
+        A detailed configuration with hardcoded defaults for every known
+        entity, including disabled entities that need stale-output cleanup.
     """
     defaults = _entity_defaults()
     supplied_entities = raw_config.get("entities")
@@ -128,7 +155,16 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _entity_defaults() -> dict[str, dict[str, object]]:
-    """Return immutable-by-convention defaults for the supported entities."""
+    """Build internal defaults for all supported entities.
+
+    The schema paths and implementation module names are intentionally not
+    configurable by end users.  Keeping them here gives the public config a
+    small, stable surface and prevents an input file from selecting arbitrary
+    code to import.
+
+    Returns:
+        Per-entity internal defaults used while normalizing public config.
+    """
     schema_root = Path(__file__).resolve().parents[2] / "schemas"
     return {
         "provider": {
@@ -179,7 +215,14 @@ def _validate_filename(entity: str, filename: str, output_directory: Path) -> No
 
 
 def _validate_unique_filenames(entities: list[EntityConfig]) -> None:
-    """Ensure enabled entities cannot overwrite one another's JSONL output."""
+    """Ensure enabled entities cannot overwrite one another's JSONL output.
+
+    Args:
+        entities: Fully resolved enabled entity definitions.
+
+    Raises:
+        ConfigurationError: If two enabled entities use the same filename.
+    """
     filenames = [entity.filename for entity in entities]
     if len(filenames) != len(set(filenames)):
         raise ConfigurationError("Enabled entities must use distinct output filenames")
@@ -378,7 +421,8 @@ def _safe_validation_detail(error: Any) -> str:
         error: JSON Schema validation error.
 
     Returns:
-        Safe field and constraint summary for CLI output.
+        Safe field and constraint summary for CLI output that excludes supplied
+        values, which may contain sensitive data.
     """
     path = "$" + "".join(
         f"[{part}]" if isinstance(part, int) else f".{part}" for part in error.absolute_path
@@ -412,7 +456,8 @@ def _resolve_path(value: str, config_directory: Path) -> Path:
         config_directory: Directory containing the root configuration.
 
     Returns:
-        Absolute resolved filesystem path.
+        Absolute resolved filesystem path. Relative values are interpreted from
+        the configuration file rather than the process working directory.
     """
     candidate = Path(value)
     return candidate if candidate.is_absolute() else (config_directory / candidate).resolve()

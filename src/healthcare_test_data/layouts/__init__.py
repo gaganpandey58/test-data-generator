@@ -1,4 +1,9 @@
-"""Load checked-in GDF source-layout profiles."""
+"""Load immutable, checked-in GDF source-layout metadata.
+
+Layout JSON files capture the supported root fields and nested field groups for
+each healthcare entity profile.  They are package resources rather than user
+configuration so generated data remains constrained to reviewed source layouts.
+"""
 
 import json
 from dataclasses import dataclass
@@ -9,7 +14,13 @@ from typing import Mapping
 
 @dataclass(frozen=True)
 class LayoutField:
-    """Describe one canonical GDF field."""
+    """Describe one canonical source field from a GDF layout.
+
+    Attributes:
+        name: Field name used in the generated source-shaped record.
+        type: GDF field type label retained for layout consumers.
+        max_length: Maximum allowed field length from the source layout.
+    """
 
     name: str
     type: str
@@ -18,7 +29,13 @@ class LayoutField:
 
 @dataclass(frozen=True)
 class LayoutProfile:
-    """Describe a source-shaped record profile and its nested groups."""
+    """Describe one source-shaped record profile and its nested field groups.
+
+    Attributes:
+        profile: Stable profile identifier used by configuration and generators.
+        root: Ordered fields emitted at the root record level.
+        groups: Immutable mapping of nested group names to their ordered fields.
+    """
 
     profile: str
     root: tuple[LayoutField, ...]
@@ -26,7 +43,10 @@ class LayoutProfile:
 
 
 def available_profiles() -> frozenset[str]:
-    """Return the checked-in profile identifiers.
+    """Return identifiers for every checked-in GDF layout profile.
+
+    The package-resource scan keeps the supported-profile list synchronized
+    with the versioned registry without exposing arbitrary filesystem paths.
 
     Returns:
         Immutable set of supported layout profile names.
@@ -45,7 +65,8 @@ def load_layout(profile: str) -> LayoutProfile:
         profile: Checked-in profile identifier.
 
     Returns:
-        Immutable normalized field and nested-group metadata.
+        Immutable normalized field and nested-group metadata. Nested mappings
+        are wrapped to prevent callers from mutating loaded registry state.
 
     Raises:
         ValueError: If the profile is unknown or malformed.
@@ -76,7 +97,7 @@ def _field(value: object) -> LayoutField:
         value: Decoded JSON field definition.
 
     Returns:
-        Immutable layout field.
+        Immutable layout field with the three canonical metadata attributes.
 
     Raises:
         ValueError: If a definition does not carry canonical field metadata.

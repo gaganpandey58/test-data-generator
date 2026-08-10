@@ -1,4 +1,11 @@
-"""Evaluate internal source-document survivorship outcomes."""
+"""Evaluate match tiers and survivorship actions for generated source records.
+
+The evaluator encodes the member, provider, and claim composite matching rules
+from the supplied survivorship documentation.  It is an internal quality aid:
+the generator does not emit decisions or scenario markers, but generators and
+maintainers can use this module to confirm that a source-shaped variation
+would receive the intended create, update, ignore, or payment-link outcome.
+"""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -9,7 +16,12 @@ from healthcare_test_data.scenarios import Scenario
 
 
 class ExpectedAction(StrEnum):
-    """Describe the source-document action expected for an incoming record."""
+    """Enumerate actions a receiving system can take for an incoming record.
+
+    Values model the source-document outcomes: create a separate record,
+    update a matched record, retain both records, ignore an older or voided
+    input, or link an incoming transaction to an unmatched payment.
+    """
 
     CREATE = "CREATE"
     UPDATE = "UPDATE"
@@ -20,7 +32,13 @@ class ExpectedAction(StrEnum):
 
 @dataclass(frozen=True)
 class ExpectedDecision:
-    """Record the action and matching tier used to select it."""
+    """Capture the action selected for an incoming record and its match tier.
+
+    Attributes:
+        action: Survivorship action selected after matching and recency checks.
+        match_tier: One-based source-rule tier that matched, or ``None`` when
+            no supported identity or claim composite matched.
+    """
 
     action: ExpectedAction
     match_tier: int | None
@@ -31,7 +49,21 @@ def evaluate(
     incoming: Mapping[str, object],
     scenario: Scenario,
 ) -> ExpectedDecision:
-    """Determine an action by matching first and applying the recency gate second."""
+    """Determine an action by matching first and applying the recency gate.
+
+    Matching establishes whether the incoming row represents an existing
+    entity or claim.  If it does, source timestamps prevent stale data from
+    overwriting newer data before the scenario-specific void and payment rules
+    are applied.
+
+    Args:
+        existing: Existing source-shaped member, provider, or claim record.
+        incoming: New source-shaped record to evaluate against ``existing``.
+        scenario: Internal scenario that describes the incoming variation.
+
+    Returns:
+        The expected survivorship action and the matching tier, if any.
+    """
     tier = _match_tier(existing, incoming)
     if tier is None:
         return ExpectedDecision(ExpectedAction.CREATE, None)
@@ -47,7 +79,16 @@ def evaluate(
 
 
 def _match_tier(existing: Mapping[str, object], incoming: Mapping[str, object]) -> int | None:
-    """Return the first documented identity tier shared by both records."""
+    """Return the first documented member/provider or claim tier that matches.
+
+    Args:
+        existing: Existing source-shaped record.
+        incoming: Incoming source-shaped record.
+
+    Returns:
+        One-based identity tier for member/provider matching, a profile-local
+        claim tier, or ``None`` when no supported keys match.
+    """
     for tier, keys in enumerate(_MATCH_KEY_TIERS, start=1):
         if _matches_all(existing, incoming, keys):
             return tier
@@ -139,7 +180,16 @@ _INSTITUTIONAL_CLAIM_TIERS = (
 
 
 def _claim_match_tier(existing: Mapping[str, object], incoming: Mapping[str, object]) -> int | None:
-    """Apply the documented profile-specific 837 composite matching tiers."""
+    """Apply the documented profile-specific 837 composite matching tiers.
+
+    Args:
+        existing: Existing professional or institutional claim.
+        incoming: Incoming claim to compare with ``existing``.
+
+    Returns:
+        One-based composite tier, or ``None`` when profiles differ or no
+        documented composite is complete and equal.
+    """
     if _claim_profile(existing) != _claim_profile(incoming):
         return None
     tiers = (
@@ -156,7 +206,18 @@ def _claim_match_tier(existing: Mapping[str, object], incoming: Mapping[str, obj
 def _matches_all(
     existing: Mapping[str, object], incoming: Mapping[str, object], keys: tuple[str, ...]
 ) -> bool:
-    """Require nonblank equality for every field in one identity tier."""
+    """Require populated equality for every field in a member/provider tier.
+
+    Args:
+        existing: Existing source-shaped record.
+        incoming: Incoming source-shaped record.
+        keys: Root or nested-address field names for the tier.
+
+    Returns:
+        ``True`` only when every key has the same nonblank source value.  The
+        organization provider tier additionally requires both record types to
+        be organization records.
+    """
     if keys == ("CP_PROVIDER_RECORD_TYPE", "CP_PROVIDER_FEDERAL_TAX_ID"):
         return (
             existing.get("CP_PROVIDER_RECORD_TYPE") == "O"
@@ -173,7 +234,15 @@ def _matches_all(
 
 
 def _source_value(record: Mapping[str, object], key: str) -> object | None:
-    """Read a root source value or a first nested address value."""
+    """Read a root source value or a value from the first address group.
+
+    Args:
+        record: Member or provider source record to inspect.
+        key: Field name used by a documented member/provider identity tier.
+
+    Returns:
+        The populated value, or ``None`` when the field is absent or blank.
+    """
     if key in record:
         return record[key]
     for group in ("CM_MEMBER_ADDRESSES", "CP_PROVIDER_ADDRESSES"):
@@ -188,7 +257,16 @@ def _source_value(record: Mapping[str, object], key: str) -> object | None:
 def _claim_matches_all(
     existing: Mapping[str, object], incoming: Mapping[str, object], keys: tuple[str, ...]
 ) -> bool:
-    """Require equality for direct claim fields and source-shaped claim-line fields."""
+    """Require populated equality for every field in a claim composite tier.
+
+    Args:
+        existing: Existing source-shaped claim.
+        incoming: Incoming source-shaped claim.
+        keys: Header or detail-row field names in the selected claim composite.
+
+    Returns:
+        ``True`` only when every composite key has the same nonblank value.
+    """
     return all(
         (existing_value := _claim_value(existing, key)) not in (None, "")
         and existing_value == _claim_value(incoming, key)
@@ -197,7 +275,15 @@ def _claim_matches_all(
 
 
 def _claim_profile(record: Mapping[str, object]) -> str | None:
-    """Select the documented professional or institutional claim composite."""
+    """Select the documented claim composite family from the claim type.
+
+    Args:
+        record: Source-shaped claim record whose type is inspected.
+
+    Returns:
+        ``"professional"`` for type ``P``, ``"institutional"`` for type
+        ``I``, or ``None`` when no supported type is present.
+    """
     claim_type = record.get("CH_CLAIM_TYPE")
     if claim_type == "P":
         return "professional"
@@ -207,7 +293,15 @@ def _claim_profile(record: Mapping[str, object]) -> str | None:
 
 
 def _claim_value(record: Mapping[str, object], key: str) -> object | None:
-    """Read a claim header field or the first source-shaped claim-line field."""
+    """Read a claim header value or a value from the first detail row.
+
+    Args:
+        record: Source-shaped claim record to inspect.
+        key: Field name used by a documented claim composite tier.
+
+    Returns:
+        The populated value, or ``None`` when the field is absent or blank.
+    """
     if key in record:
         return record[key]
     for line_group in ("CLAIM_DETAIL", "CD_CLAIM_LINES"):
@@ -220,7 +314,16 @@ def _claim_value(record: Mapping[str, object], key: str) -> object | None:
 
 
 def _is_newer(existing: Mapping[str, object], incoming: Mapping[str, object]) -> bool:
-    """Compare the first shared source, payment, or effective date value."""
+    """Compare the first shared source, payment, or effective date value.
+
+    Args:
+        existing: Existing source-shaped record.
+        incoming: Incoming source-shaped record.
+
+    Returns:
+        ``True`` when no common recency field is present or the incoming value
+        sorts later than the existing value; otherwise ``False``.
+    """
     for key in _RECENCY_KEYS:
         if key in existing and key in incoming:
             return str(incoming[key]) > str(existing[key])
@@ -237,31 +340,69 @@ _RECENCY_KEYS = (
 
 
 def _is_verified(record: Mapping[str, object]) -> bool:
-    """Identify authoritative roster or claim-history source tags."""
+    """Identify authoritative roster or claim-history source tags.
+
+    Args:
+        record: Source-shaped entity or claim record to inspect.
+
+    Returns:
+        ``True`` for normalized tags that identify verified, MR, or CH input.
+    """
     tag = _source_tag(record)
     return "verified" in tag or tag.startswith("mr") or tag.startswith("ch")
 
 
 def _is_provisional(record: Mapping[str, object]) -> bool:
-    """Identify incremental 834 or 837 source tags."""
+    """Identify incremental 834 or 837 source tags.
+
+    Args:
+        record: Source-shaped entity or claim record to inspect.
+
+    Returns:
+        ``True`` for normalized tags that identify 834, 837, or provisional
+        input.
+    """
     tag = _source_tag(record)
     return "834" in tag or "837" in tag or "provisional" in tag
 
 
 def _is_claim_transaction(record: Mapping[str, object]) -> bool:
-    """Identify an incoming 837 transaction from its source tag."""
+    """Identify an incoming 837 transaction from its source tag.
+
+    Args:
+        record: Source-shaped claim record to inspect.
+
+    Returns:
+        ``True`` when the normalized source tag contains ``837``.
+    """
     return "837" in _source_tag(record)
 
 
 def _is_orphan_payment(record: Mapping[str, object]) -> bool:
-    """Identify an existing unmatched 835 payment record."""
+    """Identify an existing unmatched 835 payment record.
+
+    Args:
+        record: Source-shaped claim/payment envelope to inspect.
+
+    Returns:
+        ``True`` when the source identifies an 835 transaction and record
+        status identifies it as orphaned.
+    """
     return (
         "835" in _source_tag(record) and "orphan" in str(record.get("CH_RECORD_STATUS", "")).lower()
     )
 
 
 def _source_tag(record: Mapping[str, object]) -> str:
-    """Return a normalized source tag across supported entity shapes."""
+    """Return the first normalized source tag across supported entity shapes.
+
+    Args:
+        record: Member, provider, or claim record to inspect.
+
+    Returns:
+        The first nonblank supported source tag in lowercase, or an empty
+        string when none is available.
+    """
     for key in ("CM_MEMBER_SOURCE_RECORD_TAG", "CP_PROVIDER_SOURCE_RECORD_TAG", "CH_RECORD_TAG"):
         value = record.get(key)
         if value not in (None, ""):

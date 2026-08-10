@@ -1,4 +1,10 @@
-"""Generate source-shaped medical claims with embedded 835 payment data."""
+"""Generate deterministic medical claims with embedded payment information.
+
+This module produces professional or institutional claim envelopes from the
+checked-in GDF profiles.  A claim references generated member and provider
+records, contains its line-level detail and payment fields in the same JSON
+object, and applies configured claim scenarios to copied baseline rows.
+"""
 
 from collections.abc import Mapping
 from datetime import date, timedelta

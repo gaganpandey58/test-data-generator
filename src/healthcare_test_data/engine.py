@@ -1,4 +1,10 @@
-"""Stream generic entity records into atomically published JSONL files."""
+"""Generate, validate, and atomically publish source-shaped entity JSONL.
+
+The engine owns the generic generation lifecycle: load an approved entity
+generator, plan record variations, validate every generated row against its
+JSON Schema, and replace the final output only after a complete successful
+write. Entity modules supply domain fields but do not manage files.
+"""
 
 import importlib
 import inspect
@@ -23,7 +29,11 @@ def run_entity(
     entity_counts: Mapping[str, int] | None = None,
     entity_scenarios: Mapping[str, Mapping[str, int]] | None = None,
 ) -> Path:
-    """Generate one enabled entity as an atomically published JSONL file.
+    """Generate and publish one configured entity as a validated JSONL file.
+
+    The destination is replaced atomically only when all requested records are
+    generated and schema-valid.  Any failure removes the temporary file and
+    leaves an existing destination untouched.
 
     Args:
         entity: Enabled entity definition to generate.
@@ -98,8 +108,8 @@ def _load_generator(module_name: str) -> Callable[..., dict[str, object]]:
         module_name: Dotted Python module path from entity configuration.
 
     Returns:
-        Callable that produces one record from a seed and index, optionally
-        accepting enabled-entity counts.
+        Callable that produces one record from a seed and index. It may also
+        accept supported optional relationship, scenario, and profile context.
 
     Raises:
         GenerationError: If importing or locating ``generate_record`` fails.
@@ -129,7 +139,8 @@ def _accepts_entity_counts(generate_record: Callable[..., dict[str, object]]) ->
         generate_record: Entity record generator loaded from its module.
 
     Returns:
-        ``True`` when the callable can accept seed, index, and entity counts.
+        ``True`` when the callable can accept positional seed, index, and
+        entity-count relationship context.
     """
     try:
         inspect.signature(generate_record).bind(0, 0, {})
@@ -139,7 +150,14 @@ def _accepts_entity_counts(generate_record: Callable[..., dict[str, object]]) ->
 
 
 def _accepts_scenario(generate_record: Callable[..., dict[str, object]]) -> bool:
-    """Determine whether a generator accepts the optional scenario variation."""
+    """Determine whether a generator accepts one planned scenario variation.
+
+    Args:
+        generate_record: Entity record generator loaded from its module.
+
+    Returns:
+        ``True`` when the callable accepts a ``scenario`` keyword argument.
+    """
     try:
         inspect.signature(generate_record).bind(0, 0, scenario=None)
     except TypeError:
@@ -192,7 +210,28 @@ def _generate_record(
     profile: str,
     accepts_profile: bool,
 ) -> dict[str, object]:
-    """Call a generator while preserving optional extension support."""
+    """Call an entity generator with only the context it supports.
+
+    The signature inspection performed by the helper functions lets older,
+    simple generators remain compatible while newer generators receive their
+    scenario plan, GDF profile, and relationship context.
+
+    Args:
+        generate_record: Imported callable that builds one entity record.
+        seed: Deterministic run seed.
+        index: Zero-based output row index.
+        entity_counts: Enabled entity counts available for relationship links.
+        accepts_entity_counts: Whether the callable accepts ``entity_counts``.
+        entity_scenarios: Related entity scenario quantities for stable links.
+        accepts_entity_scenarios: Whether the callable accepts that keyword.
+        scenario: Planned variation for this row, or ``None`` for a baseline.
+        accepts_scenario: Whether the callable accepts the scenario keyword.
+        profile: Configured source-layout profile identifier.
+        accepts_profile: Whether the callable accepts the profile keyword.
+
+    Returns:
+        One unvalidated record for the engine to validate and serialize.
+    """
     kwargs: dict[str, object] = {}
     if accepts_scenario:
         kwargs["scenario"] = scenario
@@ -237,7 +276,8 @@ def _validation_detail(error: ValidationError) -> str:
         error: Validation error raised for one generated record.
 
     Returns:
-        Field path and failed constraint without including record values.
+        Field path and failed constraint without including generated values,
+        which keeps failures useful without echoing test data.
     """
     validation_path = "$" + "".join(
         f"[{part}]" if isinstance(part, int) else f".{part}" for part in error.absolute_path

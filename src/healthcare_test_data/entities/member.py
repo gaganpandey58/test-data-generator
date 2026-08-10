@@ -1,4 +1,10 @@
-"""Generate source-shaped member records with deterministic scenario variations."""
+"""Generate deterministic, source-shaped member records.
+
+The generator builds member roots and their address, enrollment, and COB
+groups from the checked-in GDF member profile.  It resolves PCP references to
+the provider rows selected for the same run and applies configured scenario
+variations only to copied deterministic baselines.
+"""
 
 from collections.abc import Mapping
 from datetime import date, timedelta
