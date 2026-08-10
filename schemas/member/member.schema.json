@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://healthcare-test-data.local/schemas/member/member.schema.json",
+  "title": "Synthetic member record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "CM_CLIENT_DATA_PLATFORM",
+    "CM_MEMBER_CLIENT_ID",
+    "CM_MEMBER_CLIENT_MASTER_ID",
+    "CM_MEMBER_DEPENDENT_NUMBER",
+    "CM_SUBSCRIBER_CLIENT_ID",
+    "CM_SUBSCRIBER_CLIENT_MASTER_ID",
+    "CM_MEMBER_FIRST_NAME",
+    "CM_MEMBER_MIDDLE_NAME",
+    "CM_MEMBER_LAST_NAME",
+    "CM_MEMBER_BIRTH_DATE",
+    "CM_MEMBER_GENDER",
+    "CM_MEMBER_MEDICARE_BENEFICIARY_ID",
+    "CM_MEMBER_RELATIONSHIP_CODE",
+    "CM_MEMBER_RECORD_START_DATE",
+    "CM_MEMBER_RECORD_END_DATE",
+    "CM_MEMBER_SOURCE_RECORD_TAG",
+    "CM_MEMBER_RECORD_STATUS",
+    "CM_MEMBER_SOURCE_UPDATED_AT",
+    "CM_MEMBER_ADDRESSES",
+    "CM_MEMBER_ENROLLMENTS",
+    "CM_MEMBER_COB"
+  ],
+  "properties": {
+    "CM_CLIENT_DATA_PLATFORM": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "CM_MEMBER_CLIENT_ID": {
+      "type": "string",
+      "maxLength": 35
+    },
+    "CM_MEMBER_CLIENT_MASTER_ID": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "CM_MEMBER_DEPENDENT_NUMBER": {
+      "type": "string"
+    },
+    "CM_SUBSCRIBER_CLIENT_ID": {
+      "type": "string"
+    },
+    "CM_SUBSCRIBER_CLIENT_MASTER_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_FIRST_NAME": {
+      "type": "string"
+    },
+    "CM_MEMBER_MIDDLE_NAME": {
+      "type": "string"
+    },
+    "CM_MEMBER_LAST_NAME": {
+      "type": "string"
+    },
+    "CM_MEMBER_BIRTH_DATE": {
+      "type": "string",
+      "maxLength": 8,
+      "pattern": "^[0-9]{8}$"
+    },
+    "CM_MEMBER_GENDER": {
+      "type": "string",
+      "maxLength": 1,
+      "enum": [
+        "F",
+        "M",
+        "X"
+      ]
+    },
+    "CM_MEMBER_SSN": {
+      "type": "string",
+      "pattern": "^[0-9]{9}$"
+    },
+    "CM_MEMBER_MEDICARE_BENEFICIARY_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_RELATIONSHIP_CODE": {
+      "type": "string",
+      "enum": [
+        "18",
+        "19"
+      ]
+    },
+    "CM_MEMBER_RECORD_START_DATE": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "CM_MEMBER_RECORD_END_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_SOURCE_RECORD_TAG": {
+      "type": "string",
+      "enum": [
+        "834 Provisional",
+        "MR Verified"
+      ]
+    },
+    "CM_MEMBER_RECORD_STATUS": {
+      "type": "string",
+      "enum": [
+        "New",
+        "Active"
+      ]
+    },
+    "CM_MEMBER_SOURCE_UPDATED_AT": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "CM_MEMBER_ADDRESSES": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/address"
+      }
+    },
+    "CM_MEMBER_ENROLLMENTS": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/enrollment"
+      }
+    },
+    "CM_MEMBER_COB": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/cob"
+      }
+    }
+  },
+  "$defs": {
+    "address": {
+      "type": "object",
+        "additionalProperties": true,
+      "required": [
+        "CM_MEMBER_ADDRESS_CLIENT_ID",
+        "CM_MEMBER_ADDRESS_TYPE_CODE",
+        "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR",
+        "CM_MEMBER_ADDRESS_01",
+        "CM_MEMBER_ADDRESS_02",
+        "CM_MEMBER_ADDRESS_03",
+        "CM_MEMBER_CITY",
+        "CM_MEMBER_STATE",
+        "CM_MEMBER_ZIP",
+        "CM_MEMBER_ADDRESS_START_DATE",
+        "CM_MEMBER_ADDRESS_END_DATE"
+      ],
+      "properties": {
+        "CM_MEMBER_ADDRESS_CLIENT_ID": {
+          "type": "string"
+        },
+        "CM_MEMBER_ADDRESS_TYPE_CODE": {
+          "type": "string"
+        },
+        "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR": {
+          "type": "string",
+          "enum": [
+            "Y",
+            "N"
+          ]
+        },
+        "CM_MEMBER_ADDRESS_01": {
+          "type": "string",
+          "maxLength": 55
+        },
+        "CM_MEMBER_ADDRESS_02": {
+          "type": "string"
+        },
+        "CM_MEMBER_ADDRESS_03": {
+          "type": "string"
+        },
+        "CM_MEMBER_CITY": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "CM_MEMBER_STATE": {
+          "type": "string",
+          "maxLength": 2,
+          "pattern": "^[A-Z]{2}$"
+        },
+        "CM_MEMBER_ZIP": {
+          "type": "string",
+          "pattern": "^[0-9]{5}$"
+        },
+        "CM_MEMBER_ADDRESS_START_DATE": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "CM_MEMBER_ADDRESS_END_DATE": {
+          "type": "string"
+        }
+      }
+    },
+    "enrollment": {
+      "type": "object",
+        "additionalProperties": true,
+      "required": [
+        "CM_MEMBER_ENROLLMENT_CLIENT_ID",
+        "CM_MEMBER_ENROLLMENT_EFFECTIVE_DATE",
+        "CM_MEMBER_ENROLLMENT_TERMINATION_DATE",
+        "CM_LINE_OF_BUSINESS_CODE",
+        "CM_NETWORK_CLIENT_ID",
+        "CM_PLAN_CLIENT_ID",
+        "CM_PCP_PROVIDER_CLIENT_ID"
+      ],
+      "properties": {
+        "CM_MEMBER_ENROLLMENT_CLIENT_ID": {
+          "type": "string"
+        },
+        "CM_MEMBER_ENROLLMENT_EFFECTIVE_DATE": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "CM_MEMBER_ENROLLMENT_TERMINATION_DATE": {
+          "type": "string"
+        },
+        "CM_LINE_OF_BUSINESS_CODE": {
+          "type": "string"
+        },
+        "CM_NETWORK_CLIENT_ID": {
+          "type": "string"
+        },
+        "CM_PLAN_CLIENT_ID": {
+          "type": "string"
+        },
+        "CM_PCP_PROVIDER_CLIENT_ID": {
+          "type": "string"
+        }
+      }
+    },
+    "cob": {
+      "type": "object",
+        "additionalProperties": true,
+      "required": [
+        "CM_MEMBER_COB_ORDER_NUMBER",
+        "CM_OTHER_PAYER_NAME",
+        "CM_MEMBER_COB_EFFECTIVE_DATE",
+        "CM_MEMBER_COB_TERMINATION_DATE"
+      ],
+      "properties": {
+        "CM_MEMBER_COB_ORDER_NUMBER": {
+          "type": "string"
+        },
+        "CM_OTHER_PAYER_NAME": {
+          "type": "string"
+        },
+        "CM_MEMBER_COB_EFFECTIVE_DATE": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "CM_MEMBER_COB_TERMINATION_DATE": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

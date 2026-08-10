@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "healthcare-test-data"
+version = "0.1.0"
+description = "Configuration-driven synthetic healthcare test data generation."
+requires-python = ">=3.12"
+dependencies = [
+    "Faker>=26",
+    "jsonschema>=4.23",
+    "orjson>=3.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/healthcare_test_data"]
+include = ["src/healthcare_test_data/**/*.json"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "D", "B"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/healthcare_test_data"]

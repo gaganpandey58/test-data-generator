@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://healthcare-test-data.local/schemas/provider/provider.schema.json",
+  "title": "Synthetic provider record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "CP_PROVIDER_CLIENT_ID",
+    "CP_PROVIDER_CLIENT_MASTER_ID",
+    "CP_PROVIDER_FEDERAL_TAX_ID",
+    "CP_PROVIDER_NPI",
+    "CP_PROVIDER_STATE_LICENSE_STATE_CODE",
+    "CP_PROVIDER_STATE_LICENSE_NUMBER",
+    "CP_PROVIDER_CHASE_INDICATOR",
+    "CP_PRESCRIBING_PROVIDER_INDICATOR",
+    "CP_PRESCRIBING_PROVIDER_CLIENT_ID",
+    "CP_PRESCRIBING_PROVIDER_CLIENT_MASTER_ID",
+    "CP_PRESCRIBING_PROVIDER_NPI",
+    "CP_PROVIDER_RECORD_TYPE",
+    "CP_PROVIDER_FIRST_NAME",
+    "CP_PROVIDER_MIDDLE_NAME",
+    "CP_PROVIDER_LAST_NAME",
+    "CP_PROVIDER_NAME_SUFFIX",
+    "CP_PROVIDER_NAME_TITLE",
+    "CP_PROVIDER_FULL_NAME",
+    "CP_PROVIDER_PRIMARY_SPECIALTY_CODE",
+    "CP_PROVIDER_TAXONOMY_CODE",
+    "CP_PROVIDER_BILLING_GROUP_NUMBER",
+    "CP_PROVIDER_BILLING_GROUP_NAME",
+    "CP_PROVIDER_CCD_ID",
+    "CP_PROVIDER_RECORD_START_DATE",
+    "CP_PROVIDER_RECORD_END_DATE",
+    "CP_CUSTOM_FIELD_01",
+    "CP_CUSTOM_FIELD_02",
+    "CP_CUSTOM_FIELD_03",
+    "CP_CUSTOM_FIELD_04",
+    "CP_CUSTOM_FIELD_05",
+    "CP_CUSTOM_FIELD_06",
+    "CP_CUSTOM_FIELD_07",
+    "CP_CUSTOM_FIELD_08",
+    "CP_CUSTOM_FIELD_09",
+    "CP_CUSTOM_FIELD_10",
+    "CP_CUSTOM_FIELD_11",
+    "CP_CUSTOM_FIELD_12",
+    "CP_CUSTOM_FIELD_13",
+    "CP_CUSTOM_FIELD_14",
+    "CP_CUSTOM_FIELD_15",
+    "CP_CUSTOM_FIELD_16",
+    "CP_CUSTOM_FIELD_17",
+    "CP_CUSTOM_FIELD_18",
+    "CP_CUSTOM_FIELD_19",
+    "CP_CUSTOM_FIELD_20",
+    "CP_CUSTOM_DATE_01",
+    "CP_CUSTOM_DATE_02",
+    "CP_PROVIDER_ADDRESSES",
+    "CP_PROVIDER_NETWORKS",
+    "PAYER_PLATFORM",
+    "PAYER",
+    "CLIENT_DATA_PLATFORM",
+    "INGESTION_DATE",
+    "INGESTION_EPOCH",
+    "ROWID",
+    "PUBLISHER_NAME"
+  ],
+  "properties": {
+    "CP_PROVIDER_CLIENT_ID": {
+      "type": "string",
+      "maxLength": 25
+    },
+    "CP_PROVIDER_CLIENT_MASTER_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_FEDERAL_TAX_ID": {
+      "type": "string",
+      "pattern": "^[0-9]{9}$"
+    },
+    "CP_PROVIDER_NPI": {
+      "type": "string",
+      "maxLength": 10,
+      "pattern": "^[0-9]{10}$"
+    },
+    "CP_PROVIDER_DEA_NUMBER": {
+      "type": "string"
+    },
+    "CP_PROVIDER_STATE_LICENSE_STATE_CODE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_STATE_LICENSE_NUMBER": {
+      "type": "string"
+    },
+    "CP_PROVIDER_MEDICARE_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_MEDICAID_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CHASE_INDICATOR": {
+      "type": "string"
+    },
+    "CP_PRESCRIBING_PROVIDER_INDICATOR": {
+      "type": "string"
+    },
+    "CP_PRESCRIBING_PROVIDER_CLIENT_ID": {
+      "type": "string"
+    },
+    "CP_PRESCRIBING_PROVIDER_CLIENT_MASTER_ID": {
+      "type": "string"
+    },
+    "CP_PRESCRIBING_PROVIDER_NPI": {
+      "type": "string"
+    },
+    "CP_PROVIDER_RECORD_TYPE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_FIRST_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_MIDDLE_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_LAST_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NAME_SUFFIX": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NAME_TITLE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_FULL_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PRIMARY_SPECIALTY_CODE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_TAXONOMY_CODE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_BILLING_GROUP_NUMBER": {
+      "type": "string"
+    },
+    "CP_PROVIDER_BILLING_GROUP_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CCD_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_RECORD_START_DATE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_RECORD_END_DATE": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_01": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_02": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_03": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_04": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_05": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_06": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_07": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_08": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_09": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_10": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_11": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_12": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_13": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_14": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_15": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_16": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_17": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_18": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_19": {
+      "type": "string"
+    },
+    "CP_CUSTOM_FIELD_20": {
+      "type": "string"
+    },
+    "CP_CUSTOM_DATE_01": {
+      "type": "string"
+    },
+    "CP_CUSTOM_DATE_02": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESSES": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "CP_PROVIDER_ADDRESS_CLIENT_ID",
+          "CP_PROVIDER_ADDRESS_MCO_NUMBER",
+          "CP_PROVIDER_ADDRESS_PRIMARY_INDICATOR",
+          "CP_PROVIDER_BILLING_ADDRESS_INDICATOR",
+          "CP_PROVIDER_ADDRESS_02",
+          "CP_PROVIDER_ADDRESS_03",
+          "CP_PROVIDER_CITY",
+          "CP_PROVIDER_STATE",
+          "CP_ITS_HOST_PLAN_CODE",
+          "CP_PROVIDER_ZIP",
+          "CP_PROVIDER_ZIP_PLUS_FOUR",
+          "CP_PROVIDER_COUNTY",
+          "CP_PROVIDER_REGION",
+          "CP_PROVIDER_PHONE",
+          "CP_PROVIDER_PHONE_EXTENSION",
+          "CP_PROVIDER_ALTERNATE_PHONE",
+          "CP_PROVIDER_ALTERNATE_PHONE_EXTENSION",
+          "CP_PROVIDER_FAX",
+          "CP_PROVIDER_FAX_EXTENSION",
+          "CP_PROVIDER_MOBILE_PHONE",
+          "CP_PROVIDER_PAGER",
+          "CP_PROVIDER_EMAIL",
+          "CP_FACILITY_NAME",
+          "CP_PROVIDER_ADDRESS_CONTACT_LAST_NAME",
+          "CP_PROVIDER_ADDRESS_CONTACT_FIRST_NAME",
+          "CP_PROVIDER_ADDRESS_START_DATE",
+          "CP_PROVIDER_ADDRESS_TERMINATION_DATE"
+        ],
+        "properties": {
+          "CP_PROVIDER_ADDRESS_CLIENT_ID": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_MCO_NUMBER": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_PRIMARY_INDICATOR": {
+            "type": "string"
+          },
+          "CP_PROVIDER_BILLING_ADDRESS_INDICATOR": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_01": {
+            "type": "string",
+            "maxLength": 55
+          },
+          "CP_PROVIDER_ADDRESS_02": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_03": {
+            "type": "string"
+          },
+          "CP_PROVIDER_CITY": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "CP_PROVIDER_STATE": {
+            "type": "string",
+            "maxLength": 2,
+            "pattern": "^[A-Z]{2}$"
+          },
+          "CP_ITS_HOST_PLAN_CODE": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ZIP": {
+            "type": "string",
+            "pattern": "^[0-9]{5}$"
+          },
+          "CP_PROVIDER_ZIP_PLUS_FOUR": {
+            "type": "string"
+          },
+          "CP_PROVIDER_COUNTY": {
+            "type": "string"
+          },
+          "CP_PROVIDER_REGION": {
+            "type": "string"
+          },
+          "CP_PROVIDER_PHONE": {
+            "type": "string"
+          },
+          "CP_PROVIDER_PHONE_EXTENSION": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ALTERNATE_PHONE": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ALTERNATE_PHONE_EXTENSION": {
+            "type": "string"
+          },
+          "CP_PROVIDER_FAX": {
+            "type": "string"
+          },
+          "CP_PROVIDER_FAX_EXTENSION": {
+            "type": "string"
+          },
+          "CP_PROVIDER_MOBILE_PHONE": {
+            "type": "string"
+          },
+          "CP_PROVIDER_PAGER": {
+            "type": "string"
+          },
+          "CP_PROVIDER_EMAIL": {
+            "type": "string"
+          },
+          "CP_FACILITY_NAME": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_CONTACT_LAST_NAME": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_CONTACT_FIRST_NAME": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_START_DATE": {
+            "type": "string"
+          },
+          "CP_PROVIDER_ADDRESS_TERMINATION_DATE": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CP_PROVIDER_NETWORKS": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "CP_PROVIDER_NETWORK_CLIENT_ID",
+          "CP_PROVIDER_NETWORK_NAME",
+          "CP_PROVIDER_NETWORK_INDICATOR",
+          "CP_PROVIDER_NETWORK_EFFECTIVE_DATE",
+          "CP_PROVIDER_NETWORK_TERMINATION_DATE"
+        ],
+        "properties": {
+          "CP_PROVIDER_NETWORK_CLIENT_ID": {
+            "type": "string"
+          },
+          "CP_PROVIDER_NETWORK_NAME": {
+            "type": "string"
+          },
+          "CP_PROVIDER_NETWORK_INDICATOR": {
+            "type": "string"
+          },
+          "CP_PROVIDER_NETWORK_EFFECTIVE_DATE": {
+            "type": "string"
+          },
+          "CP_PROVIDER_NETWORK_TERMINATION_DATE": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "PAYER_PLATFORM": {
+      "type": "string"
+    },
+    "PAYER": {
+      "type": "string"
+    },
+    "CLIENT_DATA_PLATFORM": {
+      "type": "string"
+    },
+    "INGESTION_DATE": {
+      "type": "string"
+    },
+    "INGESTION_EPOCH": {
+      "type": "integer"
+    },
+    "ROWID": {
+      "type": "string"
+    },
+    "PUBLISHER_NAME": {
+      "type": "string"
+    }
+  }
+}

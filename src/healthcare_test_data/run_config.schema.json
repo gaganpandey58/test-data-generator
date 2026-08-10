@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simple healthcare test-data generator configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "anyOf": [
+    {"required": ["entities"]},
+    {"required": ["provider"]},
+    {"required": ["member"]},
+    {"required": ["claim"]}
+  ],
+  "properties": {
+    "seed": {"type": "integer"},
+    "output_directory": {"type": "string", "minLength": 1},
+    "survivorship_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member_verified_action": {"enum": ["update", "keep_both", "ignore"]},
+        "claim_verified_action": {"enum": ["update", "keep_both", "ignore"]},
+        "void_action": {"enum": ["update", "keep_both", "ignore"]}
+      }
+    },
+    "provider": {"$ref": "#/$defs/shortEntity"},
+    "member": {"$ref": "#/$defs/shortEntity"},
+    "claim": {"$ref": "#/$defs/shortEntity"},
+    "entities": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"$ref": "#/$defs/detailedEntity"},
+        "member": {"$ref": "#/$defs/detailedEntity"},
+        "claim": {"$ref": "#/$defs/detailedEntity"}
+      }
+    }
+  },
+  "$defs": {
+    "shortEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 1},
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "detailedEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "count", "schema", "module", "filename"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "count": {"type": "integer", "minimum": 0},
+        "profile": {"type": "string", "minLength": 1},
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "schema": {"type": "string", "minLength": 1},
+        "module": {"type": "string", "minLength": 1},
+        "filename": {"type": "string", "pattern": "\\.jsonl$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
+          "then": {"properties": {"count": {"minimum": 1}}}
+        }
+      ]
+    }
+  }
+}
