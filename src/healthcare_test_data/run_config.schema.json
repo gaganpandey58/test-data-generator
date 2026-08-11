@@ -1,36 +1,30 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Simple healthcare test-data generator configuration",
+  "title": "Test data generator configuration",
   "type": "object",
   "additionalProperties": false,
   "anyOf": [
-    {"required": ["entities"]},
     {"required": ["provider"]},
     {"required": ["member"]},
-    {"required": ["claim_professional"]},
-    {"required": ["claim_institutional"]}
+    {"required": ["claims"]}
   ],
   "properties": {
     "seed": {"type": "integer"},
     "output_directory": {"type": "string", "minLength": 1},
-    "provider": {"$ref": "#/$defs/shortEntity"},
-    "member": {"$ref": "#/$defs/shortEntity"},
-    "claim_professional": {"$ref": "#/$defs/shortEntity"},
-    "claim_institutional": {"$ref": "#/$defs/shortEntity"},
-    "entities": {
+    "provider": {"$ref": "#/$defs/entity"},
+    "member": {"$ref": "#/$defs/entity"},
+    "claims": {
       "type": "object",
       "minProperties": 1,
       "additionalProperties": false,
       "properties": {
-        "provider": {"$ref": "#/$defs/detailedEntity"},
-        "member": {"$ref": "#/$defs/detailedEntity"},
-        "claim_professional": {"$ref": "#/$defs/detailedEntity"},
-        "claim_institutional": {"$ref": "#/$defs/detailedEntity"}
+        "professional": {"$ref": "#/$defs/entity"},
+        "institutional": {"$ref": "#/$defs/entity"}
       }
     }
   },
   "$defs": {
-    "shortEntity": {
+    "entity": {
       "type": "object",
       "additionalProperties": false,
       "required": ["count"],
@@ -41,25 +35,6 @@
           "additionalProperties": {"type": "integer", "minimum": 0}
         }
       }
-    },
-    "detailedEntity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["enabled", "count"],
-      "properties": {
-        "enabled": {"type": "boolean"},
-        "count": {"type": "integer", "minimum": 0},
-        "scenarios": {
-          "type": "object",
-          "additionalProperties": {"type": "integer", "minimum": 0}
-        }
-      },
-      "allOf": [
-        {
-          "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
-          "then": {"properties": {"count": {"minimum": 1}}}
-        }
-      ]
     }
   }
 }

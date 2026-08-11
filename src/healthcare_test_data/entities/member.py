@@ -6,13 +6,16 @@ the provider rows selected for the same run and applies configured scenario
 variations only to copied deterministic baselines.
 """
 
+import json
 from collections.abc import Mapping
 from datetime import date, timedelta
+from importlib.resources import files
 from random import Random
 
 from faker import Faker
 
 from healthcare_test_data.entities.provider import generate_record as generate_provider
+from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
 from healthcare_test_data.scenarios import Scenario, plan
 
@@ -68,14 +71,17 @@ def generate_record(
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     birth = _date(date(1940, 1, 1) + timedelta(days=randomizer.randrange(28000)))
     member_id = f"MBR{index + 1:010d}"
-    record = _profile_blanks("member")
+    # The EIP reference sample is the authoritative JSON-kind contract.  Add
+    # GDF-only fields first, then let sample defaults preserve kinds for fields
+    # that appear in both sources (for example risk score).
+    record = {**_profile_blanks("member"), **_sample_root_defaults()}
     record.update(
         {
             "CM_CLIENT_DATA_PLATFORM": "QNXT",
             "CM_PAYER_SHORT": "CHC",
             "CM_MEMBER_CLIENT_ID": member_id,
             "CM_MEMBER_CLIENT_MASTER_ID": f"MM{1500000000 + index:010d}",
-            "CM_MEMBER_DEPENDENT_NUMBER": "01" if dependent else "00",
+            "CM_MEMBER_DEPENDENT_NUMBER": 1 if dependent else 0,
             "CM_SUBSCRIBER_CLIENT_ID": f"SUB{subscriber_index + 1:010d}",
             "CM_SUBSCRIBER_CLIENT_MASTER_ID": f"SM{1500000000 + subscriber_index:010d}",
             "CM_SUBSCRIBER_SSN": _digits(randomizer, 9),
@@ -118,6 +124,7 @@ def generate_record(
             "CM_MEMBER_COB": [],
         }
     )
+    record.update(_transport_headers(seed, index))
     return record
 
 
@@ -162,7 +169,9 @@ def _mutate(baseline: dict[str, object], scenario: Scenario) -> dict[str, object
         address["CM_MEMBER_ADDRESS_START_DATE"] = "20190101"
     elif scenario.name == "incomplete":
         for field in _OPTIONAL_INCOMPLETE_FIELDS:
-            record.pop(field, None)
+            record[field] = (
+                "000000000" if field == "CM_MEMBER_SSN" else _blank_like(record.get(field))
+            )
     elif scenario.name == "new":
         # A new row is independently generated before this branch is reached.
         return record
@@ -180,6 +189,129 @@ def _profile_blanks(profile: str) -> dict[str, object]:
     """
     layout = load_layout(profile)
     return {field.name: "" for field in layout.root}
+
+
+def _sample_root_defaults() -> dict[str, object]:
+    """Create blank values for every root field in the supplied member sample.
+
+    The checked-in field-kind registry preserves the complete EIP member
+    envelope without copying source values. Real generated values overwrite
+    identity, relationship, address, enrollment, and transport fields later in
+    :func:`generate_record`; the remaining optional fields retain source-valid
+    blank values of the matching JSON kind.
+
+    Returns:
+        A new mutable mapping containing every documented member root field.
+
+    Raises:
+        RuntimeError: If the packaged field-kind registry is malformed.
+    """
+    try:
+        raw = json.loads(
+            files("healthcare_test_data")
+            .joinpath("member_field_defaults.json")
+            .read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("Could not load packaged member field defaults") from error
+    if not isinstance(raw, dict) or not all(
+        isinstance(name, str) and isinstance(kind, str) for name, kind in raw.items()
+    ):
+        raise RuntimeError("Packaged member field defaults are malformed")
+    blank_by_kind: dict[str, object] = {
+        "string": "",
+        "integer": 0,
+        "number": 0.0,
+        "boolean": False,
+        "array": [],
+        "object": {},
+    }
+    if any(kind not in blank_by_kind for kind in raw.values()):
+        raise RuntimeError("Packaged member field defaults contain an unknown JSON kind")
+    defaults: dict[str, object] = {}
+    for name, kind in raw.items():
+        if kind == "array":
+            defaults[name] = []
+        elif kind == "object":
+            defaults[name] = {}
+        else:
+            defaults[name] = blank_by_kind[kind]
+    return defaults
+
+
+def _blank_like(value: object | None) -> object:
+    """Return a source-valid empty value while preserving a JSON value type.
+
+    Scenario records must keep the same EIP field set as baseline records.
+    This helper represents a missing optional value using the source's normal
+    empty convention instead of deleting its field from the JSON object.
+
+    Args:
+        value: Existing generated value whose JSON type is retained.
+
+    Returns:
+        An empty string, numeric zero, false, empty list, or empty mapping.
+    """
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return 0
+    if isinstance(value, float):
+        return 0.0
+    if isinstance(value, list):
+        return []
+    if isinstance(value, dict):
+        return {}
+    return ""
+
+
+def _transport_headers(seed: int, index: int) -> dict[str, object]:
+    """Build the flattened Cotiviti envelope used by EIP member samples.
+
+    The member source examples place transport attributes beside the GDF
+    member body, rather than inside a nested envelope. Deterministic UUIDv4
+    identifiers remain stable for a given seed and output position while the
+    generator never repeats a sample value.
+
+    Args:
+        seed: Shared deterministic generation seed.
+        index: Stable zero-based member output position.
+
+    Returns:
+        Source-compatible Cotiviti and ingestion attributes for one member.
+    """
+    sequence = index + 1
+    namespace = "member"
+    return {
+        "cotiviti.dataset_id": "members",
+        "cotiviti.tenant_id": "tnt_ppc_synthetic",
+        "cotiviti.schema_version": "gdf-ppc-v1",
+        "cotiviti.client_id": "synthetic.health.payer",
+        "cotiviti.client_system": "synthetic.health.payer",
+        "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
+        "cotiviti.produced_at": f"2026-08-05T00:{index % 60:02d}:00Z",
+        "cotiviti.source_format": "edi_x12_834",
+        "cotiviti.source_system": "PPC",
+        "cotiviti.batch_id": deterministic_uuid4(seed, f"{namespace}:batch"),
+        "cotiviti.message_seq": sequence,
+        "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
+        "cotiviti.producer_version": "test-data-generator/1",
+        "cotiviti.source.isa_control": f"{seed % 1_000_000_000:09d}",
+        "cotiviti.source.gs_control": sequence,
+        "cotiviti.source.raw_file_ref": f"members-{seed}-{sequence:06d}.834",
+        "ROWID": deterministic_uuid4(seed, f"{namespace}:row:{sequence}"),
+        "PAYER": "CHC",
+        "PAYER_PLATFORM": "CHC-QNXT",
+        "CLIENT_DATA_PLATFORM": "QNXT",
+        "PUBLISHER_NAME": "client_member_gdf",
+        "PRODUCT": "PPC",
+        "GDF_VERSION": "gdf-ppc-v1",
+        "FILE_TYPE": "834",
+        "DATA_CATEGORY": "member",
+        "LOB": "tnt_ppc_synthetic",
+        "INGESTION_DATE": "20260805",
+        "INGESTION_EPOCH": 1785888000 + sequence,
+    }
 
 
 def _address(
