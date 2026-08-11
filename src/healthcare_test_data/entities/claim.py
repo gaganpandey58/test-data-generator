@@ -14,6 +14,11 @@ from pathlib import Path
 from random import Random
 from typing import cast
 
+from healthcare_test_data.clients import (
+    nested_header_values,
+    record_header_values,
+    resolve_client_headers,
+)
 from healthcare_test_data.entities.member import generate_record as generate_member
 from healthcare_test_data.entities.provider import generate_record as generate_provider
 from healthcare_test_data.identifiers import deterministic_uuid4
@@ -30,6 +35,8 @@ def generate_record(
     profile: str | None = None,
     entity_scenarios: Mapping[str, Mapping[str, int]] | None = None,
     entity_name: str | None = None,
+    client_headers: Mapping[str, object] | None = None,
+    client_values: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Generate one GDF claim/payment envelope, optionally varying a baseline.
 
@@ -43,6 +50,8 @@ def generate_record(
             provider output rows.
         entity_name: Configured claim entity name.  It keeps professional and
             institutional identifiers in independent namespaces.
+        client_headers: Optional client-specific envelope header overrides.
+        client_values: Optional client-specific non-header generation values.
 
     Returns:
         Medical claim linked to deterministic member and provider source records.
@@ -55,6 +64,8 @@ def generate_record(
             profile=profile,
             entity_scenarios=entity_scenarios,
             entity_name=entity_name,
+            client_headers=client_headers,
+            client_values=client_values,
         )
         mutated = _mutate(baseline, scenario)
         _hydrate_sample_shape(mutated, _claim_type(index, profile))
@@ -76,12 +87,15 @@ def generate_record(
     liability = round(copay + deductible + coinsurance, 2)
     paid = round(allowed - liability, 2)
     claim_id = f"{profile_code}CLM{index + 1:09d}"
+    resolved_headers = resolve_client_headers(
+        entity_name or ("claim_professional" if claim_type == "P" else "claim_institutional"),
+        client_headers,
+    )
     member_addresses = member["CM_MEMBER_ADDRESSES"]
     address = member_addresses[0] if isinstance(member_addresses, list) else {}
     record = _profile_blanks("claim-professional" if claim_type == "P" else "claim-institutional")
     record.update(
         {
-            "CH_CLIENT_DATA_PLATFORM": "QNXT",
             "CH_CLIENT_CLAIM_UNIQUE_ID": f"{profile_code}CLU{index + 1:011d}",
             "CH_CLIENT_CLAIM_ID": claim_id,
             "CH_CLIENT_ROOT_CLAIM_ID": f"{profile_code}ROOT{index + 1:08d}",
@@ -160,7 +174,9 @@ def generate_record(
             ],
         }
     )
-    record.update(_transport_headers(seed, index, claim_type, claim_id, entity_name))
+    record.update(
+        _transport_headers(seed, index, claim_type, claim_id, entity_name, resolved_headers)
+    )
     if isinstance(address, Mapping):
         record["CH_PATIENT_ZIP"] = address.get("CM_MEMBER_ZIP", "")
     _remove_profile_exclusions(record, claim_type)
@@ -587,6 +603,7 @@ def _transport_headers(
     claim_type: str,
     claim_id: str,
     entity_name: str | None,
+    client_headers: Mapping[str, object] | None,
 ) -> dict[str, object]:
     """Build Cotiviti transport attributes for one independent 837 envelope.
 
@@ -601,6 +618,7 @@ def _transport_headers(
         claim_type: ``P`` for 837 professional or ``O`` for 837 institutional.
         claim_id: Synthetic claim identifier used in source-control metadata.
         entity_name: Optional configured entity name for traceable namespaces.
+        client_headers: Resolved client-specific header values, if supplied.
 
     Returns:
         Flattened transport/header attributes ready to merge into a claim row.
@@ -611,25 +629,21 @@ def _transport_headers(
     )
     sequence = index + 1
     batch = f"synthetic-{namespace}-{seed}-{sequence:06d}"
+    profile_entity = entity_name or (
+        "claim_professional" if claim_type == "P" else "claim_institutional"
+    )
+    resolved_headers = resolve_client_headers(profile_entity, client_headers)
     headers: dict[str, object] = {
         "FILE_TYPE": file_type,
-        "CLIENT_DATA_PLATFORM": "",
         "INGESTION_DATE": "20260805",
         "INGESTION_EPOCH": 1785888000 + sequence,
-        "PAYER": "SYNTHETIC-PAYER",
-        "PAYER_PLATFORM": "PPC",
-        "PRODUCT": "PPC",
         "DATA_CATEGORY": "MEDICAL_CLAIMS",
         "GDF_VERSION": "v2.9",
         "PUBLISHER_NAME": "test-data-generator",
         "x-connector-name": "synthetic-eip-837",
         "cotiviti.dataset_id": "medical_claims",
-        "cotiviti.tenant_id": "tenant_synthetic",
-        "cotiviti.client_id": "SYNTHETIC-PAYER",
-        "cotiviti.client_system": "test-data-generator",
         "cotiviti.schema_version": "gdf-eip-v1",
         "cotiviti.source_format": f"edi_x12_{file_type}",
-        "cotiviti.source_system": "PPC",
         "cotiviti.batch_id": batch,
         "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
         "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
@@ -641,14 +655,21 @@ def _transport_headers(
         "cotiviti.source.st_control": f"{sequence:04d}",
         "cotiviti.source.claim_id": claim_id,
         "cotiviti.source.raw_file_ref": f"{namespace}-{seed}-{sequence:06d}.x12",
-        "otherAttributes": _other_attributes(claim_type, sequence),
+        "otherAttributes": _other_attributes(
+            claim_type,
+            sequence,
+            nested_header_values(profile_entity, resolved_headers, "otherAttributes"),
+        ),
     }
     if claim_type != "P":
         headers["ROWID"] = deterministic_uuid4(seed, f"{namespace}:row:{sequence}")
+    headers.update(record_header_values(profile_entity, resolved_headers))
     return headers
 
 
-def _other_attributes(claim_type: str, sequence: int) -> dict[str, str] | None:
+def _other_attributes(
+    claim_type: str, sequence: int, client_headers: Mapping[str, object]
+) -> dict[str, str] | None:
     """Create the source-compatible EDI control attributes for a claim row.
 
     Professional examples carry an ``otherAttributes`` object while the
@@ -659,6 +680,7 @@ def _other_attributes(claim_type: str, sequence: int) -> dict[str, str] | None:
     Args:
         claim_type: ``P`` for professional or ``O`` for institutional.
         sequence: One-based deterministic transaction sequence.
+        client_headers: Declared nested payer values from the client profile.
 
     Returns:
         Professional EDI control attributes, or ``None`` for institutional
@@ -668,28 +690,32 @@ def _other_attributes(claim_type: str, sequence: int) -> dict[str, str] | None:
         return None
     control = f"{sequence:04d}"
     return {
-        "payerName": "SYNTHETIC-PAYER",
-        "payerIdentifier": "SYNTHETICPAYER",
-        "payerIdCodeQualifier": "PI",
-        "payerAddressLine1": "100 Synthetic Way",
-        "payerCity": "Baltimore",
-        "payerState": "MD",
-        "payerZip": "212010001",
-        "submitterName": "SYNTHETIC SUBMITTER",
-        "submitterIdentifier": "SYNTH837",
-        "submitterTelephone": "8005550100",
-        "receiverName": "SYNTHETIC RECEIVER",
-        "receiverIdentifier": "SYNTHRECV",
-        "tradingPartner": "SYNTHETIC",
+        "payerName": str(client_headers.get("payerName", "")),
+        "payerIdentifier": str(client_headers.get("payerIdentifier", "")),
+        "payerIdCodeQualifier": str(client_headers.get("payerIdCodeQualifier", "")),
+        "payerAddressLine1": str(client_headers.get("payerAddressLine1", "")),
+        "payerCity": str(client_headers.get("payerCity", "")),
+        "payerState": str(client_headers.get("payerState", "")),
+        "payerZip": str(client_headers.get("payerZip", "")),
+        "submitterName": str(client_headers.get("submitterName", "")),
+        "submitterIdentifier": str(client_headers.get("submitterIdentifier", "")),
+        "submitterTelephone": str(client_headers.get("submitterTelephone", "")),
+        "receiverName": str(client_headers.get("receiverName", "")),
+        "receiverIdentifier": str(client_headers.get("receiverIdentifier", "")),
+        "tradingPartner": str(client_headers.get("tradingPartner", "")),
         "batchPurpose": "CH",
         "claimPurpose": "CH",
         "batchControlNumber": control,
         "interchangeControlNumber": f"{sequence:09d}",
         "functionalGroupControlNumber": str(sequence),
         "transactionSetControlNumber": control,
-        "interchangeUsageIndicator": "T",
-        "interchangeSenderIdentifierQualifier": "ZZ",
-        "interchangeReceiverIdentifierQualifier": "ZZ",
+        "interchangeUsageIndicator": str(client_headers.get("interchangeUsageIndicator", "")),
+        "interchangeSenderIdentifierQualifier": str(
+            client_headers.get("interchangeSenderIdentifierQualifier", "")
+        ),
+        "interchangeReceiverIdentifierQualifier": str(
+            client_headers.get("interchangeReceiverIdentifierQualifier", "")
+        ),
     }
 
 

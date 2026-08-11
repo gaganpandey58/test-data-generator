@@ -56,34 +56,97 @@
     "cotiviti.source.raw_file_ref"
   ],
   "properties": {
-    "ROWID": {"type": "string", "format": "uuid"},
-    "INGESTION_EPOCH": {"type": "integer"},
-    "FILE_TYPE": {"const": "834"},
-    "DATA_CATEGORY": {"const": "member"},
-    "PUBLISHER_NAME": {"const": "client_member_gdf"},
-    "PAYER_PLATFORM": {"type": "string"},
-    "PAYER": {"type": "string"},
-    "CLIENT_DATA_PLATFORM": {"type": "string"},
-    "INGESTION_DATE": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "PRODUCT": {"type": "string"},
-    "GDF_VERSION": {"type": "string"},
-    "LOB": {"type": "string"},
-    "cotiviti.dataset_id": {"const": "members"},
-    "cotiviti.tenant_id": {"type": "string"},
-    "cotiviti.schema_version": {"type": "string"},
-    "cotiviti.client_id": {"type": "string"},
-    "cotiviti.client_system": {"type": "string"},
-    "cotiviti.message_id": {"type": "string", "format": "uuid"},
-    "cotiviti.produced_at": {"type": "string", "format": "date-time"},
-    "cotiviti.source_format": {"const": "edi_x12_834"},
-    "cotiviti.source_system": {"const": "PPC"},
-    "cotiviti.batch_id": {"type": "string"},
-    "cotiviti.message_seq": {"type": "integer", "minimum": 1},
-    "cotiviti.correlation_id": {"type": "string", "format": "uuid"},
-    "cotiviti.producer_version": {"type": "string"},
-    "cotiviti.source.isa_control": {"type": "string"},
-    "cotiviti.source.gs_control": {"type": "integer", "minimum": 1},
-    "cotiviti.source.raw_file_ref": {"type": "string"},
+    "ROWID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "INGESTION_EPOCH": {
+      "type": "integer"
+    },
+    "FILE_TYPE": {
+      "const": "834"
+    },
+    "DATA_CATEGORY": {
+      "const": "member"
+    },
+    "PUBLISHER_NAME": {
+      "const": "client_member_gdf"
+    },
+    "PAYER_PLATFORM": {
+      "type": "string"
+    },
+    "PAYER": {
+      "type": "string"
+    },
+    "CLIENT_DATA_PLATFORM": {
+      "type": "string"
+    },
+    "INGESTION_DATE": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "PRODUCT": {
+      "type": "string"
+    },
+    "GDF_VERSION": {
+      "type": "string"
+    },
+    "LOB": {
+      "type": "string"
+    },
+    "cotiviti.dataset_id": {
+      "const": "members"
+    },
+    "cotiviti.tenant_id": {
+      "type": "string"
+    },
+    "cotiviti.schema_version": {
+      "type": "string"
+    },
+    "cotiviti.client_id": {
+      "type": "string"
+    },
+    "cotiviti.client_system": {
+      "type": "string"
+    },
+    "cotiviti.message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cotiviti.produced_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cotiviti.source_format": {
+      "const": "edi_x12_834"
+    },
+    "cotiviti.source_system": {
+      "const": "PPC"
+    },
+    "cotiviti.batch_id": {
+      "type": "string"
+    },
+    "cotiviti.message_seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cotiviti.correlation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cotiviti.producer_version": {
+      "type": "string"
+    },
+    "cotiviti.source.isa_control": {
+      "type": "string"
+    },
+    "cotiviti.source.gs_control": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cotiviti.source.raw_file_ref": {
+      "type": "string"
+    },
     "CM_CLIENT_DATA_PLATFORM": {
       "type": "string",
       "maxLength": 20
@@ -186,12 +249,981 @@
       "items": {
         "$ref": "#/$defs/cob"
       }
+    },
+    "HDR_CONSTANT": {
+      "type": "string"
+    },
+    "HDR_CLIENT_ID": {
+      "type": "string"
+    },
+    "HDR_CLIENT_VENDOR_ID": {
+      "type": "string"
+    },
+    "HDR_FILE_TYPE": {
+      "type": "string"
+    },
+    "HDR_FILE_SEQUENCE": {
+      "type": "string"
+    },
+    "HDR_FILE_ID": {
+      "type": "string"
+    },
+    "HDR_PRODUCED_DATE": {
+      "type": "string"
+    },
+    "HDR_RECORD_COUNT": {
+      "type": "string"
+    },
+    "CM_SUBSCRIBER_SSN": {
+      "type": "string"
+    },
+    "CM_MEMBER_ALTERNATE_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_MEDICARE_HICN_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_MEDICAID_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_MEDICAL_RECORD_NUMBER": {
+      "type": "string"
+    },
+    "CM_MEMBER_NAME_SUFFIX": {
+      "type": "string"
+    },
+    "CM_MEMBER_DEATH_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_EDUCATION": {
+      "type": "string"
+    },
+    "CM_MEMBER_RACE": {
+      "type": "string"
+    },
+    "CM_RACE_SOURCE": {
+      "type": "string"
+    },
+    "CM_ETHNICITY_SOURCE": {
+      "type": "string"
+    },
+    "CM_MEMBER_HISPANIC_ORIGIN_INDICATOR": {
+      "type": "string"
+    },
+    "CM_SPOKEN_LANGUAGE_ID": {
+      "type": "string"
+    },
+    "CM_WRITTEN_LANGUAGE_ID": {
+      "type": "string"
+    },
+    "CM_OTHER_LANGUAGE_ID": {
+      "type": "string"
+    },
+    "CM_SPOKEN_LANGUAGE_SOURCE": {
+      "type": "string"
+    },
+    "CM_WRITTEN_LANGUAGE_SOURCE": {
+      "type": "string"
+    },
+    "CM_OTHER_LANGUAGE_SOURCE": {
+      "type": "string"
+    },
+    "CM_MEMBER_INTERPRETER_INDICATOR": {
+      "type": "string"
+    },
+    "CM_MEMBER_RELATIONSHIP_TO_SUBSCRIBER": {
+      "type": "string"
+    },
+    "CM_GUARDIAN_LAST_NAME": {
+      "type": "string"
+    },
+    "CM_GUARDIAN_FIRST_NAME": {
+      "type": "string"
+    },
+    "CM_GUARDIAN_MIDDLE_NAME": {
+      "type": "string"
+    },
+    "CM_GUARDIAN_EMAIL": {
+      "type": "string"
+    },
+    "CM_RISK_SCORE_TYPE": {
+      "type": "string"
+    },
+    "CM_RISK_SCORE": {
+      "type": "number"
+    },
+    "CM_OTHER_INSURANCE_INDICATOR": {
+      "type": "string"
+    },
+    "CM_PAYER_ESRD_INDICATOR": {
+      "type": "string"
+    },
+    "CM_ESRD_INDICATOR": {
+      "type": "string"
+    },
+    "CM_HOSPICE_INDICATOR": {
+      "type": "string"
+    },
+    "CM_INSTITUTIONALIZED_INDICATOR": {
+      "type": "string"
+    },
+    "CM_DISABLED_INDICATOR": {
+      "type": "string"
+    },
+    "CM_ESRD_COORDINATION_PERIOD_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_ESRD_COORDINATION_PERIOD_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_FIRST_DIALYSIS_DATE": {
+      "type": "string"
+    },
+    "CM_HOME_TREATMENT_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_CCD_ID": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_01": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_02": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_03": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_04": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_05": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_06": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_07": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_08": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_09": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_10": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_11": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_12": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_13": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_14": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_15": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_16": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_17": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_18": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_19": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_20": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_21": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_22": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_23": {
+      "type": "string"
+    },
+    "CM_CUSTOM_FIELD_24": {
+      "type": "string"
+    },
+    "CM_CUSTOM_DATE_01": {
+      "type": "string"
+    },
+    "CM_CUSTOM_DATE_02": {
+      "type": "string"
+    },
+    "CM_CUSTOM_DATE_03": {
+      "type": "string"
+    },
+    "CM_CUSTOM_DATE_04": {
+      "type": "string"
+    },
+    "CM_CUSTOM_AMOUNT_01": {
+      "type": "number"
+    },
+    "CM_CUSTOM_AMOUNT_02": {
+      "type": "number"
+    },
+    "CM_MEMBER_ADDRESS_CLIENT_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_TYPE": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_01": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_02": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_03": {
+      "type": "string"
+    },
+    "CM_MEMBER_CITY": {
+      "type": "string"
+    },
+    "CM_MEMBER_STATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_ZIP": {
+      "type": "string"
+    },
+    "CM_MEMBER_ZIP_PLUS_FOUR": {
+      "type": "string"
+    },
+    "CM_MEMBER_COUNTY": {
+      "type": "string"
+    },
+    "CM_MEMBER_EMAIL": {
+      "type": "string"
+    },
+    "CM_MEMBER_PHONE": {
+      "type": "string"
+    },
+    "CM_MEMBER_PHONE_EXTENSION": {
+      "type": "string"
+    },
+    "CM_MEMBER_ALTERNATE_PHONE": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_START_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_ADDRESS_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_ID": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_NAME": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_INSURANCE_LOB": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_INSURANCE_LOB_SUBTYPE": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_ORDER_OF_BENEFITS": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_PRIMACY_REASON": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_SUBSCRIBER_FIRST_NAME": {
+      "type": "string"
+    },
+    "CM_OTHER_PAYER_SUBSCRIBER_LAST_NAME": {
+      "type": "string"
+    },
+    "CM_MEDICARE_SECONDARY_PAYER_CODE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_PART_A_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_PART_A_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_PART_B_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_PART_B_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_PART_D_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_PART_D_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_MEDICARE_ENTITLEMENT_REASON": {
+      "type": "string"
+    },
+    "CM_PAYER_ORGANIZATION_ID": {
+      "type": "string"
+    },
+    "CM_PAYER_ORGANIZATION_NAME": {
+      "type": "string"
+    },
+    "CM_PAYER_EMPLOYEE_INDICATOR": {
+      "type": "string"
+    },
+    "CM_MEMBER_ORIGINAL_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_TERMINATION_REASON": {
+      "type": "string"
+    },
+    "CM_INSURANCE_LOB": {
+      "type": "string"
+    },
+    "CM_INSURANCE_LOB_SUBTYPE": {
+      "type": "string"
+    },
+    "CM_NETWORK_TYPE": {
+      "type": "string"
+    },
+    "CM_CLIENT_LOB": {
+      "type": "string"
+    },
+    "CM_PRODUCT_ID": {
+      "type": "string"
+    },
+    "CM_GOVERNMENT_PLAN_ID": {
+      "type": "string"
+    },
+    "CM_HIOS_ISSUER_ID": {
+      "type": "string"
+    },
+    "CM_PLAN_STATE_CODE": {
+      "type": "string"
+    },
+    "CM_PLAN_METAL_LEVEL": {
+      "type": "string"
+    },
+    "CM_BENEFIT_PLAN_ID": {
+      "type": "string"
+    },
+    "CM_BENEFIT_PLAN_CODE": {
+      "type": "string"
+    },
+    "CM_BENEFIT_PLAN_NAME": {
+      "type": "string"
+    },
+    "CM_MEMBER_BENEFIT_PLAN_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_BENEFIT_PLAN_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_PRODUCT_REPORTABLE_INDICATOR": {
+      "type": "string"
+    },
+    "CM_PLAN_COVERAGE_TYPE": {
+      "type": "string"
+    },
+    "CM_BENEFIT_MEDICAL_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_DENTAL_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_PHARMACY_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_MENTAL_HEALTH_ICARE_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_MENTAL_HEALTH_INPATIENT_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_MENTAL_HEALTH_AMBULATORY_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_CHEMICAL_DEPENDENCY_INPATIENT_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_CHEMICAL_DEPENDENCY_ICARE_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_CHEMICAL_DEPENDENCY_AMBULATORY_INDICATOR": {
+      "type": "string"
+    },
+    "CM_BENEFIT_DISABILITY_INDICATOR": {
+      "type": "string"
+    },
+    "CM_SPECIAL_NEEDS_PROGRAM_ENROLLEE_TYPE": {
+      "type": "string"
+    },
+    "CM_REGULATORY_STATE": {
+      "type": "string"
+    },
+    "CM_MEDICAID_ENROLLMENT_INDICATOR": {
+      "type": "string"
+    },
+    "CM_MEDICAID_ELIGIBILITY_REASON_CODE": {
+      "type": "string"
+    },
+    "CM_MEDICAID_ELIGIBILITY_CATEGORY_ID": {
+      "type": "string"
+    },
+    "CM_MEMBER_ENROLLMENT_NOTES": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_CLIENT_ID": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_MASTER_CLIENT_ID": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_NPI": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_FIRST_NAME": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_LAST_NAME": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_START_DATE": {
+      "type": "string"
+    },
+    "CM_PRIMARY_CARE_PROVIDER_END_DATE": {
+      "type": "string"
+    },
+    "CM_AMP_NUMBER": {
+      "type": "string"
+    },
+    "CM_PAYMENT_DATE": {
+      "type": "string"
+    },
+    "CM_CMS_MMR_RUN_DATE": {
+      "type": "string"
+    },
+    "CM_LONG_TERM_ILLNESS_INDICATOR": {
+      "type": "string"
+    },
+    "CM_MEDICARE_OREC_INDICATOR": {
+      "type": "string"
+    },
+    "CM_LOW_INCOME_SUBSIDY_PREMIUM": {
+      "type": "number"
+    },
+    "CM_LOW_INCOME_PERIOD_START_DATE": {
+      "type": "string"
+    },
+    "CM_LOW_INCOME_PERIOD_END_DATE": {
+      "type": "string"
+    },
+    "CM_COST_SHARING_REDUCTION_VARIANT_ID": {
+      "type": "string"
+    },
+    "CM_APTC_ELIGIBLITY_INDICATOR": {
+      "type": "string"
+    },
+    "CM_MEDICAID_EXPANSION_QHP_WAIVER_INDICATOR": {
+      "type": "string"
+    },
+    "CM_ISSUER_REPORTING_INDICATOR": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_LEAVE_TYPE": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_LEAVE_BEGIN_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_LEAVE_END_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYEE_BENEFIT_COVERAGE_TYPE": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_STATUS_CODE": {
+      "type": "string"
+    },
+    "CM_EMPLOYMENT_STATUS_DESCRIPTION": {
+      "type": "string"
+    },
+    "CM_CARE_MANAGEMENT_INDICATOR": {
+      "type": "string"
+    },
+    "CM_GROUP_NUMBER": {
+      "type": "string"
+    },
+    "CM_GROUP_NAME": {
+      "type": "string"
+    },
+    "CM_GROUP_FUNDING_TYPE": {
+      "type": "string"
+    },
+    "CM_GROUP_SIZE": {
+      "type": "integer"
+    },
+    "CM_GROUP_SIZE_DESCRIPTION": {
+      "type": "string"
+    },
+    "CM_GROUP_SIZE_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_GROUP_SIZE_END_DATE": {
+      "type": "string"
+    },
+    "CM_GROUP_ADDRESS_01": {
+      "type": "string"
+    },
+    "CM_GROUP_ADDRESS_02": {
+      "type": "string"
+    },
+    "CM_GROUP_CITY": {
+      "type": "string"
+    },
+    "CM_GROUP_STATE": {
+      "type": "string"
+    },
+    "CM_GROUP_ZIP": {
+      "type": "string"
+    },
+    "CM_GROUP_PHONE": {
+      "type": "string"
+    },
+    "CM_MEMBER_GROUP_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_GROUP_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_NUMBER": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_NAME": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_SIZE": {
+      "type": "integer"
+    },
+    "CM_EMPLOYER_SIZE_DESCRIPTION": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_SIZE_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_SIZE_END_DATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_ADDRESS_01": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_ADDRESS_02": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_ADDRESS_03": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_CITY": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_STATE": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_ZIP": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_ZIP_PLUS_FOUR": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_EMAIL": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_PHONE": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_FAX": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_GROUP_SIC_CODE": {
+      "type": "string"
+    },
+    "CM_EMPLOYER_GROUP_SIC_CODE_DESCRIPTION": {
+      "type": "string"
+    },
+    "CM_SUBGROUP_NUMBER": {
+      "type": "string"
+    },
+    "CM_SUBGROUP_NAME": {
+      "type": "string"
+    },
+    "CM_MEMBER_SUBGROUP_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_SUBGROUP_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_SUBGROUP_SIZE": {
+      "type": "integer"
+    },
+    "CM_SUBGROUP_SIZE_DESCRIPTION": {
+      "type": "string"
+    },
+    "CM_SUBGROUP_SIZE_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_SUBGROUP_SIZE_END_DATE": {
+      "type": "string"
+    },
+    "CM_WORKING_STATUS_SEGMENTATION_CLIENT_ID": {
+      "type": "string"
+    },
+    "CM_WORKING_STATUS_SEGMENTATION_NAME": {
+      "type": "string"
+    },
+    "CM_MEMBER_WORKING_STATUS_SEGMENTATION_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CM_MEMBER_WORKING_STATUS_SEGMENTATION_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_01": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_01": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_02": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_02": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_03": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_03": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_04": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_04": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_05": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_05": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_06": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_06": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_07": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_07": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_08": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_08": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_09": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_09": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_10": {
+      "type": "string"
+    },
+    "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_10": {
+      "type": "string"
+    },
+    "CM_MEDICARE_CONTRACT_NUMBER": {
+      "type": "string"
+    },
+    "CM_STATE_COUNTY_CODE": {
+      "type": "string"
+    },
+    "CM_OUT_OF_AREA_INDICATOR": {
+      "type": "string"
+    },
+    "CM_RISK_ADJUSTMENT_FACTOR_A": {
+      "type": "string"
+    },
+    "CM_RISK_ADJUSTMENT_FACTOR_B": {
+      "type": "string"
+    },
+    "CM_PAYMENT_START_DATE": {
+      "type": "string"
+    },
+    "CM_PAYMENT_END_DATE": {
+      "type": "string"
+    },
+    "CM_MONTHLY_RISK_PAYMENT_A": {
+      "type": "string"
+    },
+    "CM_MONTHLY_RISK_PAYMENT_B": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTA_COST_SHARING": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTB_COST_SHARING": {
+      "type": "string"
+    },
+    "CM_REBATE_OTHER_PARTA_SUPPL": {
+      "type": "string"
+    },
+    "CM_REBATE_OTHER_PARTB_SUPPL": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTB_PREMIUM_PARTA_AMOUNT": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTB_PREMIUM_PARTB_AMOUNT": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTD_SUPPL_PARTA_AMOUNT": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTD_SUPPL_PARTB_AMOUNT": {
+      "type": "string"
+    },
+    "CM_TOTAL_PARTA_MA_PAYMENT": {
+      "type": "string"
+    },
+    "CM_TOTAL_PARTB_MA_PAYMENT": {
+      "type": "string"
+    },
+    "CM_TOTAL_PARTC_MA_PAYMENT": {
+      "type": "string"
+    },
+    "CM_RISK_ADJ_FACTOR_D": {
+      "type": "string"
+    },
+    "CM_REBATE_PARTD_BASIC": {
+      "type": "string"
+    },
+    "CM_PARTD_DIRECT_SUBSIDY": {
+      "type": "string"
+    },
+    "CM_REINSURANCE_SUBSIDY": {
+      "type": "string"
+    },
+    "CM_LOW_INCOME_SUBSIDY": {
+      "type": "string"
+    },
+    "CM_TOTAL_PARTD_PAYMENT": {
+      "type": "string"
+    },
+    "CM_MSP_REDUCTION_PARTA": {
+      "type": "string"
+    },
+    "CM_MSP_REDUCTION_PARTB": {
+      "type": "string"
+    },
+    "CM_PARTD_COVERAGE_GAP": {
+      "type": "string"
+    },
+    "CM_PARTD_RISKADJ_FACTOR_TYPE": {
+      "type": "string"
+    },
+    "CM_PARTA_MONTHLY_RATE": {
+      "type": "string"
+    },
+    "CM_PARTB_MONTHLY_RATE": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_01": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_02": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_03": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_04": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_05": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_06": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_07": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_08": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_09": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_10": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_11": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_12": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_13": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_14": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_15": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_16": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_17": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_18": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_19": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_20": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_21": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_22": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_23": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_24": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_25": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_26": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_27": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_28": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_29": {
+      "type": "string"
+    },
+    "CME_CUSTOM_FIELD_30": {
+      "type": "string"
+    },
+    "CMD_CLIENT_DATA_PLATFORM": {
+      "type": "string"
+    },
+    "CMD_MOTHER_MEMBER_CLIENT_ID": {
+      "type": "string"
+    },
+    "CMD_MOTHER_MEMBER_CLIENT_MASTER_ID": {
+      "type": "string"
+    },
+    "CMD_BABY_MEMBER_CLIENT_ID": {
+      "type": "string"
+    },
+    "CMD_BABY_MEMBER_CLIENT_MASTER_ID": {
+      "type": "string"
+    },
+    "CMD_MOTHER_BIRTH_DATE": {
+      "type": "string"
+    },
+    "CMD_BABY_BIRTH_DATE": {
+      "type": "string"
+    },
+    "CMD_ESTIMATED_DELIVERY_DATE": {
+      "type": "string"
+    },
+    "CMD_GESTATIONAL_AGE": {
+      "type": "string"
+    },
+    "CMD_BABY_BIRTH_WEIGHT": {
+      "type": "string"
+    },
+    "CMD_FETAL_DEATH_DATE": {
+      "type": "string"
+    },
+    "CMD_INFANT_DEATH_AGE": {
+      "type": "string"
+    },
+    "CMD_CEPHALIC_PRESENT_VERTEX_INDICATOR": {
+      "type": "string"
+    },
+    "CMD_NUMBER_OF_BABIES": {
+      "type": "string"
+    },
+    "CMD_PREVIOUS_LIVE_BIRTH_INDICATOR": {
+      "type": "string"
+    },
+    "CMD_CUSTOM_FIELD_01": {
+      "type": "string"
+    },
+    "CMD_CUSTOM_FIELD_02": {
+      "type": "string"
+    },
+    "CMD_CUSTOM_FIELD_03": {
+      "type": "string"
+    },
+    "CMD_CUSTOM_FIELD_04": {
+      "type": "string"
+    },
+    "CMD_CUSTOM_FIELD_05": {
+      "type": "string"
     }
   },
   "$defs": {
     "address": {
       "type": "object",
-        "additionalProperties": true,
+      "additionalProperties": true,
       "required": [
         "CM_MEMBER_ADDRESS_CLIENT_ID",
         "CM_MEMBER_ADDRESS_TYPE_CODE",
@@ -253,7 +1285,7 @@
     },
     "enrollment": {
       "type": "object",
-        "additionalProperties": true,
+      "additionalProperties": true,
       "required": [
         "CM_MEMBER_ENROLLMENT_CLIENT_ID",
         "CM_MEMBER_ENROLLMENT_EFFECTIVE_DATE",
@@ -290,7 +1322,7 @@
     },
     "cob": {
       "type": "object",
-        "additionalProperties": true,
+      "additionalProperties": true,
       "required": [
         "CM_MEMBER_COB_ORDER_NUMBER",
         "CM_OTHER_PAYER_NAME",

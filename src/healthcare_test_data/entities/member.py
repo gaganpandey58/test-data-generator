@@ -14,6 +14,7 @@ from random import Random
 
 from faker import Faker
 
+from healthcare_test_data.clients import record_header_values, resolve_client_headers
 from healthcare_test_data.entities.provider import generate_record as generate_provider
 from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
@@ -40,6 +41,8 @@ def generate_record(
     *,
     scenario: Scenario | None = None,
     entity_scenarios: Mapping[str, Mapping[str, int]] | None = None,
+    client_headers: Mapping[str, object] | None = None,
+    client_values: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Generate one GDF-profile member record, optionally varying a baseline.
 
@@ -50,6 +53,8 @@ def generate_record(
         scenario: Optional planned variation for this output position.
         entity_scenarios: Optional scenario quantities for linked provider
             output rows.
+        client_headers: Optional client-specific envelope header overrides.
+        client_values: Optional client-specific non-header generation values.
 
     Returns:
         A source-shaped member record that satisfies the member schema.
@@ -60,6 +65,8 @@ def generate_record(
             scenario.baseline_index,
             entity_counts,
             entity_scenarios=entity_scenarios,
+            client_headers=client_headers,
+            client_values=client_values,
         )
         return _mutate(baseline, scenario)
     randomizer = Random(_record_seed(seed, index))
@@ -71,14 +78,15 @@ def generate_record(
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     birth = _date(date(1940, 1, 1) + timedelta(days=randomizer.randrange(28000)))
     member_id = f"MBR{index + 1:010d}"
+    resolved_headers = resolve_client_headers("member", client_headers)
+    client_platform = str(resolved_headers.get("CM_CLIENT_DATA_PLATFORM", ""))
+    values = dict(client_values or {})
     # The EIP reference sample is the authoritative JSON-kind contract.  Add
     # GDF-only fields first, then let sample defaults preserve kinds for fields
     # that appear in both sources (for example risk score).
     record = {**_profile_blanks("member"), **_sample_root_defaults()}
     record.update(
         {
-            "CM_CLIENT_DATA_PLATFORM": "QNXT",
-            "CM_PAYER_SHORT": "CHC",
             "CM_MEMBER_CLIENT_ID": member_id,
             "CM_MEMBER_CLIENT_MASTER_ID": f"MM{1500000000 + index:010d}",
             "CM_MEMBER_DEPENDENT_NUMBER": 1 if dependent else 0,
@@ -106,7 +114,18 @@ def generate_record(
             "CM_MEMBER_RECORD_STATUS": "Active" if index % 2 else "New",
             "CM_MEMBER_SOURCE_UPDATED_AT": "20260805",
             "CM_MEMBER_ADDRESSES": [
-                _address(index, member_id, state, city, zip_code, county, start, faker, randomizer)
+                _address(
+                    index,
+                    member_id,
+                    state,
+                    city,
+                    zip_code,
+                    county,
+                    start,
+                    faker,
+                    randomizer,
+                    client_platform,
+                )
             ],
             "CM_MEMBER_ENROLLMENTS": [
                 {
@@ -114,17 +133,17 @@ def generate_record(
                     "CM_MEMBER_ENROLLMENT_EFFECTIVE_DATE": start,
                     "CM_MEMBER_ENROLLMENT_TERMINATION_DATE": "",
                     "CM_LINE_OF_BUSINESS_CODE": "MED",
-                    "CM_NETWORK_CLIENT_ID": "CHC-QNXT",
+                    "CM_NETWORK_CLIENT_ID": str(values.get("member_network_client_id", "")),
                     "CM_PLAN_CLIENT_ID": "PLAN-GOLD",
                     "CM_PCP_PROVIDER_CLIENT_ID": _pcp_provider_id(
                         seed, index, entity_counts, entity_scenarios
                     ),
                 }
             ],
-            "CM_MEMBER_COB": [],
+            "CM_MEMBER_COB": [_cob(index, start)],
         }
     )
-    record.update(_transport_headers(seed, index))
+    record.update(_transport_headers(seed, index, resolved_headers))
     return record
 
 
@@ -265,7 +284,9 @@ def _blank_like(value: object | None) -> object:
     return ""
 
 
-def _transport_headers(seed: int, index: int) -> dict[str, object]:
+def _transport_headers(
+    seed: int, index: int, client_headers: Mapping[str, object] | None
+) -> dict[str, object]:
     """Build the flattened Cotiviti envelope used by EIP member samples.
 
     The member source examples place transport attributes beside the GDF
@@ -276,22 +297,19 @@ def _transport_headers(seed: int, index: int) -> dict[str, object]:
     Args:
         seed: Shared deterministic generation seed.
         index: Stable zero-based member output position.
+        client_headers: Resolved client-specific header values, if supplied.
 
     Returns:
         Source-compatible Cotiviti and ingestion attributes for one member.
     """
     sequence = index + 1
     namespace = "member"
-    return {
+    headers: dict[str, object] = {
         "cotiviti.dataset_id": "members",
-        "cotiviti.tenant_id": "tnt_ppc_synthetic",
         "cotiviti.schema_version": "gdf-ppc-v1",
-        "cotiviti.client_id": "synthetic.health.payer",
-        "cotiviti.client_system": "synthetic.health.payer",
         "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
         "cotiviti.produced_at": f"2026-08-05T00:{index % 60:02d}:00Z",
         "cotiviti.source_format": "edi_x12_834",
-        "cotiviti.source_system": "PPC",
         "cotiviti.batch_id": deterministic_uuid4(seed, f"{namespace}:batch"),
         "cotiviti.message_seq": sequence,
         "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
@@ -300,18 +318,15 @@ def _transport_headers(seed: int, index: int) -> dict[str, object]:
         "cotiviti.source.gs_control": sequence,
         "cotiviti.source.raw_file_ref": f"members-{seed}-{sequence:06d}.834",
         "ROWID": deterministic_uuid4(seed, f"{namespace}:row:{sequence}"),
-        "PAYER": "CHC",
-        "PAYER_PLATFORM": "CHC-QNXT",
-        "CLIENT_DATA_PLATFORM": "QNXT",
         "PUBLISHER_NAME": "client_member_gdf",
-        "PRODUCT": "PPC",
         "GDF_VERSION": "gdf-ppc-v1",
         "FILE_TYPE": "834",
         "DATA_CATEGORY": "member",
-        "LOB": "tnt_ppc_synthetic",
         "INGESTION_DATE": "20260805",
         "INGESTION_EPOCH": 1785888000 + sequence,
     }
+    headers.update(record_header_values("member", resolve_client_headers("member", client_headers)))
+    return headers
 
 
 def _address(
@@ -324,6 +339,7 @@ def _address(
     start: str,
     faker: Faker,
     randomizer: Random,
+    client_platform: str,
 ) -> dict[str, object]:
     """Build one source-shaped member address group.
 
@@ -337,6 +353,7 @@ def _address(
         start: Compact effective date.
         faker: Seeded name and address data generator.
         randomizer: Seeded numeric data generator.
+        client_platform: Client-selected source platform value.
 
     Returns:
         A layout-compatible member address record.
@@ -346,7 +363,7 @@ def _address(
     }
     fields.update(
         {
-            "CM_CLIENT_DATA_PLATFORM": "QNXT",
+            "CM_CLIENT_DATA_PLATFORM": client_platform,
             "CM_MEMBER_CLIENT_ID": member_id,
             "CM_MEMBER_CLIENT_MASTER_ID": f"MM{1500000000 + index:010d}",
             "CM_MEMBER_ADDRESS_CLIENT_ID": f"MADDR{index + 1:08d}",
@@ -367,6 +384,24 @@ def _address(
         }
     )
     return fields
+
+
+def _cob(index: int, start: str) -> dict[str, object]:
+    """Build one source-compatible member coordination-of-benefits item.
+
+    Args:
+        index: Stable member position used for deterministic source values.
+        start: Compact effective date shared with the member record.
+
+    Returns:
+        A complete COB group containing the fields declared by the layout.
+    """
+    return {
+        "CM_MEMBER_COB_ORDER_NUMBER": "1",
+        "CM_OTHER_PAYER_NAME": f"OTHER PAYER {index + 1:06d}",
+        "CM_MEMBER_COB_EFFECTIVE_DATE": start,
+        "CM_MEMBER_COB_TERMINATION_DATE": "",
+    }
 
 
 def _copy_record(record: dict[str, object]) -> dict[str, object]:

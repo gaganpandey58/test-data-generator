@@ -81,31 +81,85 @@
     "cotiviti.source.raw_file_ref"
   ],
   "properties": {
-    "ROWID": {"type": "string", "format": "uuid"},
-    "INGESTION_EPOCH": {"type": "integer"},
-    "FILE_TYPE": {"const": "PR"},
-    "DATA_CATEGORY": {"const": "provider"},
-    "PUBLISHER_NAME": {"const": "client_provider_gdf"},
-    "PAYER_PLATFORM": {"type": "string"},
-    "PAYER": {"type": "string"},
-    "CLIENT_DATA_PLATFORM": {"type": "string"},
-    "INGESTION_DATE": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "PRODUCT": {"type": "string"},
-    "GDF_VERSION": {"type": "string"},
-    "LOB": {"type": "string"},
-    "cotiviti.dataset_id": {"const": "provider"},
-    "cotiviti.tenant_id": {"type": "string"},
-    "cotiviti.schema_version": {"type": "string"},
-    "cotiviti.client_id": {"type": "string"},
-    "cotiviti.client_system": {"type": "string"},
-    "cotiviti.message_id": {"type": "string", "format": "uuid"},
-    "cotiviti.produced_at": {"type": "string", "format": "date-time"},
-    "cotiviti.source_format": {"const": "provider_roster"},
-    "cotiviti.source_system": {"const": "PPC"},
-    "cotiviti.batch_id": {"type": "string"},
-    "cotiviti.message_seq": {"type": "integer", "minimum": 1},
-    "cotiviti.correlation_id": {"type": "string", "format": "uuid"},
-    "cotiviti.source.raw_file_ref": {"type": "string"},
+    "ROWID": {
+      "type": "string"
+    },
+    "INGESTION_EPOCH": {
+      "type": "integer"
+    },
+    "FILE_TYPE": {
+      "const": "PR"
+    },
+    "DATA_CATEGORY": {
+      "const": "provider"
+    },
+    "PUBLISHER_NAME": {
+      "type": "string"
+    },
+    "PAYER_PLATFORM": {
+      "type": "string"
+    },
+    "PAYER": {
+      "type": "string"
+    },
+    "CLIENT_DATA_PLATFORM": {
+      "type": "string"
+    },
+    "INGESTION_DATE": {
+      "type": "string"
+    },
+    "PRODUCT": {
+      "type": "string"
+    },
+    "GDF_VERSION": {
+      "type": "string"
+    },
+    "LOB": {
+      "type": "string"
+    },
+    "cotiviti.dataset_id": {
+      "const": "provider"
+    },
+    "cotiviti.tenant_id": {
+      "type": "string"
+    },
+    "cotiviti.schema_version": {
+      "type": "string"
+    },
+    "cotiviti.client_id": {
+      "type": "string"
+    },
+    "cotiviti.client_system": {
+      "type": "string"
+    },
+    "cotiviti.message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cotiviti.produced_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cotiviti.source_format": {
+      "const": "provider_roster"
+    },
+    "cotiviti.source_system": {
+      "const": "PPC"
+    },
+    "cotiviti.batch_id": {
+      "type": "string"
+    },
+    "cotiviti.message_seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cotiviti.correlation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cotiviti.source.raw_file_ref": {
+      "type": "string"
+    },
     "CP_PROVIDER_CLIENT_ID": {
       "type": "string",
       "maxLength": 25
@@ -420,25 +474,163 @@
         }
       }
     },
-    "PAYER_PLATFORM": {
+    "HDR_CONSTANT": {
       "type": "string"
     },
-    "PAYER": {
+    "HDR_CLIENT_ID": {
       "type": "string"
     },
-    "CLIENT_DATA_PLATFORM": {
+    "HDR_CLIENT_VENDOR_ID": {
       "type": "string"
     },
-    "INGESTION_DATE": {
+    "HDR_FILE_TYPE": {
       "type": "string"
     },
-    "INGESTION_EPOCH": {
-      "type": "integer"
-    },
-    "ROWID": {
+    "HDR_FILE_SEQUENCE": {
       "type": "string"
     },
-    "PUBLISHER_NAME": {
+    "HDR_FILE_ID": {
+      "type": "string"
+    },
+    "HDR_PRODUCED_DATE": {
+      "type": "string"
+    },
+    "HDR_RECORD_COUNT": {
+      "type": "string"
+    },
+    "CP_CLIENT_DATA_PLATFORM": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NETWORK_CLIENT_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NETWORK_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NETWORK_INDICATOR": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NETWORK_EFFECTIVE_DATE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_NETWORK_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_CLIENT_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_MCO_NUMBER": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_PRIMARY_INDICATOR": {
+      "type": "string"
+    },
+    "CP_PROVIDER_BILLING_ADDRESS_INDICATOR": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_01": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_02": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_03": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CITY": {
+      "type": "string"
+    },
+    "CP_PROVIDER_STATE": {
+      "type": "string"
+    },
+    "CP_ITS_HOST_PLAN_CODE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ZIP": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ZIP_PLUS_FOUR": {
+      "type": "string"
+    },
+    "CP_PROVIDER_COUNTY": {
+      "type": "string"
+    },
+    "CP_PROVIDER_REGION": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PHONE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PHONE_EXTENSION": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ALTERNATE_PHONE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ALTERNATE_PHONE_EXTENSION": {
+      "type": "string"
+    },
+    "CP_PROVIDER_FAX": {
+      "type": "string"
+    },
+    "CP_PROVIDER_FAX_EXTENSION": {
+      "type": "string"
+    },
+    "CP_PROVIDER_MOBILE_PHONE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PAGER": {
+      "type": "string"
+    },
+    "CP_PROVIDER_EMAIL": {
+      "type": "string"
+    },
+    "CP_FACILITY_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_CONTACT_LAST_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_CONTACT_FIRST_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_START_DATE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_ADDRESS_TERMINATION_DATE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CLIENT_METRIC_TYPE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_METRIC_VALUE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_METRIC_TIME_PERIOD": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CLIENT_GROUP_TYPE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CLIENT_GROUP_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_CLIENT_GROUP_NAME": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PARENT_SYSTEM_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PARENT_SYSTEM_DESC": {
+      "type": "string"
+    },
+    "CP_PROVIDER_PRACTICE_TYPE_ID": {
+      "type": "string"
+    },
+    "CP_PROVIDER_SPECIALTY_CODE": {
+      "type": "string"
+    },
+    "CP_PROVIDER_SPECIALTY_DESCRIPTION": {
       "type": "string"
     }
   }

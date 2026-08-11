@@ -1,40 +1,20 @@
 {
+  "client": "chc",
+  "scenario": "happy-path",
   "seed": 20260805,
   "output_directory": "./output",
   "provider": {
-    "count": 10,
-    "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1}
+    "count": 10
   },
   "member": {
-    "count": 10,
-    "scenarios": {"new": 1, "changed": 1, "duplicate": 1, "stale": 1, "incomplete": 1}
+    "count": 10
   },
   "claims": {
     "professional": {
-      "count": 10,
-      "scenarios": {
-        "new": 1,
-        "changed": 1,
-        "duplicate": 1,
-        "stale": 1,
-        "incomplete": 1,
-        "replacement": 1,
-        "void": 1,
-        "orphan_payment": 1
-      }
+      "count": 10
     },
     "institutional": {
-      "count": 10,
-      "scenarios": {
-        "new": 1,
-        "changed": 1,
-        "duplicate": 1,
-        "stale": 1,
-        "incomplete": 1,
-        "replacement": 1,
-        "void": 1,
-        "orphan_payment": 1
-      }
+      "count": 10
     }
   }
 }
