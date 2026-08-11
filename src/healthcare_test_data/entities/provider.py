@@ -12,6 +12,7 @@ from random import Random
 
 from faker import Faker
 
+from healthcare_test_data.clients import record_header_values, resolve_client_headers
 from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
 from healthcare_test_data.scenarios import Scenario
@@ -40,6 +41,8 @@ def generate_record(
     entity_counts: Mapping[str, int] | None = None,
     *,
     scenario: Scenario | None = None,
+    client_headers: Mapping[str, object] | None = None,
+    client_values: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Generate one GDF-profile provider record, optionally varying a baseline.
 
@@ -48,13 +51,23 @@ def generate_record(
         index: Stable zero-based output position.
         entity_counts: Unused related-entity counts accepted by the common API.
         scenario: Optional planned variation for this output position.
+        client_headers: Optional client-specific envelope header overrides.
+        client_values: Optional client-specific non-header generation values.
 
     Returns:
         A source-shaped provider record that satisfies the provider schema.
     """
     del entity_counts
     if scenario is not None and scenario.baseline_index is not None:
-        return _mutate(generate_record(seed, scenario.baseline_index), scenario)
+        return _mutate(
+            generate_record(
+                seed,
+                scenario.baseline_index,
+                client_headers=client_headers,
+                client_values=client_values,
+            ),
+            scenario,
+        )
     randomizer = Random(seed * 1000003 + index)
     faker = Faker("en_US")
     faker.seed_instance(seed * 1000003 + index)
@@ -67,6 +80,9 @@ def generate_record(
     last = faker.last_name().upper() if individual else f"{faker.company().upper()} MEDICAL GROUP"
     full = " ".join(part for part in (first, middle, last) if part)
     npi = _npi(randomizer)
+    resolved_headers = resolve_client_headers("provider", client_headers)
+    client_platform = str(resolved_headers.get("CP_CLIENT_DATA_PLATFORM", ""))
+    values = dict(client_values or {})
     provider_id = f"PPRV{index + 1:010d}{state}"
     master_id = f"{1500000000 + index:010d}"
     taxonomy, specialty = randomizer.choice(_SPECIALTIES)
@@ -75,8 +91,6 @@ def generate_record(
     record.update({"CP_CUSTOM_DATE_01": "", "CP_CUSTOM_DATE_02": ""})
     record.update(
         {
-            "CP_CLIENT_DATA_PLATFORM": "QNXT",
-            "CLIENT_DATA_PLATFORM": "QNXT",
             "CP_PROVIDER_CLIENT_ID": provider_id,
             "CP_PROVIDER_CLIENT_MASTER_ID": master_id,
             "CP_PROVIDER_FEDERAL_TAX_ID": _digits(randomizer, 9),
@@ -118,13 +132,24 @@ def generate_record(
                     start,
                     faker,
                     randomizer,
+                    client_platform,
                 )
             ],
-            "CP_PROVIDER_NETWORKS": [_network(provider_id, master_id, start, randomizer)],
+            "CP_PROVIDER_NETWORKS": [
+                _network(
+                    provider_id,
+                    master_id,
+                    start,
+                    randomizer,
+                    client_platform,
+                    str(values.get("provider_network_id_prefix", "")),
+                    str(values.get("provider_network_name", "")),
+                )
+            ],
             "CP_CUSTOM_FIELD_01": "SYNTHETIC",
         }
     )
-    record.update(_transport_headers(seed, index))
+    record.update(_transport_headers(seed, index, resolved_headers))
     return record
 
 
@@ -188,6 +213,7 @@ def _address(
     start: str,
     faker: Faker,
     randomizer: Random,
+    client_platform: str,
 ) -> dict[str, object]:
     """Build one source-shaped provider address group.
 
@@ -202,6 +228,7 @@ def _address(
         start: Compact effective date.
         faker: Seeded name and address data generator.
         randomizer: Seeded numeric data generator.
+        client_platform: Client-selected source platform value.
 
     Returns:
         A layout-compatible provider address record.
@@ -211,7 +238,7 @@ def _address(
     }
     fields.update(
         {
-            "CP_CLIENT_DATA_PLATFORM": "QNXT",
+            "CP_CLIENT_DATA_PLATFORM": client_platform,
             "CP_PROVIDER_CLIENT_ID": provider_id,
             "CP_PROVIDER_CLIENT_MASTER_ID": master_id,
             "CP_PROVIDER_ADDRESS_CLIENT_ID": f"ADDR{_digits(randomizer, 8)}",
@@ -233,7 +260,15 @@ def _address(
     return fields
 
 
-def _network(provider_id: str, master_id: str, start: str, randomizer: Random) -> dict[str, object]:
+def _network(
+    provider_id: str,
+    master_id: str,
+    start: str,
+    randomizer: Random,
+    client_platform: str,
+    network_id_prefix: str,
+    network_name: str,
+) -> dict[str, object]:
     """Build one source-shaped provider network group.
 
     Args:
@@ -241,6 +276,9 @@ def _network(provider_id: str, master_id: str, start: str, randomizer: Random) -
         master_id: Parent provider master ID.
         start: Compact network effective date.
         randomizer: Seeded numeric data generator.
+        client_platform: Client-selected source platform value.
+        network_id_prefix: Client-selected network identifier prefix.
+        network_name: Client-selected network display name.
 
     Returns:
         A layout-compatible provider network record.
@@ -250,11 +288,11 @@ def _network(provider_id: str, master_id: str, start: str, randomizer: Random) -
     }
     fields.update(
         {
-            "CP_CLIENT_DATA_PLATFORM": "QNXT",
+            "CP_CLIENT_DATA_PLATFORM": client_platform,
             "CP_PROVIDER_CLIENT_ID": provider_id,
             "CP_PROVIDER_CLIENT_MASTER_ID": master_id,
-            "CP_PROVIDER_NETWORK_CLIENT_ID": f"CHC-QNXT-{_digits(randomizer, 5)}",
-            "CP_PROVIDER_NETWORK_NAME": "CHC QNXT Network",
+            "CP_PROVIDER_NETWORK_CLIENT_ID": f"{network_id_prefix}-{_digits(randomizer, 5)}",
+            "CP_PROVIDER_NETWORK_NAME": network_name,
             "CP_PROVIDER_NETWORK_INDICATOR": "I",
             "CP_PROVIDER_NETWORK_EFFECTIVE_DATE": start,
             "CP_PROVIDER_NETWORK_TERMINATION_DATE": "",
@@ -263,7 +301,9 @@ def _network(provider_id: str, master_id: str, start: str, randomizer: Random) -
     return fields
 
 
-def _transport_headers(seed: int, index: int) -> dict[str, object]:
+def _transport_headers(
+    seed: int, index: int, client_headers: Mapping[str, object] | None
+) -> dict[str, object]:
     """Build the flattened Cotiviti envelope used by EIP provider samples.
 
     Provider roster samples carry their EIP transport and GDF ingestion
@@ -273,39 +313,35 @@ def _transport_headers(seed: int, index: int) -> dict[str, object]:
     Args:
         seed: Shared deterministic generation seed.
         index: Stable zero-based provider output position.
+        client_headers: Resolved client-specific header values, if supplied.
 
     Returns:
         Source-compatible Cotiviti and ingestion attributes for one provider.
     """
     sequence = index + 1
     namespace = "provider"
-    return {
+    headers: dict[str, object] = {
         "cotiviti.dataset_id": "provider",
-        "cotiviti.tenant_id": "tnt_ppc_synthetic",
         "cotiviti.schema_version": "gdf-ppc-v1",
-        "cotiviti.client_id": "synthetic.health.payer",
-        "cotiviti.client_system": "synthetic.health.payer",
         "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
         "cotiviti.produced_at": f"2026-08-05T00:{index % 60:02d}:00Z",
         "cotiviti.source_format": "provider_roster",
-        "cotiviti.source_system": "PPC",
         "cotiviti.batch_id": f"synthetic-provider-{seed}-{sequence:06d}",
         "cotiviti.message_seq": sequence,
         "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
         "cotiviti.source.raw_file_ref": f"providers-{seed}-{sequence:06d}.csv",
         "ROWID": deterministic_uuid4(seed, f"{namespace}:row:{sequence}"),
-        "PAYER": "CHC",
-        "PAYER_PLATFORM": "CHC-QNXT",
-        "CLIENT_DATA_PLATFORM": "QNXT",
         "PUBLISHER_NAME": "client_provider_gdf",
-        "PRODUCT": "PPC",
         "GDF_VERSION": "gdf-ppc-v1",
         "FILE_TYPE": "PR",
         "DATA_CATEGORY": "provider",
-        "LOB": "tnt_ppc_synthetic",
         "INGESTION_DATE": "20260805",
         "INGESTION_EPOCH": 1785888000 + sequence,
     }
+    headers.update(
+        record_header_values("provider", resolve_client_headers("provider", client_headers))
+    )
+    return headers
 
 
 def _copy_record(record: dict[str, object]) -> dict[str, object]:

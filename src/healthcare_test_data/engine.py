@@ -19,7 +19,8 @@ from jsonschema import Draft202012Validator, ValidationError  # type: ignore[imp
 
 from healthcare_test_data.config import EntityConfig, resolve_output_path
 from healthcare_test_data.errors import GenerationError
-from healthcare_test_data.scenarios import Scenario, plan
+from healthcare_test_data.layouts import project_record
+from healthcare_test_data.scenarios import Scenario
 
 
 def run_entity(
@@ -27,7 +28,6 @@ def run_entity(
     seed: int,
     output_directory: Path,
     entity_counts: Mapping[str, int] | None = None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None = None,
 ) -> Path:
     """Generate and publish one configured entity as a validated JSONL file.
 
@@ -40,8 +40,6 @@ def run_entity(
         seed: Shared deterministic seed from the run configuration.
         output_directory: Root directory for generated output.
         entity_counts: Optional enabled-entity counts for relational generators.
-        entity_scenarios: Optional enabled-entity scenario quantities for
-            relational generators that must link to emitted variation rows.
 
     Returns:
         Final published JSONL path.
@@ -58,11 +56,11 @@ def run_entity(
     try:
         generate_record = _load_generator(entity.module)
         accepts_entity_counts = _accepts_entity_counts(generate_record)
-        accepts_entity_scenarios = _accepts_entity_scenarios(generate_record)
         accepts_scenario = _accepts_scenario(generate_record)
         accepts_profile = _accepts_profile(generate_record)
         accepts_entity_name = _accepts_entity_name(generate_record)
-        scenario_plan = plan(entity.count, entity.scenarios, seed)
+        accepts_client_headers = _accepts_client_headers(generate_record)
+        accepts_client_values = _accepts_client_values(generate_record)
         validator = _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
@@ -80,15 +78,18 @@ def run_entity(
                     index,
                     entity_counts,
                     accepts_entity_counts,
-                    entity_scenarios,
-                    accepts_entity_scenarios,
-                    scenario_plan.variation_for(index),
+                    None,
                     accepts_scenario,
                     entity.profile,
                     accepts_profile,
                     entity.name,
                     accepts_entity_name,
+                    entity.client_headers,
+                    accepts_client_headers,
+                    entity.client_values,
+                    accepts_client_values,
                 )
+                record = project_record(record, entity.profile)
                 try:
                     validator.validate(record)
                 except ValidationError as error:
@@ -168,22 +169,6 @@ def _accepts_scenario(generate_record: Callable[..., dict[str, object]]) -> bool
     return True
 
 
-def _accepts_entity_scenarios(generate_record: Callable[..., dict[str, object]]) -> bool:
-    """Determine whether a generator accepts related-entity scenario quantities.
-
-    Args:
-        generate_record: Entity record generator loaded from its module.
-
-    Returns:
-        ``True`` when the callable accepts an ``entity_scenarios`` keyword.
-    """
-    try:
-        inspect.signature(generate_record).bind(0, 0, entity_scenarios=None)
-    except TypeError:
-        return False
-    return True
-
-
 def _accepts_profile(generate_record: Callable[..., dict[str, object]]) -> bool:
     """Determine whether a generator accepts the configured layout profile.
 
@@ -216,20 +201,54 @@ def _accepts_entity_name(generate_record: Callable[..., dict[str, object]]) -> b
     return True
 
 
+def _accepts_client_headers(generate_record: Callable[..., dict[str, object]]) -> bool:
+    """Determine whether a generator accepts resolved client header values.
+
+    Args:
+        generate_record: Entity record generator loaded from its module.
+
+    Returns:
+        ``True`` when the callable accepts a ``client_headers`` keyword.
+    """
+    try:
+        inspect.signature(generate_record).bind(0, 0, client_headers={})
+    except TypeError:
+        return False
+    return True
+
+
+def _accepts_client_values(generate_record: Callable[..., dict[str, object]]) -> bool:
+    """Determine whether a generator accepts client-owned body values.
+
+    Args:
+        generate_record: Entity record generator loaded from its module.
+
+    Returns:
+        ``True`` when the callable accepts a ``client_values`` keyword.
+    """
+    try:
+        inspect.signature(generate_record).bind(0, 0, client_values={})
+    except TypeError:
+        return False
+    return True
+
+
 def _generate_record(
     generate_record: Callable[..., dict[str, object]],
     seed: int,
     index: int,
     entity_counts: Mapping[str, int] | None,
     accepts_entity_counts: bool,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None,
-    accepts_entity_scenarios: bool,
     scenario: Scenario | None,
     accepts_scenario: bool,
     profile: str,
     accepts_profile: bool,
     entity_name: str,
     accepts_entity_name: bool,
+    client_headers: Mapping[str, object],
+    accepts_client_headers: bool,
+    client_values: Mapping[str, object],
+    accepts_client_values: bool,
 ) -> dict[str, object]:
     """Call an entity generator with only the context it supports.
 
@@ -243,14 +262,16 @@ def _generate_record(
         index: Zero-based output row index.
         entity_counts: Enabled entity counts available for relationship links.
         accepts_entity_counts: Whether the callable accepts ``entity_counts``.
-        entity_scenarios: Related entity scenario quantities for stable links.
-        accepts_entity_scenarios: Whether the callable accepts that keyword.
         scenario: Planned variation for this row, or ``None`` for a baseline.
         accepts_scenario: Whether the callable accepts the scenario keyword.
         profile: Configured source-layout profile identifier.
         accepts_profile: Whether the callable accepts the profile keyword.
         entity_name: Resolved configuration identity for this output stream.
         accepts_entity_name: Whether the callable accepts the identity keyword.
+        client_headers: Resolved client-specific envelope header values.
+        accepts_client_headers: Whether the callable accepts those values.
+        client_values: Resolved client-specific body generation values.
+        accepts_client_values: Whether the callable accepts those values.
 
     Returns:
         One unvalidated record for the engine to validate and serialize.
@@ -262,8 +283,10 @@ def _generate_record(
         kwargs["profile"] = profile
     if accepts_entity_name:
         kwargs["entity_name"] = entity_name
-    if accepts_entity_scenarios:
-        kwargs["entity_scenarios"] = entity_scenarios
+    if accepts_client_headers:
+        kwargs["client_headers"] = client_headers
+    if accepts_client_values:
+        kwargs["client_values"] = client_values
     if kwargs:
         if accepts_entity_counts:
             return generate_record(seed, index, entity_counts, **kwargs)

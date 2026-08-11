@@ -29,7 +29,7 @@ def generate(config: Path) -> None:
     """Generate every enabled entity described by one configuration file.
 
     The function loads and validates the supplied configuration once, passes
-    shared entity-count and scenario context to each enabled generator, prints
+    shared entity-count context to each enabled generator, prints
     the resulting JSONL path, and removes only stale output files belonging to
     disabled known entities.
 
@@ -45,7 +45,6 @@ def generate(config: Path) -> None:
         raise CommandError(f"Configuration failed for {config.resolve()}: {error}") from error
 
     entity_counts = {entity.name: entity.count for entity in run_config.entities}
-    entity_scenarios = {entity.name: entity.scenarios for entity in run_config.entities}
     for entity in run_config.entities:
         try:
             output_path = run_entity(
@@ -53,7 +52,6 @@ def generate(config: Path) -> None:
                 run_config.seed,
                 run_config.output_directory,
                 entity_counts,
-                entity_scenarios,
             )
         except GenerationError as error:
             raise CommandError(

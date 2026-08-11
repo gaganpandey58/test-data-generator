@@ -1,14 +1,650 @@
 {
   "profile": "provider",
+  "headers": [
+    {
+      "name": "FILE_TYPE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INGESTION_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INGESTION_EPOCH",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PAYER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PAYER_PLATFORM",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CLIENT_DATA_PLATFORM",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PUBLISHER_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PRODUCT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "GDF_VERSION",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "DATA_CATEGORY",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "LOB",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.dataset_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.tenant_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.schema_version",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.client_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.client_system",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.message_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.produced_at",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.source_format",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.source_system",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.batch_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.message_seq",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.correlation_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.source.raw_file_ref",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_CONSTANT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_CLIENT_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_CLIENT_VENDOR_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_FILE_TYPE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_FILE_SEQUENCE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_FILE_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_RECORD_COUNT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "HDR_PRODUCED_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "ROWID",
+      "type": "text",
+      "max_length": 255
+    }
+  ],
   "root": [
-    {"name":"CP_CLIENT_DATA_PLATFORM","type":"text","max_length":20}, {"name":"CP_PROVIDER_CLIENT_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_CLIENT_MASTER_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_FEDERAL_TAX_ID","type":"text","max_length":9}, {"name":"CP_PROVIDER_NPI","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_DEA_NUMBER","type":"text","max_length":15}, {"name":"CP_PROVIDER_STATE_LICENSE_STATE_CODE","type":"text","max_length":2}, {"name":"CP_PROVIDER_STATE_LICENSE_NUMBER","type":"text","max_length":20}, {"name":"CP_PROVIDER_MEDICARE_ID","type":"text","max_length":20}, {"name":"CP_PROVIDER_MEDICAID_ID","type":"text","max_length":20}, {"name":"CP_PROVIDER_CHASE_INDICATOR","type":"text","max_length":1}, {"name":"CP_PRESCRIBING_PROVIDER_INDICATOR","type":"text","max_length":1}, {"name":"CP_PRESCRIBING_PROVIDER_CLIENT_ID","type":"text","max_length":25}, {"name":"CP_PRESCRIBING_PROVIDER_CLIENT_MASTER_ID","type":"text","max_length":25}, {"name":"CP_PRESCRIBING_PROVIDER_NPI","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_RECORD_TYPE","type":"text","max_length":1}, {"name":"CP_PROVIDER_FIRST_NAME","type":"text","max_length":35}, {"name":"CP_PROVIDER_MIDDLE_NAME","type":"text","max_length":25}, {"name":"CP_PROVIDER_LAST_NAME","type":"text","max_length":60}, {"name":"CP_PROVIDER_NAME_SUFFIX","type":"text","max_length":10}, {"name":"CP_PROVIDER_NAME_TITLE","type":"text","max_length":5}, {"name":"CP_PROVIDER_FULL_NAME","type":"text","max_length":80}, {"name":"CP_PROVIDER_PRIMARY_SPECIALTY_CODE","type":"text","max_length":10}, {"name":"CP_PROVIDER_TAXONOMY_CODE","type":"text","max_length":10}, {"name":"CP_PROVIDER_BILLING_GROUP_NUMBER","type":"text","max_length":50}, {"name":"CP_PROVIDER_BILLING_GROUP_NAME","type":"text","max_length":60}, {"name":"CP_PROVIDER_CCD_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_RECORD_START_DATE","type":"date","max_length":8}, {"name":"CP_PROVIDER_RECORD_END_DATE","type":"date","max_length":8}
+    {
+      "name": "CP_CLIENT_DATA_PLATFORM",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_CLIENT_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_CLIENT_MASTER_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_FEDERAL_TAX_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_NPI",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_DEA_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_STATE_LICENSE_STATE_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_STATE_LICENSE_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_MEDICARE_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_MEDICAID_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_CHASE_INDICATOR",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PRESCRIBING_PROVIDER_INDICATOR",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PRESCRIBING_PROVIDER_CLIENT_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PRESCRIBING_PROVIDER_CLIENT_MASTER_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PRESCRIBING_PROVIDER_NPI",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_RECORD_TYPE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_FIRST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_MIDDLE_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_LAST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_NAME_SUFFIX",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_NAME_TITLE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_FULL_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_PRIMARY_SPECIALTY_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_TAXONOMY_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_BILLING_GROUP_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_BILLING_GROUP_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_CCD_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_RECORD_START_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_RECORD_END_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_01",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_02",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_03",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_04",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_05",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_06",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_07",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_08",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_09",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_10",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_11",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_12",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_13",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_14",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_15",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_16",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_17",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_18",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_19",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_FIELD_20",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_DATE_01",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_CUSTOM_DATE_02",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_SOURCE_RECORD_TAG",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CP_PROVIDER_SOURCE_UPDATED_AT",
+      "type": "text",
+      "max_length": 255
+    }
   ],
   "groups": {
-    "CP_PROVIDER_ADDRESSES":[
-      {"name":"CP_CLIENT_DATA_PLATFORM","type":"text","max_length":20}, {"name":"CP_PROVIDER_CLIENT_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_CLIENT_MASTER_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_ADDRESS_CLIENT_ID","type":"text","max_length":20}, {"name":"CP_PROVIDER_ADDRESS_MCO_NUMBER","type":"text","max_length":75}, {"name":"CP_PROVIDER_ADDRESS_PRIMARY_INDICATOR","type":"text","max_length":1}, {"name":"CP_PROVIDER_BILLING_ADDRESS_INDICATOR","type":"text","max_length":1}, {"name":"CP_PROVIDER_ADDRESS_01","type":"text","max_length":55}, {"name":"CP_PROVIDER_ADDRESS_02","type":"text","max_length":55}, {"name":"CP_PROVIDER_ADDRESS_03","type":"text","max_length":55}, {"name":"CP_PROVIDER_CITY","type":"text","max_length":30}, {"name":"CP_PROVIDER_STATE","type":"text","max_length":2}, {"name":"CP_ITS_HOST_PLAN_CODE","type":"text","max_length":3}, {"name":"CP_PROVIDER_ZIP","type":"numeric","max_length":5}, {"name":"CP_PROVIDER_ZIP_PLUS_FOUR","type":"numeric","max_length":4}, {"name":"CP_PROVIDER_COUNTY","type":"text","max_length":50}, {"name":"CP_PROVIDER_REGION","type":"text","max_length":50}, {"name":"CP_PROVIDER_PHONE","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_PHONE_EXTENSION","type":"text","max_length":6}, {"name":"CP_PROVIDER_ALTERNATE_PHONE","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_ALTERNATE_PHONE_EXTENSION","type":"text","max_length":6}, {"name":"CP_PROVIDER_FAX","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_FAX_EXTENSION","type":"text","max_length":6}, {"name":"CP_PROVIDER_MOBILE_PHONE","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_PAGER","type":"numeric","max_length":10}, {"name":"CP_PROVIDER_EMAIL","type":"text","max_length":100}, {"name":"CP_FACILITY_NAME","type":"text","max_length":150}, {"name":"CP_PROVIDER_ADDRESS_CONTACT_LAST_NAME","type":"text","max_length":60}, {"name":"CP_PROVIDER_ADDRESS_CONTACT_FIRST_NAME","type":"text","max_length":35}, {"name":"CP_PROVIDER_ADDRESS_START_DATE","type":"date","max_length":8}, {"name":"CP_PROVIDER_ADDRESS_TERMINATION_DATE","type":"date","max_length":8}
+    "CP_PROVIDER_ADDRESSES": [
+      {
+        "name": "CP_CLIENT_DATA_PLATFORM",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_CLIENT_MASTER_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_MCO_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_PRIMARY_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_BILLING_ADDRESS_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_CITY",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_STATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_ITS_HOST_PLAN_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ZIP",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ZIP_PLUS_FOUR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_COUNTY",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_REGION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_PHONE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_PHONE_EXTENSION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ALTERNATE_PHONE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ALTERNATE_PHONE_EXTENSION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_FAX",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_FAX_EXTENSION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_MOBILE_PHONE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_PAGER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_EMAIL",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_FACILITY_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_CONTACT_LAST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_CONTACT_FIRST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_START_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_ADDRESS_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      }
     ],
-    "CP_PROVIDER_NETWORKS":[
-      {"name":"CP_CLIENT_DATA_PLATFORM","type":"text","max_length":20}, {"name":"CP_PROVIDER_CLIENT_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_CLIENT_MASTER_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_NETWORK_CLIENT_ID","type":"text","max_length":25}, {"name":"CP_PROVIDER_NETWORK_NAME","type":"text","max_length":75}, {"name":"CP_PROVIDER_NETWORK_INDICATOR","type":"text","max_length":1}, {"name":"CP_PROVIDER_NETWORK_EFFECTIVE_DATE","type":"date","max_length":8}, {"name":"CP_PROVIDER_NETWORK_TERMINATION_DATE","type":"date","max_length":8}
+    "CP_PROVIDER_NETWORKS": [
+      {
+        "name": "CP_CLIENT_DATA_PLATFORM",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_CLIENT_MASTER_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_NETWORK_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_NETWORK_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_NETWORK_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_NETWORK_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CP_PROVIDER_NETWORK_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      }
+    ]
+  },
+  "required_parent_fields": {
+    "CP_PROVIDER_ADDRESSES": [
+      "CP_CLIENT_DATA_PLATFORM",
+      "CP_PROVIDER_CLIENT_ID",
+      "CP_PROVIDER_CLIENT_MASTER_ID"
+    ],
+    "CP_PROVIDER_NETWORKS": [
+      "CP_CLIENT_DATA_PLATFORM",
+      "CP_PROVIDER_CLIENT_ID",
+      "CP_PROVIDER_CLIENT_MASTER_ID"
     ]
   }
 }

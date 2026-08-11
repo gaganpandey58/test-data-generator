@@ -1,7 +1,8 @@
 """Load, normalize, and validate the public generator configuration.
 
-The external JSON config remains deliberately short: callers choose entities,
-record counts, optional scenarios, a seed, and an output directory.  This
+The external JSON config remains deliberately short: callers choose a client,
+the currently supported happy-path scenario, entity record counts, a seed, and
+an output directory. This
 module expands those choices into immutable internal entity definitions with
 hardcoded schema, module, profile, and filename defaults, then validates paths
 and relationships before generation can begin.
@@ -15,6 +16,7 @@ from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
+from healthcare_test_data.clients import available_clients, load_client_headers, load_client_values
 from healthcare_test_data.errors import ConfigurationError
 from healthcare_test_data.layouts import available_profiles, load_layout
 
@@ -28,7 +30,9 @@ class EntityConfig:
             ``claim_professional``. Claim stream names are derived from the
             public ``claims.professional`` and ``claims.institutional`` keys.
         count: Exact number of rows the entity must emit.
-        scenarios: Immutable-by-convention mapping of variation quantities.
+        client_headers: Immutable client-specific envelope values for this
+            output stream.
+        client_values: Immutable client-specific non-header generation values.
         profile: GDF source-layout profile applied to generated records.
         schema: Absolute JSON Schema path used to validate each output row.
         module: Dotted module path exposing the entity record generator.
@@ -37,7 +41,8 @@ class EntityConfig:
 
     name: str
     count: int
-    scenarios: Mapping[str, int]
+    client_headers: Mapping[str, object]
+    client_values: Mapping[str, object]
     profile: str
     schema: Path
     module: str
@@ -49,12 +54,16 @@ class RunConfig:
     """Describe the resolved settings needed for one complete generator run.
 
     Attributes:
+        client: Selected checked-in client header profile.
+        scenario: The current generation mode, always ``happy-path``.
         seed: Deterministic seed shared by every enabled entity generator.
         output_directory: Absolute directory used for generated JSONL files.
         entities: Ordered, enabled entity requests ready for the engine.
         disabled_filenames: Known generated filenames to remove after success.
     """
 
+    client: str
+    scenario: str
     seed: int
     output_directory: Path
     entities: tuple[EntityConfig, ...]
@@ -77,15 +86,18 @@ def load_config(path: Path) -> RunConfig:
     """
     config_path = path.resolve()
     raw_config = _load_json(config_path, "configuration")
-    _reject_legacy_claim_config(raw_config)
     _validate_schema(raw_config)
     raw_config = _normalize_config(raw_config)
     try:
+        client = raw_config["client"]
+        scenario = raw_config["scenario"]
         seed = raw_config["seed"]
         output_directory = _resolve_path(raw_config["output_directory"], config_path.parent)
         raw_entities = raw_config["entities"]
     except KeyError as error:
         raise ConfigurationError(f"Invalid configuration: missing {error.args[0]!r}") from error
+    if client not in available_clients():
+        raise ConfigurationError(f"Invalid configuration: unknown client profile {client!r}")
 
     entities: list[EntityConfig] = []
     disabled_filenames: list[str] = []
@@ -96,8 +108,6 @@ def load_config(path: Path) -> RunConfig:
             continue
         profile = raw_entity["profile"]
         _validate_profile(name, profile)
-        scenarios = raw_entity.get("scenarios", {})
-        _validate_scenarios(name, scenarios, raw_entity["count"])
         schema = Path(str(raw_entity["schema"]))
         if not schema.is_file():
             raise ConfigurationError(
@@ -109,7 +119,8 @@ def load_config(path: Path) -> RunConfig:
             EntityConfig(
                 name=name,
                 count=raw_entity["count"],
-                scenarios=dict(scenarios),
+                client_headers=load_client_headers(client, name),
+                client_values=load_client_values(client, name),
                 profile=profile,
                 schema=schema,
                 module=raw_entity["module"],
@@ -119,6 +130,8 @@ def load_config(path: Path) -> RunConfig:
     _validate_unique_filenames(entities)
     _validate_claim_relationships(entities)
     return RunConfig(
+        client=client,
+        scenario=scenario,
         seed=seed,
         output_directory=output_directory,
         entities=tuple(entities),
@@ -130,7 +143,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     """Expand the short root entity form into the detailed internal form.
 
     The public form keeps a run focused on the only values people usually
-    change: each selected entity's count and scenarios. Professional and
+    change: client, happy-path mode, and each selected entity's count. Professional and
     institutional claims are grouped under one ``claims`` object. Source
     profile, schema, module, and output filename are always internal defaults.
 
@@ -162,6 +175,8 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                     **value,
                 }
     return {
+        "client": raw_config.get("client", "chc"),
+        "scenario": raw_config.get("scenario", "happy-path"),
         "seed": raw_config.get("seed", 20260805),
         "output_directory": raw_config.get("output_directory", "./output"),
         "entities": entities,
@@ -185,7 +200,6 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "enabled": False,
             "count": 0,
             "profile": "provider",
-            "scenarios": {},
             "schema": str(schema_root / "provider/provider.schema.json"),
             "module": "healthcare_test_data.entities.provider",
             "filename": "providers.jsonl",
@@ -194,7 +208,6 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "enabled": False,
             "count": 0,
             "profile": "member",
-            "scenarios": {},
             "schema": str(schema_root / "member/member.schema.json"),
             "module": "healthcare_test_data.entities.member",
             "filename": "members.jsonl",
@@ -203,7 +216,6 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "enabled": False,
             "count": 0,
             "profile": "claim-professional",
-            "scenarios": {},
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "healthcare_test_data.entities.claim",
             "filename": "professional-claims.jsonl",
@@ -212,7 +224,6 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "enabled": False,
             "count": 0,
             "profile": "claim-institutional",
-            "scenarios": {},
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "healthcare_test_data.entities.claim",
             "filename": "institutional-claims.jsonl",
@@ -281,70 +292,6 @@ def _validate_profile(entity: str, profile: object) -> None:
         ) from error
 
 
-def _validate_scenarios(entity: str, scenarios: object, count: int) -> None:
-    """Validate configured scenario quantities for one enabled entity.
-
-    Args:
-        entity: Enabled entity name from the run configuration.
-        scenarios: Raw scenario name-to-quantity mapping.
-        count: Exact entity output count.
-
-    Raises:
-        ConfigurationError: If a scenario is unsupported, negative, or exceeds count.
-    """
-    supported_scenarios = {
-        "provider": frozenset({"new", "changed", "duplicate", "stale", "incomplete"}),
-        "member": frozenset({"new", "changed", "duplicate", "stale", "incomplete"}),
-        "claim_professional": frozenset(
-            {
-                "new",
-                "changed",
-                "duplicate",
-                "stale",
-                "incomplete",
-                "replacement",
-                "void",
-                "orphan_payment",
-            }
-        ),
-        "claim_institutional": frozenset(
-            {
-                "new",
-                "changed",
-                "duplicate",
-                "stale",
-                "incomplete",
-                "replacement",
-                "void",
-                "orphan_payment",
-            }
-        ),
-    }
-    if not isinstance(scenarios, dict):
-        raise ConfigurationError(f"Enabled entity {entity!r} scenarios must be an object")
-    permitted = supported_scenarios.get(entity, frozenset())
-    total = 0
-    has_non_new_scenario = False
-    for scenario, quantity in scenarios.items():
-        if scenario not in permitted:
-            raise ConfigurationError(f"Scenario {scenario!r} is not supported by entity {entity!r}")
-        if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 0:
-            raise ConfigurationError(
-                f"Scenario {scenario!r} for entity {entity!r} must be a non-negative integer"
-            )
-        total += quantity
-        if scenario != "new" and quantity > 0:
-            has_non_new_scenario = True
-    if total > count:
-        raise ConfigurationError(
-            f"Scenario total for enabled entity {entity!r} must not exceed count"
-        )
-    if has_non_new_scenario and total >= count:
-        raise ConfigurationError(
-            f"Non-new scenarios for enabled entity {entity!r} require at least one baseline record"
-        )
-
-
 def _validate_claim_relationships(entities: list[EntityConfig]) -> None:
     """Require claim generation to include the member and provider it links.
 
@@ -360,22 +307,6 @@ def _validate_claim_relationships(entities: list[EntityConfig]) -> None:
         raise ConfigurationError(
             "Enabled professional or institutional claim generation requires "
             "enabled member and provider entities"
-        )
-
-
-def _reject_legacy_claim_config(raw_config: Mapping[str, object]) -> None:
-    """Reject retired claim configuration keys with a direct migration message.
-
-    Args:
-        raw_config: Decoded root configuration before JSON Schema validation.
-
-    Raises:
-        ConfigurationError: If a retired claim or detailed-entity key is present.
-    """
-    retired = {"claim", "claim_professional", "claim_institutional", "entities"}
-    if retired & set(raw_config):
-        raise ConfigurationError(
-            "Use 'claims.professional' and/or 'claims.institutional' for claim generation."
         )
 
 
