@@ -17,9 +17,6 @@
       "required": [
         "FILE_TYPE",
         "CH_CLAIM_TYPE",
-        "CH_CLIENT_CLAIM_ID",
-        "CH_CLIENT_ROOT_CLAIM_ID",
-        "CH_CLIENT_CLAIM_UNIQUE_ID",
         "CH_PATIENT_CLIENT_ID",
         "CH_BILLING_PROVIDER_NPI",
         "CH_RENDERING_PROVIDER_NPI",
@@ -124,7 +121,6 @@
         "CH_CLAIM_SERVICE_TO_DATE",
         "CH_DIAGNOSIS_CODE_01",
         "CLAIM_DETAIL",
-        "otherAttributes",
         "cotiviti.batch_id",
         "cotiviti.message_id",
         "cotiviti.source_format"

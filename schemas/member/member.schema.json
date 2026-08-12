@@ -5,7 +5,6 @@
   "type": "object",
   "additionalProperties": true,
   "required": [
-    "CM_CLIENT_DATA_PLATFORM",
     "CM_MEMBER_CLIENT_ID",
     "CM_MEMBER_CLIENT_MASTER_ID",
     "CM_MEMBER_DEPENDENT_NUMBER",
@@ -17,14 +16,9 @@
     "CM_MEMBER_BIRTH_DATE",
     "CM_MEMBER_GENDER",
     "CM_MEMBER_MEDICARE_BENEFICIARY_ID",
-    "CM_MEMBER_RELATIONSHIP_CODE",
     "CM_MEMBER_RECORD_START_DATE",
     "CM_MEMBER_RECORD_END_DATE",
-    "CM_MEMBER_SOURCE_RECORD_TAG",
-    "CM_MEMBER_RECORD_STATUS",
-    "CM_MEMBER_SOURCE_UPDATED_AT",
     "CM_MEMBER_ADDRESSES",
-    "CM_MEMBER_ENROLLMENTS",
     "CM_MEMBER_COB",
     "PAYER_PLATFORM",
     "PAYER",
@@ -32,28 +26,7 @@
     "INGESTION_DATE",
     "INGESTION_EPOCH",
     "ROWID",
-    "PUBLISHER_NAME",
-    "PRODUCT",
-    "GDF_VERSION",
-    "FILE_TYPE",
-    "DATA_CATEGORY",
-    "LOB",
-    "cotiviti.dataset_id",
-    "cotiviti.tenant_id",
-    "cotiviti.schema_version",
-    "cotiviti.client_id",
-    "cotiviti.client_system",
-    "cotiviti.message_id",
-    "cotiviti.produced_at",
-    "cotiviti.source_format",
-    "cotiviti.source_system",
-    "cotiviti.batch_id",
-    "cotiviti.message_seq",
-    "cotiviti.correlation_id",
-    "cotiviti.producer_version",
-    "cotiviti.source.isa_control",
-    "cotiviti.source.gs_control",
-    "cotiviti.source.raw_file_ref"
+    "PUBLISHER_NAME"
   ],
   "properties": {
     "ROWID": {
@@ -1226,7 +1199,6 @@
       "additionalProperties": true,
       "required": [
         "CM_MEMBER_ADDRESS_CLIENT_ID",
-        "CM_MEMBER_ADDRESS_TYPE_CODE",
         "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR",
         "CM_MEMBER_ADDRESS_01",
         "CM_MEMBER_ADDRESS_02",
@@ -1234,8 +1206,7 @@
         "CM_MEMBER_CITY",
         "CM_MEMBER_STATE",
         "CM_MEMBER_ZIP",
-        "CM_MEMBER_ADDRESS_START_DATE",
-        "CM_MEMBER_ADDRESS_END_DATE"
+        "CM_MEMBER_ADDRESS_START_DATE"
       ],
       "properties": {
         "CM_MEMBER_ADDRESS_CLIENT_ID": {

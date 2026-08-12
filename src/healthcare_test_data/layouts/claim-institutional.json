@@ -52,11 +52,6 @@
       "max_length": 255
     },
     {
-      "name": "LOB",
-      "type": "text",
-      "max_length": 255
-    },
-    {
       "name": "cotiviti.dataset_id",
       "type": "text",
       "max_length": 255
@@ -122,62 +117,7 @@
       "max_length": 255
     },
     {
-      "name": "HDR_CONSTANT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_CLIENT_VENDOR_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_FILE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_FILE_SEQUENCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_FILE_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_RECORD_COUNT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_PRODUCED_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
       "name": "ROWID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerName",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerIdentifier",
       "type": "text",
       "max_length": 255
     },
@@ -203,81 +143,6 @@
     },
     {
       "name": "cotiviti.source.claim_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "x-connector-name",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerIdCodeQualifier",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerAddressLine1",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerCity",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerState",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.payerZip",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.submitterName",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.submitterIdentifier",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.submitterTelephone",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.receiverName",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.receiverIdentifier",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.tradingPartner",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.interchangeUsageIndicator",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.interchangeSenderIdentifierQualifier",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "otherAttributes.interchangeReceiverIdentifierQualifier",
       "type": "text",
       "max_length": 255
     }
@@ -525,36 +390,6 @@
     },
     {
       "name": "CH_PATIENT_LIABILITY_AMOUNT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_PAYMENT_CHECK_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_PAYMENT_STATUS_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_RECORD_TAG",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_RECORD_STATUS",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_SOURCE_UPDATED_AT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_PAYMENT_CLAIM_ID",
       "type": "text",
       "max_length": 255
     },
@@ -3567,107 +3402,12 @@
         "max_length": 255
       },
       {
-        "name": "CD_ORIGINAL_CLAIM_LINE_NUMBER",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_SERVICE_FROM_DATE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_SERVICE_TO_DATE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_DIAGNOSIS_POINTER_01",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_SUBMITTED_PROCEDURE_CODE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_SUBMITTED_UNITS",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_SUBMITTED_UNITS_TYPE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_CHARGE_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_ALLOWED_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_COINSURANCE_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_COPAY_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_DEDUCTIBLE_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_PATIENT_LIABILITY_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_PAID_AMOUNT",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_LINE_PAID_DATE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_LINE_ADJUSTMENTS",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_SUBMITTED_REVENUE_CODE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_ALLOWED_REVENUE_CODE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
         "name": "CD_NUMBER_OF_ADJUSTMENTS",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CD_PAYMENT_METHOD",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CD_PAYMENT_STATUS",
+        "name": "CD_ORIGINAL_CLAIM_LINE_NUMBER",
         "type": "text",
         "max_length": 255
       },
@@ -3738,6 +3478,16 @@
       },
       {
         "name": "CD_PAYER_BYPASS_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_SERVICE_FROM_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_SERVICE_TO_DATE",
         "type": "text",
         "max_length": 255
       },
@@ -3967,6 +3717,11 @@
         "max_length": 255
       },
       {
+        "name": "CD_DIAGNOSIS_POINTER_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
         "name": "CD_DIAGNOSIS_POINTER_02",
         "type": "text",
         "max_length": 255
@@ -4027,6 +3782,11 @@
         "max_length": 255
       },
       {
+        "name": "CD_SUBMITTED_PROCEDURE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
         "name": "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
         "type": "text",
         "max_length": 255
@@ -4068,6 +3828,16 @@
       },
       {
         "name": "CD_ALLOWED_PROCEDURE_MODIFIER_04",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_SUBMITTED_REVENUE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_ALLOWED_REVENUE_CODE",
         "type": "text",
         "max_length": 255
       },
@@ -4267,12 +4037,37 @@
         "max_length": 255
       },
       {
+        "name": "CD_LINE_PAID_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_PAYMENT_STATUS",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_PAYMENT_METHOD",
+        "type": "text",
+        "max_length": 255
+      },
+      {
         "name": "CD_CARVE_OUT_INDICATOR",
         "type": "text",
         "max_length": 255
       },
       {
         "name": "CD_FEE_SCHEDULE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_CHARGE_AMOUNT",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_ALLOWED_AMOUNT",
         "type": "text",
         "max_length": 255
       },
@@ -4298,6 +4093,31 @@
       },
       {
         "name": "CD_COB_CLIENT_SAVINGS_AMOUNT",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_COINSURANCE_AMOUNT",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_COPAY_AMOUNT",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_DEDUCTIBLE_AMOUNT",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_PATIENT_LIABILITY_AMOUNT",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_PAID_AMOUNT",
         "type": "text",
         "max_length": 255
       },
@@ -4343,6 +4163,16 @@
       },
       {
         "name": "CD_LINE_SEQUESTRATION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_SUBMITTED_UNITS",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CD_SUBMITTED_UNITS_TYPE",
         "type": "text",
         "max_length": 255
       },
@@ -4407,5 +4237,6 @@
         "max_length": 255
       }
     ]
-  }
+  },
+  "required_parent_fields": {}
 }

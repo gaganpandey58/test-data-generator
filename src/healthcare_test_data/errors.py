@@ -10,7 +10,7 @@ class ConfigurationError(ValueError):
     """Indicate that the supplied generation configuration is invalid.
 
     This error covers malformed JSON, invalid configuration schema, unsafe
-    output paths, unsupported profiles or scenarios, and invalid enabled-entity
+    output paths, unsupported layouts, and invalid enabled-entity
     relationships. Its message is designed to be suitable for CLI output.
     """
 

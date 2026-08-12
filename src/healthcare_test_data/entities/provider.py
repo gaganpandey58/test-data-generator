@@ -1,9 +1,7 @@
 """Generate deterministic, source-shaped provider records.
 
 This module owns provider root, address, and network field construction for
-the checked-in GDF provider profile.  It also applies scenario mutations to a
-copied baseline record so duplicate, changed, stale, and incomplete rows stay
-valid examples of the same provider rather than unrelated synthetic records.
+the checked-in GDF provider layout and its source-shaped happy-path values.
 """
 
 from collections.abc import Mapping
@@ -12,10 +10,10 @@ from random import Random
 
 from faker import Faker
 
-from healthcare_test_data.clients import record_header_values, resolve_client_headers
+from healthcare_test_data.client_profiles import record_header_values
 from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
-from healthcare_test_data.scenarios import Scenario
+from healthcare_test_data.sample_shapes import complete_record
 
 _LOCATIONS = (
     ("AZ", "Tucson", "85704", "Pima", "Southwest"),
@@ -28,46 +26,30 @@ _SPECIALTIES = (
     ("208D00000X", "General Practice"),
     ("261QP2300X", "Primary Care Clinic"),
 )
-_OPTIONAL_INCOMPLETE_FIELDS = (
-    "CP_PROVIDER_DEA_NUMBER",
-    "CP_PROVIDER_MEDICARE_ID",
-    "CP_PROVIDER_MEDICAID_ID",
-)
 
 
 def generate_record(
     seed: int,
     index: int,
-    entity_counts: Mapping[str, int] | None = None,
-    *,
-    scenario: Scenario | None = None,
-    client_headers: Mapping[str, object] | None = None,
-    client_values: Mapping[str, object] | None = None,
+    entity_counts: Mapping[str, int],
+    client_headers: Mapping[str, object],
+    client_values: Mapping[str, object],
+    profile: str,
 ) -> dict[str, object]:
-    """Generate one GDF-profile provider record, optionally varying a baseline.
+    """Generate one GDF-profile provider happy-path record.
 
     Args:
         seed: Shared deterministic generation seed.
         index: Stable zero-based output position.
-        entity_counts: Unused related-entity counts accepted by the common API.
-        scenario: Optional planned variation for this output position.
-        client_headers: Optional client-specific envelope header overrides.
-        client_values: Optional client-specific non-header generation values.
+        entity_counts: Enabled stream counts; unused for provider rows.
+        client_headers: Client-specific envelope header values.
+        client_values: Client-specific provider body values.
+        profile: Selected layout; fixed to ``provider`` by configuration.
 
     Returns:
         A source-shaped provider record that satisfies the provider schema.
     """
-    del entity_counts
-    if scenario is not None and scenario.baseline_index is not None:
-        return _mutate(
-            generate_record(
-                seed,
-                scenario.baseline_index,
-                client_headers=client_headers,
-                client_values=client_values,
-            ),
-            scenario,
-        )
+    del entity_counts, profile
     randomizer = Random(seed * 1000003 + index)
     faker = Faker("en_US")
     faker.seed_instance(seed * 1000003 + index)
@@ -80,9 +62,8 @@ def generate_record(
     last = faker.last_name().upper() if individual else f"{faker.company().upper()} MEDICAL GROUP"
     full = " ".join(part for part in (first, middle, last) if part)
     npi = _npi(randomizer)
-    resolved_headers = resolve_client_headers("provider", client_headers)
-    client_platform = str(resolved_headers.get("CP_CLIENT_DATA_PLATFORM", ""))
-    values = dict(client_values or {})
+    client_platform = str(client_headers.get("CP_CLIENT_DATA_PLATFORM", ""))
+    values = dict(client_values)
     provider_id = f"PPRV{index + 1:010d}{state}"
     master_id = f"{1500000000 + index:010d}"
     taxonomy, specialty = randomizer.choice(_SPECIALTIES)
@@ -149,57 +130,8 @@ def generate_record(
             "CP_CUSTOM_FIELD_01": "SYNTHETIC",
         }
     )
-    record.update(_transport_headers(seed, index, resolved_headers))
-    return record
-
-
-def _mutate(baseline: dict[str, object], scenario: Scenario) -> dict[str, object]:
-    """Apply one provider variation without changing the baseline record.
-
-    Args:
-        baseline: Deterministic provider record selected by the scenario plan.
-        scenario: Named variation to apply.
-
-    Returns:
-        A copied provider record with the requested source-valid variation.
-    """
-    record = _copy_record(baseline)
-    if scenario.name == "duplicate":
-        return record
-    if scenario.name == "changed":
-        record["CP_PROVIDER_SOURCE_UPDATED_AT"] = "20260806"
-        addresses = record["CP_PROVIDER_ADDRESSES"]
-        assert isinstance(addresses, list) and addresses
-        address = addresses[0]
-        assert isinstance(address, dict)
-        state, city, zip_code, county, region = _next_location(str(address["CP_PROVIDER_STATE"]))
-        address.update(
-            {
-                "CP_PROVIDER_ADDRESS_01": "900 UPDATED AVENUE",
-                "CP_PROVIDER_CITY": city.upper(),
-                "CP_PROVIDER_STATE": state,
-                "CP_PROVIDER_ZIP": zip_code,
-                "CP_PROVIDER_COUNTY": county,
-                "CP_PROVIDER_REGION": region,
-            }
-        )
-    elif scenario.name == "stale":
-        record["CP_PROVIDER_SOURCE_UPDATED_AT"] = "20260804"
-        record["CP_PROVIDER_RECORD_START_DATE"] = "20190101"
-        addresses = record["CP_PROVIDER_ADDRESSES"]
-        assert isinstance(addresses, list) and addresses
-        address = addresses[0]
-        assert isinstance(address, dict)
-        address["CP_PROVIDER_ADDRESS_START_DATE"] = "20190101"
-    elif scenario.name == "incomplete":
-        for field in _OPTIONAL_INCOMPLETE_FIELDS:
-            record[field] = ""
-        addresses = record["CP_PROVIDER_ADDRESSES"]
-        assert isinstance(addresses, list) and addresses
-        address = addresses[0]
-        assert isinstance(address, dict)
-        address["CP_PROVIDER_ADDRESS_01"] = ""
-    return record
+    record.update(_transport_headers(seed, index, client_headers))
+    return complete_record(record, "provider")
 
 
 def _address(
@@ -338,34 +270,8 @@ def _transport_headers(
         "INGESTION_DATE": "20260805",
         "INGESTION_EPOCH": 1785888000 + sequence,
     }
-    headers.update(
-        record_header_values("provider", resolve_client_headers("provider", client_headers))
-    )
+    headers.update(record_header_values("provider", client_headers or {}))
     return headers
-
-
-def _copy_record(record: dict[str, object]) -> dict[str, object]:
-    """Copy mutable provider groups before changing a scenario variation.
-
-    Args:
-        record: Baseline provider record to copy.
-
-    Returns:
-        A shallow root copy with independent nested group dictionaries.
-
-    Raises:
-        AssertionError: If expected nested groups are not lists.
-    """
-    copied = dict(record)
-    addresses = record["CP_PROVIDER_ADDRESSES"]
-    networks = record["CP_PROVIDER_NETWORKS"]
-    assert isinstance(addresses, list)
-    assert isinstance(networks, list)
-    copied["CP_PROVIDER_ADDRESSES"] = [
-        dict(item) for item in addresses if isinstance(item, Mapping)
-    ]
-    copied["CP_PROVIDER_NETWORKS"] = [dict(item) for item in networks if isinstance(item, Mapping)]
-    return copied
 
 
 def _date(value: date) -> str:
@@ -429,21 +335,3 @@ def _is_luhn_valid(number: str) -> bool:
             digit = digit * 2 - 9 if digit > 4 else digit * 2
         total += digit
     return total % 10 == 0
-
-
-def _next_location(state: str) -> tuple[str, str, str, str, str]:
-    """Return the next complete source location after a known state.
-
-    Args:
-        state: Existing two-character state code from ``_LOCATIONS``.
-
-    Returns:
-        State, city, ZIP code, county, and region for the next location.
-
-    Raises:
-        StopIteration: If ``state`` is not represented by ``_LOCATIONS``.
-    """
-    location_index = next(
-        index for index, location in enumerate(_LOCATIONS) if location[0] == state
-    )
-    return _LOCATIONS[(location_index + 1) % len(_LOCATIONS)]

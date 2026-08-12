@@ -1,8 +1,7 @@
 """Load, normalize, and validate the public generator configuration.
 
 The external JSON config remains deliberately short: callers choose a client,
-the currently supported happy-path scenario, entity record counts, a seed, and
-an output directory. This
+entity record counts, a seed, and an output directory. This
 module expands those choices into immutable internal entity definitions with
 hardcoded schema, module, profile, and filename defaults, then validates paths
 and relationships before generation can begin.
@@ -16,7 +15,11 @@ from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
-from healthcare_test_data.clients import available_clients, load_client_headers, load_client_values
+from healthcare_test_data.client_profiles import (
+    available_clients,
+    load_client_headers,
+    load_client_values,
+)
 from healthcare_test_data.errors import ConfigurationError
 from healthcare_test_data.layouts import available_profiles, load_layout
 
@@ -55,7 +58,6 @@ class RunConfig:
 
     Attributes:
         client: Selected checked-in client header profile.
-        scenario: The current generation mode, always ``happy-path``.
         seed: Deterministic seed shared by every enabled entity generator.
         output_directory: Absolute directory used for generated JSONL files.
         entities: Ordered, enabled entity requests ready for the engine.
@@ -63,7 +65,6 @@ class RunConfig:
     """
 
     client: str
-    scenario: str
     seed: int
     output_directory: Path
     entities: tuple[EntityConfig, ...]
@@ -90,7 +91,6 @@ def load_config(path: Path) -> RunConfig:
     raw_config = _normalize_config(raw_config)
     try:
         client = raw_config["client"]
-        scenario = raw_config["scenario"]
         seed = raw_config["seed"]
         output_directory = _resolve_path(raw_config["output_directory"], config_path.parent)
         raw_entities = raw_config["entities"]
@@ -128,10 +128,8 @@ def load_config(path: Path) -> RunConfig:
             )
         )
     _validate_unique_filenames(entities)
-    _validate_claim_relationships(entities)
     return RunConfig(
         client=client,
-        scenario=scenario,
         seed=seed,
         output_directory=output_directory,
         entities=tuple(entities),
@@ -143,7 +141,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     """Expand the short root entity form into the detailed internal form.
 
     The public form keeps a run focused on the only values people usually
-    change: client, happy-path mode, and each selected entity's count. Professional and
+    change: client and each selected entity's count. Professional and
     institutional claims are grouped under one ``claims`` object. Source
     profile, schema, module, and output filename are always internal defaults.
 
@@ -159,7 +157,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     for name in ("provider", "member"):
         value = raw_config.get(name)
         if isinstance(value, dict):
-            entities[name] = {**entities[name], "enabled": True, **value}
+            entities[name] = _selected_entity(entities[name], value)
 
     claims = raw_config.get("claims")
     if isinstance(claims, dict):
@@ -169,18 +167,35 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         ):
             value = claims.get(stream)
             if isinstance(value, dict):
-                entities[entity_name] = {
-                    **entities[entity_name],
-                    "enabled": True,
-                    **value,
-                }
+                entities[entity_name] = _selected_entity(entities[entity_name], value)
     return {
         "client": raw_config.get("client", "chc"),
-        "scenario": raw_config.get("scenario", "happy-path"),
         "seed": raw_config.get("seed", 20260805),
         "output_directory": raw_config.get("output_directory", "./output"),
         "entities": entities,
     }
+
+
+def _selected_entity(
+    defaults: Mapping[str, object], selection: Mapping[str, object]
+) -> dict[str, object]:
+    """Apply a compact public entity selection to internal defaults.
+
+    ``layout`` is deliberately the only optional entity setting. The allowed
+    layout is checked after normalization against the selected data type; all
+    implementation details remain internal.
+
+    Args:
+        defaults: Hardcoded implementation defaults for one entity stream.
+        selection: Public ``count`` and optional ``layout`` request.
+
+    Returns:
+        Enabled internal entity definition with the requested layout profile.
+    """
+    result = {**defaults, "enabled": True, "count": selection["count"]}
+    if "layout" in selection:
+        result["profile"] = selection["layout"]
+    return result
 
 
 def _entity_defaults() -> dict[str, dict[str, object]]:
@@ -290,24 +305,6 @@ def _validate_profile(entity: str, profile: object) -> None:
         raise ConfigurationError(
             f"Could not load layout profile for enabled entity {entity!r}"
         ) from error
-
-
-def _validate_claim_relationships(entities: list[EntityConfig]) -> None:
-    """Require claim generation to include the member and provider it links.
-
-    Args:
-        entities: Enabled entity configurations from the root config.
-
-    Raises:
-        ConfigurationError: If enabled claims would reference an absent entity.
-    """
-    enabled_names = {entity.name for entity in entities}
-    claim_entities = {"claim_professional", "claim_institutional"}
-    if enabled_names & claim_entities and not {"member", "provider"} <= enabled_names:
-        raise ConfigurationError(
-            "Enabled professional or institutional claim generation requires "
-            "enabled member and provider entities"
-        )
 
 
 def _load_json(path: Path, label: str) -> dict[str, Any]:

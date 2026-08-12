@@ -1,8 +1,9 @@
-"""Extract source-controlled entity field catalogs from the GDF workbook.
+"""Refresh or verify GDF field properties in the checked-in JSON Schemas.
 
-The generator never reads the workbook at runtime.  This utility is only used
-when a new GDF layout version needs to refresh the checked-in catalog JSON
-files that document every field available to each supported entity.
+The GDF workbook is the source of every available provider, member, and claim
+attribute.  The generator does not read the workbook at runtime: this small
+maintenance utility adds newly available field names to the schemas, or checks
+that the schemas already contain them.
 """
 
 from __future__ import annotations
@@ -125,33 +126,97 @@ def extract_catalogs(workbook_path: Path) -> dict[str, list[str]]:
     return catalogs
 
 
-def write_catalogs(workbook_path: Path, output_directory: Path) -> None:
-    """Write stable, source-controlled JSON catalogs from one GDF workbook."""
+SCHEMA_PATHS = {
+    "provider": Path("schemas/provider/provider.schema.json"),
+    "member": Path("schemas/member/member.schema.json"),
+    "claim": Path("schemas/claim/claim.schema.json"),
+}
+
+
+def missing_schema_fields(schema: dict[str, object], fields: Iterable[str]) -> list[str]:
+    """Return GDF field names not yet declared in one schema's properties.
+
+    Args:
+        schema: Decoded entity schema.
+        fields: GDF field names extracted from the workbook.
+
+    Returns:
+        Ordered field names that the schema does not currently acknowledge.
+    """
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        raise ValueError("Schema must contain an object-valued properties mapping.")
+    return [field for field in fields if field not in properties]
+
+
+def update_schema_properties(schema: dict[str, object], fields: Iterable[str]) -> list[str]:
+    """Add missing GDF fields as permissive available attributes.
+
+    Existing property definitions are never replaced: schemas may retain a
+    tighter type, format, or length constraint for fields emitted today.  New
+    GDF fields are intentionally optional until a layout selects them.
+
+    Args:
+        schema: Decoded entity schema to update in place.
+        fields: GDF field names extracted from the workbook.
+
+    Returns:
+        Ordered field names added to the schema.
+    """
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        raise ValueError("Schema must contain an object-valued properties mapping.")
+    missing = missing_schema_fields(schema, fields)
+    properties.update({field: {} for field in missing})
+    return missing
+
+
+def refresh_schemas(workbook_path: Path, schema_root: Path, verify: bool = False) -> int:
+    """Update or verify all supported schemas against one GDF workbook.
+
+    Args:
+        workbook_path: Source GDF workbook.
+        schema_root: Project root containing the ``schemas`` directory.
+        verify: When true, make no edits and return one if a field is missing.
+
+    Returns:
+        Zero when every schema is current; one when verify mode finds missing
+        GDF fields.
+    """
     catalogs = extract_catalogs(workbook_path)
-    output_directory.mkdir(parents=True, exist_ok=True)
+    stale = False
     for entity, fields in catalogs.items():
-        payload = {
-            "source": workbook_path.name,
-            "entity": entity,
-            "fields": fields,
-        }
-        (output_directory / f"{entity}.json").write_text(
-            json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-        )
+        schema_path = schema_root / SCHEMA_PATHS[entity]
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        if not isinstance(schema, dict):
+            raise ValueError(f"Schema {schema_path} must contain a JSON object.")
+        missing = missing_schema_fields(schema, fields)
+        if verify:
+            if missing:
+                stale = True
+                print(f"{entity}: missing {len(missing)} GDF fields")
+            else:
+                print(f"{entity}: current ({len(fields)} GDF fields)")
+            continue
+        if missing:
+            update_schema_properties(schema, fields)
+            schema_path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+        print(f"{entity}: {'added ' + str(len(missing)) if missing else 'current'}")
+    return 1 if stale else 0
 
 
 def main(arguments: list[str]) -> int:
-    """Refresh catalogs using a workbook path and optional output directory."""
-    if not arguments:
-        raise SystemExit("Usage: extract_gdf_catalogs.py WORKBOOK [OUTPUT_DIRECTORY]")
+    """Refresh schemas from a workbook, or verify them with ``--verify``.
+
+    Usage:
+        ``extract_gdf_catalogs.py WORKBOOK [--verify]``
+    """
+    if not arguments or len(arguments) > 2 or (len(arguments) == 2 and arguments[1] != "--verify"):
+        raise SystemExit("Usage: extract_gdf_catalogs.py WORKBOOK [--verify]")
     workbook_path = Path(arguments[0]).expanduser().resolve()
-    output_directory = (
-        Path(arguments[1]).resolve()
-        if len(arguments) > 1
-        else Path("src/healthcare_test_data/entities/catalogs").resolve()
+    return refresh_schemas(
+        workbook_path, Path(__file__).resolve().parents[1], verify="--verify" in arguments
     )
-    write_catalogs(workbook_path, output_directory)
-    return 0
 
 
 if __name__ == "__main__":

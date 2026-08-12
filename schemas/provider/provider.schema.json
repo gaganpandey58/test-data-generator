@@ -60,25 +60,7 @@
     "INGESTION_DATE",
     "INGESTION_EPOCH",
     "ROWID",
-    "PUBLISHER_NAME",
-    "PRODUCT",
-    "GDF_VERSION",
-    "FILE_TYPE",
-    "DATA_CATEGORY",
-    "LOB",
-    "cotiviti.dataset_id",
-    "cotiviti.tenant_id",
-    "cotiviti.schema_version",
-    "cotiviti.client_id",
-    "cotiviti.client_system",
-    "cotiviti.message_id",
-    "cotiviti.produced_at",
-    "cotiviti.source_format",
-    "cotiviti.source_system",
-    "cotiviti.batch_id",
-    "cotiviti.message_seq",
-    "cotiviti.correlation_id",
-    "cotiviti.source.raw_file_ref"
+    "PUBLISHER_NAME"
   ],
   "properties": {
     "ROWID": {

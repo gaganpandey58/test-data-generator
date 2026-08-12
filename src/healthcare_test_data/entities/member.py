@@ -1,24 +1,21 @@
 """Generate deterministic, source-shaped member records.
 
 The generator builds member roots and their address, enrollment, and COB
-groups from the checked-in GDF member profile.  It resolves PCP references to
-the provider rows selected for the same run and applies configured scenario
-variations only to copied deterministic baselines.
+groups from the checked-in GDF member layout. It resolves PCP references to
+the provider rows selected for the same run.
 """
 
-import json
 from collections.abc import Mapping
 from datetime import date, timedelta
-from importlib.resources import files
 from random import Random
 
 from faker import Faker
 
-from healthcare_test_data.clients import record_header_values, resolve_client_headers
+from healthcare_test_data.client_profiles import record_header_values
 from healthcare_test_data.entities.provider import generate_record as generate_provider
 from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
-from healthcare_test_data.scenarios import Scenario, plan
+from healthcare_test_data.sample_shapes import complete_record
 
 _LOCATIONS = (
     ("AZ", "Tucson", "85704", "Pima"),
@@ -26,49 +23,30 @@ _LOCATIONS = (
     ("MD", "Baltimore", "21201", "Baltimore City"),
     ("TX", "Harlingen", "78550", "Cameron"),
 )
-_OPTIONAL_INCOMPLETE_FIELDS = (
-    "CM_PAYER_SHORT",
-    "CM_MEMBER_SSN",
-    "CM_MEMBER_ALTERNATE_ID",
-    "CM_MEMBER_MEDICARE_HICN_ID",
-)
 
 
 def generate_record(
     seed: int,
     index: int,
-    entity_counts: Mapping[str, int] | None = None,
-    *,
-    scenario: Scenario | None = None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None = None,
-    client_headers: Mapping[str, object] | None = None,
-    client_values: Mapping[str, object] | None = None,
+    entity_counts: Mapping[str, int],
+    client_headers: Mapping[str, object],
+    client_values: Mapping[str, object],
+    profile: str,
 ) -> dict[str, object]:
-    """Generate one GDF-profile member record, optionally varying a baseline.
+    """Generate one GDF-profile member happy-path record.
 
     Args:
         seed: Shared deterministic generation seed.
         index: Stable zero-based output position.
-        entity_counts: Optional enabled-entity counts used for PCP links.
-        scenario: Optional planned variation for this output position.
-        entity_scenarios: Optional scenario quantities for linked provider
-            output rows.
-        client_headers: Optional client-specific envelope header overrides.
-        client_values: Optional client-specific non-header generation values.
+        entity_counts: Enabled entity counts used for PCP links.
+        client_headers: Client-specific envelope header values.
+        client_values: Client-specific member body values.
+        profile: Selected layout; fixed to ``member`` by configuration.
 
     Returns:
         A source-shaped member record that satisfies the member schema.
     """
-    if scenario is not None and scenario.baseline_index is not None:
-        baseline = generate_record(
-            seed,
-            scenario.baseline_index,
-            entity_counts,
-            entity_scenarios=entity_scenarios,
-            client_headers=client_headers,
-            client_values=client_values,
-        )
-        return _mutate(baseline, scenario)
+    del profile
     randomizer = Random(_record_seed(seed, index))
     faker = Faker("en_US")
     faker.seed_instance(_record_seed(seed, index))
@@ -78,13 +56,12 @@ def generate_record(
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     birth = _date(date(1940, 1, 1) + timedelta(days=randomizer.randrange(28000)))
     member_id = f"MBR{index + 1:010d}"
-    resolved_headers = resolve_client_headers("member", client_headers)
-    client_platform = str(resolved_headers.get("CM_CLIENT_DATA_PLATFORM", ""))
-    values = dict(client_values or {})
+    client_platform = str(client_headers.get("CM_CLIENT_DATA_PLATFORM", ""))
+    values = dict(client_values)
     # The EIP reference sample is the authoritative JSON-kind contract.  Add
     # GDF-only fields first, then let sample defaults preserve kinds for fields
     # that appear in both sources (for example risk score).
-    record = {**_profile_blanks("member"), **_sample_root_defaults()}
+    record = _profile_blanks("member")
     record.update(
         {
             "CM_MEMBER_CLIENT_ID": member_id,
@@ -135,66 +112,14 @@ def generate_record(
                     "CM_LINE_OF_BUSINESS_CODE": "MED",
                     "CM_NETWORK_CLIENT_ID": str(values.get("member_network_client_id", "")),
                     "CM_PLAN_CLIENT_ID": "PLAN-GOLD",
-                    "CM_PCP_PROVIDER_CLIENT_ID": _pcp_provider_id(
-                        seed, index, entity_counts, entity_scenarios
-                    ),
+                    "CM_PCP_PROVIDER_CLIENT_ID": _pcp_provider_id(seed, index, entity_counts),
                 }
             ],
             "CM_MEMBER_COB": [_cob(index, start)],
         }
     )
-    record.update(_transport_headers(seed, index, resolved_headers))
-    return record
-
-
-def _mutate(baseline: dict[str, object], scenario: Scenario) -> dict[str, object]:
-    """Apply one member variation without changing the baseline record.
-
-    Args:
-        baseline: Deterministic source record selected by the scenario plan.
-        scenario: Named variation to apply.
-
-    Returns:
-        A copied member record with the requested source-valid variation.
-    """
-    record = _copy_record(baseline)
-    if scenario.name == "duplicate":
-        return record
-    if scenario.name == "changed":
-        record["CM_MEMBER_SOURCE_UPDATED_AT"] = "20260806"
-        record["CM_MEMBER_RECORD_STATUS"] = "Active"
-        record["CM_MEMBER_SOURCE_RECORD_TAG"] = "834 Provisional"
-        addresses = record["CM_MEMBER_ADDRESSES"]
-        assert isinstance(addresses, list) and addresses
-        address = addresses[0]
-        assert isinstance(address, dict)
-        state, city, zip_code, county = _next_location(str(address["CM_MEMBER_STATE"]))
-        address.update(
-            {
-                "CM_MEMBER_ADDRESS_01": "900 UPDATED AVENUE",
-                "CM_MEMBER_CITY": city.upper(),
-                "CM_MEMBER_STATE": state,
-                "CM_MEMBER_ZIP": zip_code,
-                "CM_MEMBER_COUNTY": county.upper(),
-            }
-        )
-    elif scenario.name == "stale":
-        record["CM_MEMBER_SOURCE_UPDATED_AT"] = "20260804"
-        record["CM_MEMBER_RECORD_START_DATE"] = "20190101"
-        addresses = record["CM_MEMBER_ADDRESSES"]
-        assert isinstance(addresses, list) and addresses
-        address = addresses[0]
-        assert isinstance(address, dict)
-        address["CM_MEMBER_ADDRESS_START_DATE"] = "20190101"
-    elif scenario.name == "incomplete":
-        for field in _OPTIONAL_INCOMPLETE_FIELDS:
-            record[field] = (
-                "000000000" if field == "CM_MEMBER_SSN" else _blank_like(record.get(field))
-            )
-    elif scenario.name == "new":
-        # A new row is independently generated before this branch is reached.
-        return record
-    return record
+    record.update(_transport_headers(seed, index, client_headers))
+    return complete_record(record, "member")
 
 
 def _profile_blanks(profile: str) -> dict[str, object]:
@@ -208,80 +133,6 @@ def _profile_blanks(profile: str) -> dict[str, object]:
     """
     layout = load_layout(profile)
     return {field.name: "" for field in layout.root}
-
-
-def _sample_root_defaults() -> dict[str, object]:
-    """Create blank values for every root field in the supplied member sample.
-
-    The checked-in field-kind registry preserves the complete EIP member
-    envelope without copying source values. Real generated values overwrite
-    identity, relationship, address, enrollment, and transport fields later in
-    :func:`generate_record`; the remaining optional fields retain source-valid
-    blank values of the matching JSON kind.
-
-    Returns:
-        A new mutable mapping containing every documented member root field.
-
-    Raises:
-        RuntimeError: If the packaged field-kind registry is malformed.
-    """
-    try:
-        raw = json.loads(
-            files("healthcare_test_data")
-            .joinpath("member_field_defaults.json")
-            .read_text(encoding="utf-8")
-        )
-    except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError("Could not load packaged member field defaults") from error
-    if not isinstance(raw, dict) or not all(
-        isinstance(name, str) and isinstance(kind, str) for name, kind in raw.items()
-    ):
-        raise RuntimeError("Packaged member field defaults are malformed")
-    blank_by_kind: dict[str, object] = {
-        "string": "",
-        "integer": 0,
-        "number": 0.0,
-        "boolean": False,
-        "array": [],
-        "object": {},
-    }
-    if any(kind not in blank_by_kind for kind in raw.values()):
-        raise RuntimeError("Packaged member field defaults contain an unknown JSON kind")
-    defaults: dict[str, object] = {}
-    for name, kind in raw.items():
-        if kind == "array":
-            defaults[name] = []
-        elif kind == "object":
-            defaults[name] = {}
-        else:
-            defaults[name] = blank_by_kind[kind]
-    return defaults
-
-
-def _blank_like(value: object | None) -> object:
-    """Return a source-valid empty value while preserving a JSON value type.
-
-    Scenario records must keep the same EIP field set as baseline records.
-    This helper represents a missing optional value using the source's normal
-    empty convention instead of deleting its field from the JSON object.
-
-    Args:
-        value: Existing generated value whose JSON type is retained.
-
-    Returns:
-        An empty string, numeric zero, false, empty list, or empty mapping.
-    """
-    if isinstance(value, bool):
-        return False
-    if isinstance(value, int):
-        return 0
-    if isinstance(value, float):
-        return 0.0
-    if isinstance(value, list):
-        return []
-    if isinstance(value, dict):
-        return {}
-    return ""
 
 
 def _transport_headers(
@@ -325,7 +176,7 @@ def _transport_headers(
         "INGESTION_DATE": "20260805",
         "INGESTION_EPOCH": 1785888000 + sequence,
     }
-    headers.update(record_header_values("member", resolve_client_headers("member", client_headers)))
+    headers.update(record_header_values("member", client_headers or {}))
     return headers
 
 
@@ -404,46 +255,17 @@ def _cob(index: int, start: str) -> dict[str, object]:
     }
 
 
-def _copy_record(record: dict[str, object]) -> dict[str, object]:
-    """Copy mutable member groups before changing a scenario variation.
-
-    Args:
-        record: Baseline member record to copy.
-
-    Returns:
-        A shallow root copy with independent nested group dictionaries.
-
-    Raises:
-        AssertionError: If expected nested groups are not lists.
-    """
-    copied = dict(record)
-    addresses = record["CM_MEMBER_ADDRESSES"]
-    enrollments = record["CM_MEMBER_ENROLLMENTS"]
-    cob = record["CM_MEMBER_COB"]
-    assert isinstance(addresses, list)
-    assert isinstance(enrollments, list)
-    assert isinstance(cob, list)
-    copied["CM_MEMBER_ADDRESSES"] = [dict(item) for item in addresses if isinstance(item, Mapping)]
-    copied["CM_MEMBER_ENROLLMENTS"] = [
-        dict(item) for item in enrollments if isinstance(item, Mapping)
-    ]
-    copied["CM_MEMBER_COB"] = [dict(item) for item in cob if isinstance(item, Mapping)]
-    return copied
-
-
 def _pcp_provider_id(
     seed: int,
     index: int,
-    entity_counts: Mapping[str, int] | None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None,
+    entity_counts: Mapping[str, int],
 ) -> str:
     """Resolve a deterministic PCP provider ID for one member.
 
     Args:
         seed: Shared deterministic generation seed.
         index: Stable member position.
-        entity_counts: Optional enabled-entity counts.
-        entity_scenarios: Optional scenario quantities for emitted providers.
+        entity_counts: Enabled entity counts.
 
     Returns:
         A linked provider ID, or a blank value when providers are disabled.
@@ -451,13 +273,11 @@ def _pcp_provider_id(
     Raises:
         AssertionError: If the provider generator returns a non-string ID.
     """
-    if entity_counts is not None and entity_counts.get("provider", 0) < 1:
+    if entity_counts.get("provider", 0) < 1:
         return ""
-    count = max(1, entity_counts.get("provider", 10) if entity_counts else 10)
+    count = entity_counts["provider"]
     provider_index = index % count
-    scenarios = entity_scenarios.get("provider", {}) if entity_scenarios else {}
-    provider_scenario = plan(count, scenarios, seed).variation_for(provider_index)
-    provider_id = generate_provider(seed, provider_index, scenario=provider_scenario)[
+    provider_id = generate_provider(seed, provider_index, entity_counts, {}, {}, "provider")[
         "CP_PROVIDER_CLIENT_ID"
     ]
     assert isinstance(provider_id, str)
@@ -500,21 +320,3 @@ def _digits(randomizer: Random, width: int) -> str:
         Numeric string of exactly ``width`` characters.
     """
     return f"{randomizer.randrange(10 ** (width - 1), 10**width):0{width}d}"
-
-
-def _next_location(state: str) -> tuple[str, str, str, str]:
-    """Return the next complete source location after a known state.
-
-    Args:
-        state: Existing two-character state code from ``_LOCATIONS``.
-
-    Returns:
-        State, city, ZIP code, and county for the next source location.
-
-    Raises:
-        StopIteration: If ``state`` is not represented by ``_LOCATIONS``.
-    """
-    location_index = next(
-        index for index, location in enumerate(_LOCATIONS) if location[0] == state
-    )
-    return _LOCATIONS[(location_index + 1) % len(_LOCATIONS)]

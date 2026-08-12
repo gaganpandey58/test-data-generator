@@ -2,7 +2,7 @@
 
 Generate deterministic, synthetic healthcare JSON Lines (JSONL) data for providers, members, professional claims, and institutional claims. The output uses the field names, JSON structure, and record relationships represented by the supplied source samples, without copying real data.
 
-The generator has one deliberately simple purpose today: create **happy-path** records. It does not generate duplicate, stale, incomplete, replacement, void, or matching/survivorship scenarios. The internal boundaries leave room to add those later without changing the catalog, layout, client-profile, or publishing layers.
+The generator has one deliberately simple purpose today: create **happy-path** records. It does not generate duplicate, stale, incomplete, replacement, void, or matching/survivorship scenarios. The small generator/layout boundary leaves room to add those later without rebuilding the current workflow.
 
 ## What it writes
 
@@ -21,9 +21,9 @@ The project separates the fields that *can* be generated from the fields that ar
 
 ```mermaid
 flowchart LR
-    A["GDF workbook"] --> B["Complete entity catalogs<br/>all available attributes"]
-    B --> C["JSON Schemas<br/>validate all catalog attributes"]
-    D["Client profile<br/>headers and client values"] --> F["Entity builder"]
+    A["GDF workbook"] --> B["Complete GDF field catalog<br/>all available attributes"]
+    B --> C["JSON Schemas<br/>validate all available fields"]
+    D["Simple client profile file<br/>headers and client values"] --> F["Entity builder"]
     E["Layout profile<br/>selected headers, root fields, groups"] --> G["Layout projection"]
     F --> G
     G --> H["Generic nested-field deduplication<br/>keep only declared relationship references"]
@@ -32,11 +32,28 @@ flowchart LR
     K["generator.config.json<br/>client + happy path + counts"] --> F
 ```
 
-### Complete catalogs and schemas
+### GDF fields and schemas
 
-The checked-in catalogs under [src/healthcare_test_data/entities/catalogs/](src/healthcare_test_data/entities/catalogs/) contain every field extracted from the GDF reference for provider, member, and claim data. The JSON Schemas under [schemas/](schemas/) acknowledge those complete catalogs, including fields that are not presently written.
+The GDF workbook is the complete field catalog. Keep
+[`scripts/extract_gdf_catalogs.py`](scripts/extract_gdf_catalogs.py) when the
+workbook changes; it updates the JSON Schemas under [schemas/](schemas/) so
+they continue to acknowledge every available provider, member, and claim
+field, including fields that are not presently written.
 
-Those full catalogs are the extension point for future layouts. A field is not removed merely because a current source sample does not use it.
+From the repository root, refresh schema properties with:
+
+```sh
+uv run python scripts/extract_gdf_catalogs.py /path/to/GDF-layout.xlsx
+```
+
+Or verify that no GDF field is missing without writing files:
+
+```sh
+uv run python scripts/extract_gdf_catalogs.py /path/to/GDF-layout.xlsx --verify
+```
+
+The schemas are the extension point for future layouts. A field is not removed
+merely because a current source sample does not use it.
 
 ### Layouts control output
 
@@ -51,27 +68,41 @@ Only fields selected by a layout are emitted. This is why a complete GDF catalog
 
 Nested projection is generic. If a nested object repeats a value already held by its parent, it is removed unless that group declares the field as a required parent reference. The layout—not entity-specific code—decides which structural links such as member or provider identifiers remain duplicated.
 
-### Client profiles and headers
+### Sample patterns and client headers
 
-`client` selects a checked-in profile in [src/healthcare_test_data/clients/](src/healthcare_test_data/clients/). Profiles own client-specific headers and values (payer, platforms, product, source-system values, and similar envelope metadata). Entity builders do not contain client-specific header literals.
+[`src/healthcare_test_data/sample_shapes.json`](src/healthcare_test_data/sample_shapes.json)
+contains type-only patterns extracted from the supplied provider, member,
+professional/institutional claim, and professional/institutional payment
+samples. It makes the origin of optional defaults explicit without copying any
+source values. Entity builders provide the realistic synthetic values; the
+pattern file fills remaining sample fields with type-compatible blanks.
 
-To support a new client, add a complete profile JSON file with `headers` and `values` for each supported entity, then select its filename (without `.json`) through `client`. No separate generator implementation is needed. Layouts declare the headers they recognize, so profile values are emitted only when the selected entity layout includes that header.
+`client` selects an entry in
+[`src/healthcare_test_data/client_profiles.json`](src/healthcare_test_data/client_profiles.json).
+That single file owns client-specific headers and values (payer, platforms,
+product, source-system values, and similar envelope metadata). Entity builders
+do not contain client-specific header literals.
+
+To support a new client, add a complete top-level client entry with `headers` and `values` for each supported entity, then select that key through `client`. No separate generator implementation is needed. Layouts declare the headers they recognize, so profile values are emitted only when the selected entity layout includes that header.
 
 ## Configuration
 
 [generator.config.json](generator.config.json) is the only run-time file you normally edit. It has four concepts:
 
 - `client` — the checked-in client profile to use;
-- `scenario` — currently required and always `"happy-path"`;
 - `seed` — integer used to reproduce a deterministic run; and
-- entity `count` values — the exact number of objects to write.
+- entity `count` values — the exact number of objects to write; and
+- optional entity `layout` — a compatible checked-in output layout (the current
+  layout is used when omitted).
 
-`schema`, `module`, output filenames, and layout names are internal defaults. They are intentionally not configurable. Omit an entity to skip its output.
+`schema`, `module`, and output filenames are internal defaults. Omit an entity
+to skip its output. A supplied layout must be valid for the selected data type:
+for example, `provider` can use only `"provider"`, while professional claims
+can use only `"claim-professional"` today.
 
 ```json
 {
   "client": "chc",
-  "scenario": "happy-path",
   "seed": 20260805,
   "output_directory": "./output",
   "provider": {"count": 10},
@@ -83,7 +114,7 @@ To support a new client, add a complete profile JSON file with `headers` and `va
 }
 ```
 
-`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Scenario quantities and scenario maps are not accepted. Claims require both member and provider generation because generated claims link to those records.
+`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Scenario quantities and scenario maps are not accepted. Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records.
 
 `seed` is not a business date or source-layout version. Reusing the same configuration and seed produces the same synthetic records; changing the seed produces a different deterministic set.
 
@@ -135,10 +166,10 @@ uv run pytest
 
 The tests verify the key contracts:
 
-- complete checked-in GDF catalog coverage in schemas and entity catalogs;
-- optional comparison of those catalogs with the supplied GDF workbook when it is available locally;
-- simple happy-path config validation and rejection of legacy scenario maps;
-- client-profile header selection, including an alternate profile;
+- complete GDF field availability in schemas;
+- optional comparison of schemas with the supplied GDF workbook when it is available locally;
+- simple config and count validation;
+- client-profile header selection;
 - separate professional and institutional claim generation;
 - `CM_MEMBER_COB` layout selection; and
 - layout projection plus generic, declarative nested-field deduplication.
@@ -149,15 +180,15 @@ The tests verify the key contracts:
 generator.config.json                         # One simple generation request
 schemas/                                      # Complete GDF-aware JSON Schemas
 src/healthcare_test_data/
-├── clients/                                  # Client headers and generation values
 ├── entities/
-│   ├── catalogs/                              # Complete GDF field catalogs
 │   └── provider.py, member.py, claim.py       # Source-shaped record builders
 ├── layouts/                                  # Current JSON output-selection contracts
+├── client_profiles.json                       # Client header/value differences
+├── sample_shapes.json                         # Type patterns from all supplied samples
 ├── config.py                                 # Public config normalization/validation
 ├── engine.py                                 # Generate, project, validate, publish
 └── cli.py                                    # Command-line entry point
-tests/                                        # Catalog, config, header, and layout checks
+tests/                                        # Small extractor, config, and output-contract checks
 ```
 
 ## Current scope
@@ -165,4 +196,4 @@ tests/                                        # Catalog, config, header, and lay
 - JSONL is the only output format.
 - Data is synthetic and intended for development, integration, and processing exercises; it is not a full matching, survivorship, or adjudication engine.
 - Provider, member, professional claim, and institutional claim are the currently supported entity streams.
-- Future scenario generation can be layered in after happy-path generation without changing the public catalog/layout/client-profile separation.
+- Future scenario generation can be layered in after happy-path generation without changing the simple config, layout, and entity builders.

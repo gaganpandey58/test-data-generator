@@ -3,7 +3,7 @@
   "title": "Test data generator configuration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["client", "scenario"],
+  "required": ["client"],
   "anyOf": [
     {"required": ["provider"]},
     {"required": ["member"]},
@@ -11,7 +11,6 @@
   ],
   "properties": {
     "client": {"type": "string", "minLength": 1},
-    "scenario": {"const": "happy-path"},
     "seed": {"type": "integer"},
     "output_directory": {"type": "string", "minLength": 1},
     "provider": {"$ref": "#/$defs/entity"},
@@ -32,7 +31,8 @@
       "additionalProperties": false,
       "required": ["count"],
       "properties": {
-        "count": {"type": "integer", "minimum": 1}
+        "count": {"type": "integer", "minimum": 1},
+        "layout": {"type": "string", "minLength": 1}
       }
     }
   }

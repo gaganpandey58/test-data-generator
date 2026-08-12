@@ -1,80 +1,52 @@
 """Generate deterministic medical claims with embedded payment information.
 
 This module produces professional or institutional claim envelopes from the
-checked-in GDF profiles.  A claim references generated member and provider
-records, contains its line-level detail and payment fields in the same JSON
-object, and applies configured claim scenarios to copied baseline rows.
+checked-in GDF layouts. A claim references generated member and provider
+records and contains its line-level detail and payment fields in the same JSON
+object.
 """
 
-import json
 from collections.abc import Mapping
 from datetime import date, timedelta
-from functools import lru_cache
-from pathlib import Path
 from random import Random
-from typing import cast
 
-from healthcare_test_data.clients import (
+from healthcare_test_data.client_profiles import (
     nested_header_values,
     record_header_values,
-    resolve_client_headers,
 )
 from healthcare_test_data.entities.member import generate_record as generate_member
 from healthcare_test_data.entities.provider import generate_record as generate_provider
 from healthcare_test_data.identifiers import deterministic_uuid4
 from healthcare_test_data.layouts import load_layout
-from healthcare_test_data.scenarios import Scenario, plan
+from healthcare_test_data.sample_shapes import complete_record
 
 
 def generate_record(
     seed: int,
     index: int,
-    entity_counts: Mapping[str, int] | None = None,
-    *,
-    scenario: Scenario | None = None,
-    profile: str | None = None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None = None,
-    entity_name: str | None = None,
-    client_headers: Mapping[str, object] | None = None,
-    client_values: Mapping[str, object] | None = None,
+    entity_counts: Mapping[str, int],
+    client_headers: Mapping[str, object],
+    client_values: Mapping[str, object],
+    profile: str,
 ) -> dict[str, object]:
-    """Generate one GDF claim/payment envelope, optionally varying a baseline.
+    """Generate one GDF claim/payment happy-path envelope.
 
     Args:
         seed: Shared deterministic generation seed.
         index: Stable zero-based claim position.
-        entity_counts: Optional enabled-entity counts used for linked records.
-        scenario: Optional planned claim variation.
-        profile: Optional GDF claim profile override.
-        entity_scenarios: Optional scenario quantities for linked member and
-            provider output rows.
-        entity_name: Configured claim entity name.  It keeps professional and
-            institutional identifiers in independent namespaces.
-        client_headers: Optional client-specific envelope header overrides.
-        client_values: Optional client-specific non-header generation values.
+        entity_counts: Enabled member and provider row counts for linked records.
+        client_headers: Client-specific envelope header values.
+        client_values: Reserved client-owned claim values.
+        profile: ``claim-professional`` or ``claim-institutional``.
 
     Returns:
         Medical claim linked to deterministic member and provider source records.
     """
-    if scenario is not None and scenario.baseline_index is not None:
-        baseline = generate_record(
-            seed,
-            scenario.baseline_index,
-            entity_counts,
-            profile=profile,
-            entity_scenarios=entity_scenarios,
-            entity_name=entity_name,
-            client_headers=client_headers,
-            client_values=client_values,
-        )
-        mutated = _mutate(baseline, scenario)
-        _hydrate_sample_shape(mutated, _claim_type(index, profile))
-        return mutated
-
+    del client_values
     randomizer = Random(_record_seed(seed, index))
-    member = _linked_member(seed, index, entity_counts, entity_scenarios)
-    provider = _linked_provider(seed, index, entity_counts, entity_scenarios)
-    claim_type = _claim_type(index, profile)
+    member = _linked_member(seed, index, entity_counts)
+    provider = _linked_provider(seed, index, entity_counts)
+    claim_type = _claim_type(profile)
     profile_code = "P" if claim_type == "P" else "I"
     service_from_date = date(2025, 1, 1) + timedelta(days=randomizer.randrange(500))
     service_from = _compact_date(service_from_date)
@@ -87,10 +59,7 @@ def generate_record(
     liability = round(copay + deductible + coinsurance, 2)
     paid = round(allowed - liability, 2)
     claim_id = f"{profile_code}CLM{index + 1:09d}"
-    resolved_headers = resolve_client_headers(
-        entity_name or ("claim_professional" if claim_type == "P" else "claim_institutional"),
-        client_headers,
-    )
+    entity_name = "claim_professional" if claim_type == "P" else "claim_institutional"
     member_addresses = member["CM_MEMBER_ADDRESSES"]
     address = member_addresses[0] if isinstance(member_addresses, list) else {}
     record = _profile_blanks("claim-professional" if claim_type == "P" else "claim-institutional")
@@ -175,113 +144,12 @@ def generate_record(
         }
     )
     record.update(
-        _transport_headers(seed, index, claim_type, claim_id, entity_name, resolved_headers)
+        _transport_headers(seed, index, claim_type, claim_id, entity_name, client_headers)
     )
     if isinstance(address, Mapping):
         record["CH_PATIENT_ZIP"] = address.get("CM_MEMBER_ZIP", "")
     _remove_profile_exclusions(record, claim_type)
-    _hydrate_sample_shape(record, claim_type)
-    return record
-
-
-def _mutate(baseline: dict[str, object], scenario: Scenario) -> dict[str, object]:
-    """Create a source-valid claim variation from a deterministic baseline.
-
-    Args:
-        baseline: Deterministic claim record selected by the scenario plan.
-        scenario: Named variation to apply.
-
-    Returns:
-        A copied claim record with the requested source-valid variation.
-
-    Raises:
-        AssertionError: If replacement adjustment counts or detail rows have an
-            unexpected shape.
-    """
-    record = _copy_record(baseline)
-    if scenario.name == "duplicate":
-        return record
-    if scenario.name == "changed":
-        record["CH_ALLOWED_AMOUNT"] = round(_amount(record["CH_ALLOWED_AMOUNT"]) + 5.0, 2)
-        record["CH_PAID_AMOUNT"] = round(_amount(record["CH_PAID_AMOUNT"]) + 5.0, 2)
-        _set_line_amounts(record, allowed_delta=5.0, paid_delta=5.0)
-        record["CH_SOURCE_UPDATED_AT"] = "20260806"
-        record["CH_RECORD_TAG"] = "837 Provisional"
-        record["CH_RECORD_STATUS"] = "Active"
-    elif scenario.name == "stale":
-        record["CH_SOURCE_UPDATED_AT"] = "20260804"
-        record["CH_CLAIM_PAID_DATE"] = "20250804"
-        record["CH_CHECK_DATE"] = "20250804"
-    elif scenario.name == "incomplete":
-        _blank_incomplete_fields(record)
-    elif scenario.name == "replacement":
-        record["CH_CLIENT_CLAIM_UNIQUE_ID"] = f"{record['CH_CLIENT_CLAIM_UNIQUE_ID']}-R2"
-        record["CH_CLIENT_CLAIM_ID"] = f"{record['CH_CLIENT_CLAIM_ID']}-R2"
-        record["CH_CLIENT_ORIGINAL_CLAIM_ID"] = baseline["CH_CLIENT_CLAIM_ID"]
-        record["CH_CLIENT_CLAIM_VERSION_NUMBER"] = "2"
-        adjustment_count = record["CH_NUMBER_OF_ADJUSTMENTS"]
-        assert isinstance(adjustment_count, int)
-        record["CH_NUMBER_OF_ADJUSTMENTS"] = adjustment_count + 1
-        record["CH_CLAIM_FREQUENCY_CODE"] = "7"
-        record["CH_SOURCE_UPDATED_AT"] = "20260806"
-        record["CH_PAYMENT_CLAIM_ID"] = record["CH_CLIENT_CLAIM_ID"]
-        record["cotiviti.source.claim_id"] = record["CH_CLIENT_CLAIM_ID"]
-        _replacement_lines(record)
-    elif scenario.name == "void":
-        record["CH_CLAIM_FREQUENCY_CODE"] = "8"
-        record["CH_SOURCE_UPDATED_AT"] = "20260806"
-        record["CH_RECORD_STATUS"] = "Void"
-    elif scenario.name == "orphan_payment":
-        record["CH_RECORD_TAG"] = "835 Provisional"
-        record["CH_RECORD_STATUS"] = "Orphan Payment"
-        record["CH_PAYMENT_CLAIM_ID"] = f"ORPHAN-{record['CH_CLIENT_CLAIM_ID']}"
-        record["CH_PATIENT_ACCOUNT_CONTROL_NUMBER"] = (
-            f"ORPHAN-{record['CH_PATIENT_ACCOUNT_CONTROL_NUMBER']}"
-        )
-        _break_payment_composite(record)
-        record["CH_SOURCE_UPDATED_AT"] = "20260806"
-    return record
-
-
-def _set_line_amounts(
-    record: dict[str, object], *, allowed_delta: float, paid_delta: float
-) -> None:
-    """Apply a coherent adjudication change to every embedded claim line.
-
-    A changed claim keeps its documented identity composite intact while its
-    adjudication values become newer.  Updating the header and detail together
-    keeps the source envelope internally consistent.
-
-    Args:
-        record: Claim envelope containing a ``CLAIM_DETAIL`` list.
-        allowed_delta: Amount added to each line's allowed amount.
-        paid_delta: Amount added to each line's paid amount.
-
-    Raises:
-        AssertionError: If embedded claim detail has an unexpected shape.
-    """
-    details = record["CLAIM_DETAIL"]
-    assert isinstance(details, list)
-    for line in details:
-        assert isinstance(line, dict)
-        line["CD_ALLOWED_AMOUNT"] = round(_amount(line["CD_ALLOWED_AMOUNT"]) + allowed_delta, 2)
-        line["CD_PAID_AMOUNT"] = round(_amount(line["CD_PAID_AMOUNT"]) + paid_delta, 2)
-
-
-def _amount(value: object) -> float:
-    """Return a numeric source amount while guarding scenario assumptions.
-
-    Args:
-        value: Candidate header or detail amount from a generated claim.
-
-    Returns:
-        The amount as a float.
-
-    Raises:
-        AssertionError: If a generator produced a non-numeric amount.
-    """
-    assert isinstance(value, int | float)
-    return float(value)
+    return _complete_source_shape(record, claim_type)
 
 
 def _line(
@@ -366,41 +234,6 @@ def _line(
     return line
 
 
-def _replacement_lines(record: dict[str, object]) -> None:
-    """Mark replacement detail rows with source-shaped adjustment values.
-
-    Args:
-        record: Replacement claim record with a ``CLAIM_DETAIL`` array.
-
-    Raises:
-        AssertionError: If claim detail is not a list of dictionaries.
-    """
-    lines = record["CLAIM_DETAIL"]
-    assert isinstance(lines, list)
-    for line in lines:
-        assert isinstance(line, dict)
-        line["CD_LINE_ADJUSTMENTS"] = [{"reason_code": "94", "amount": 0.0}]
-
-
-def _break_payment_composite(record: dict[str, object]) -> None:
-    """Change a source-supported key so an 835 payment cannot match a claim.
-
-    Args:
-        record: Orphan-payment claim envelope whose composite will be broken.
-
-    Raises:
-        AssertionError: If the expected first detail row is unavailable.
-    """
-    details = record["CLAIM_DETAIL"]
-    assert isinstance(details, list) and details and isinstance(details[0], dict)
-    line = details[0]
-    if "CD_SUBMITTED_REVENUE_CODE" in line:
-        line["CD_SUBMITTED_REVENUE_CODE"] = "9999"
-    else:
-        line["CD_PLACE_OF_SERVICE_CODE"] = "99"
-        record["CH_PLACE_OF_SERVICE_CODE"] = "99"
-
-
 def _remove_profile_exclusions(record: dict[str, object], claim_type: str) -> None:
     """Remove fields not represented by the active claim layout.
 
@@ -427,174 +260,22 @@ def _remove_profile_exclusions(record: dict[str, object], claim_type: str) -> No
             line.pop(field, None)
 
 
-def _hydrate_sample_shape(record: dict[str, object], claim_type: str) -> None:
-    """Add every field represented by the matching supplied EIP claim sample.
+def _complete_source_shape(record: dict[str, object], claim_type: str) -> dict[str, object]:
+    """Complete a claim with its claim and payment sample-type patterns.
 
-    The source samples define the transport envelope consumers expect, but the
-    generator must never repeat the sample's member, provider, claim, or money
-    values.  This helper reads only each field's JSON value *type*, preserves
-    values generated above, and fills absent fields with an empty value of the
-    same type.  It is deliberately applied after profile exclusions because
-    the institutional sample includes a broader legacy envelope than the
-    compact GDF profile.
+    Claims carry payment fields in the same generated JSON object. Both
+    supplied source patterns therefore participate in the default/type pass,
+    while all populated values remain synthetic values from this generator.
 
     Args:
         record: Synthetic claim envelope ready for source-shape completion.
         claim_type: ``P`` for professional or ``O`` for institutional.
 
-    Raises:
-        AssertionError: If the generated claim has no dictionary detail row.
-    """
-    sample = dict(_sample_shape("P" if claim_type == "P" else "I"))
-    details = record["CLAIM_DETAIL"]
-    assert isinstance(details, list) and details and isinstance(details[0], dict)
-    sample_detail = sample.pop("CLAIM_DETAIL")
-    assert isinstance(sample_detail, list) and sample_detail and isinstance(sample_detail[0], dict)
-    for field, sample_value in sample.items():
-        record.setdefault(field, _empty_like(sample_value))
-    for field, sample_value in sample_detail[0].items():
-        details[0].setdefault(field, _empty_like(sample_value))
-    _coerce_sample_types(record, sample, sample_detail[0])
-
-
-def _blank_incomplete_fields(record: dict[str, object]) -> None:
-    """Represent omitted optional claim values without removing sample fields.
-
-    EIP files retain their header columns for incomplete rows. The selected
-    profile sample controls whether the source empty value is a string or a
-    numeric zero, so the variation remains structurally identical to its
-    baseline while intentionally failing a populated matching composite.
-
-    Args:
-        record: Claim record being converted to the incomplete scenario.
-
-    Raises:
-        AssertionError: If the claim type does not identify a supported sample.
-    """
-    claim_type = record.get("CH_CLAIM_TYPE")
-    sample_type = "P" if claim_type == "P" else "I" if claim_type == "O" else None
-    assert sample_type is not None
-    sample = _sample_shape(sample_type)
-    for field in (
-        "CH_SUBSCRIBER_SSN",
-        "CH_REFERRING_PROVIDER_NPI",
-        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
-        "CH_PATIENT_ZIP",
-    ):
-        if field in sample:
-            record[field] = _empty_like(sample[field])
-
-
-def _coerce_sample_types(
-    record: dict[str, object], sample: Mapping[str, object], sample_detail: Mapping[str, object]
-) -> None:
-    """Coerce populated source fields to the JSON types used by EIP samples.
-
-    GDF layouts describe field meaning and lengths, while the supplied EIP
-    payloads define the wire-level JSON type.  Some values such as NPI, ZIP,
-    control numbers, and monetary amounts intentionally differ by the 837P
-    and 837I sample.  This final normalization keeps generated values and
-    scenarios intact while making their serialized type match the selected
-    source stream exactly.
-
-    Args:
-        record: Generated claim envelope after sample-shape completion.
-        sample: Matching EIP claim root sample, keyed by field name.
-        sample_detail: First matching EIP claim-detail row, keyed by field.
-
-    Raises:
-        AssertionError: If the generated claim has no dictionary detail row.
-    """
-    for field, sample_value in sample.items():
-        if field in record:
-            record[field] = _coerce_like(record[field], sample_value)
-    details = record["CLAIM_DETAIL"]
-    assert isinstance(details, list) and details and isinstance(details[0], dict)
-    for field, sample_value in sample_detail.items():
-        if field in details[0]:
-            details[0][field] = _coerce_like(details[0][field], sample_value)
-
-
-def _coerce_like(value: object, sample_value: object) -> object:
-    """Return ``value`` represented with the source sample's JSON type.
-
-    Args:
-        value: Synthetic source value to preserve.
-        sample_value: Reference value used only for its JSON type.
-
     Returns:
-        The original semantic value with the corresponding EIP JSON type.
+        Source-complete, JSON-kind-normalized claim/payment envelope.
     """
-    if sample_value is None:
-        return None
-    if isinstance(sample_value, bool):
-        return bool(value)
-    if isinstance(sample_value, int):
-        if isinstance(value, bool):
-            return int(value)
-        if isinstance(value, int | float):
-            return int(round(value))
-        if isinstance(value, str) and value.isdigit():
-            return int(value)
-        return 0
-    if isinstance(sample_value, float):
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            return float(value)
-        return 0.0
-    if isinstance(sample_value, str):
-        return str(value)
-    if isinstance(sample_value, list):
-        return value if isinstance(value, list) else []
-    if isinstance(sample_value, dict):
-        return value if isinstance(value, dict) else {}
-    raise TypeError(f"Unsupported source JSON value type: {type(sample_value)!r}")
-
-
-@lru_cache(maxsize=2)
-def _sample_shape(profile_code: str) -> dict[str, object]:
-    """Load the checked-in source shape without reusing any source data values.
-
-    Keeping the field inventory adjacent to its provided EIP sample prevents a
-    second, manually maintained list of hundreds of institutional fields from
-    drifting.  Callers receive a copied JSON object and use it only to infer
-    keys and JSON types; generated content always comes from this module.
-
-    Args:
-        profile_code: ``P`` or ``I`` EIP claim sample identifier.
-
-    Returns:
-        Parsed source-shape mapping for the requested profile.
-    """
-    root = Path(__file__).resolve().parents[3]
-    path = root / "requirements" / f"claim_sample_data_{profile_code} 2.json"
-    return cast(dict[str, object], json.loads(path.read_text(encoding="utf-8")))
-
-
-def _empty_like(sample_value: object) -> object:
-    """Return a safe synthetic default with the supplied source JSON type.
-
-    Args:
-        sample_value: A value used only to identify the source field's type.
-
-    Returns:
-        Empty string, zero, false, empty collection, or ``None`` matching the
-        source JSON type.  No source value is copied into generated output.
-    """
-    if sample_value is None:
-        return None
-    if isinstance(sample_value, bool):
-        return False
-    if isinstance(sample_value, int):
-        return 0
-    if isinstance(sample_value, float):
-        return 0.0
-    if isinstance(sample_value, str):
-        return ""
-    if isinstance(sample_value, list):
-        return []
-    if isinstance(sample_value, dict):
-        return {}
-    raise TypeError(f"Unsupported source JSON value type: {type(sample_value)!r}")
+    suffix = "professional" if claim_type == "P" else "institutional"
+    return complete_record(record, f"claim_{suffix}", f"payment_{suffix}")
 
 
 def _transport_headers(
@@ -632,7 +313,6 @@ def _transport_headers(
     profile_entity = entity_name or (
         "claim_professional" if claim_type == "P" else "claim_institutional"
     )
-    resolved_headers = resolve_client_headers(profile_entity, client_headers)
     headers: dict[str, object] = {
         "FILE_TYPE": file_type,
         "INGESTION_DATE": "20260805",
@@ -658,12 +338,12 @@ def _transport_headers(
         "otherAttributes": _other_attributes(
             claim_type,
             sequence,
-            nested_header_values(profile_entity, resolved_headers, "otherAttributes"),
+            nested_header_values(profile_entity, client_headers or {}, "otherAttributes"),
         ),
     }
     if claim_type != "P":
         headers["ROWID"] = deterministic_uuid4(seed, f"{namespace}:row:{sequence}")
-    headers.update(record_header_values(profile_entity, resolved_headers))
+    headers.update(record_header_values(profile_entity, client_headers or {}))
     return headers
 
 
@@ -765,35 +445,11 @@ def _profile_blanks(profile: str) -> dict[str, object]:
     return {field.name: "" for field in layout.root}
 
 
-def _copy_record(record: dict[str, object]) -> dict[str, object]:
-    """Copy mutable embedded detail rows before applying a scenario variation.
-
-    Args:
-        record: Baseline claim record to copy.
-
-    Returns:
-        A shallow root copy with independent detail and adjustment collections.
-
-    Raises:
-        AssertionError: If ``CLAIM_DETAIL`` is not a list.
-    """
-    copied = dict(record)
-    details = record["CLAIM_DETAIL"]
-    assert isinstance(details, list)
-    copied["CLAIM_DETAIL"] = [
-        {**line, "CD_LINE_ADJUSTMENTS": list(line.get("CD_LINE_ADJUSTMENTS", []))}
-        for line in details
-        if isinstance(line, dict)
-    ]
-    return copied
-
-
-def _claim_type(index: int, profile: str | None) -> str:
+def _claim_type(profile: str) -> str:
     """Resolve a source profile to its GDF professional/institutional type.
 
     Args:
-        index: Stable claim position used for the mixed-profile default.
-        profile: Optional explicit claim layout profile.
+        profile: Explicit claim layout profile.
 
     Returns:
         ``P`` or ``O`` for the selected profile.  Cotiviti's institutional
@@ -803,7 +459,7 @@ def _claim_type(index: int, profile: str | None) -> str:
         return "P"
     if profile == "claim-institutional":
         return "O"
-    return "P" if index % 2 else "O"
+    raise ValueError(f"Unsupported claim layout {profile!r}")
 
 
 def _record_seed(seed: int, index: int) -> int:
@@ -819,91 +475,57 @@ def _record_seed(seed: int, index: int) -> int:
     return (seed * 1_000_037) + index
 
 
-def _entity_count(entity_counts: Mapping[str, int] | None, entity_name: str) -> int:
+def _entity_count(entity_counts: Mapping[str, int], entity_name: str) -> int:
     """Return a positive configured related-entity count.
 
     Args:
-        entity_counts: Optional enabled-entity output counts.
+        entity_counts: Enabled entity output counts.
         entity_name: Related entity to count.
 
     Returns:
         Configured positive count or deterministic fallback count.
     """
-    configured_count = entity_counts.get(entity_name, 10) if entity_counts else 10
-    return max(1, configured_count)
+    return max(1, entity_counts.get(entity_name, 10))
 
 
 def _linked_member(
     seed: int,
     claim_index: int,
-    entity_counts: Mapping[str, int] | None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None,
+    entity_counts: Mapping[str, int],
 ) -> dict[str, object]:
     """Generate the exact member row selected from the configured output set.
 
     Args:
         seed: Shared deterministic generation seed.
         claim_index: Stable zero-based claim position.
-        entity_counts: Enabled entity output counts, if supplied.
-        entity_scenarios: Enabled entity scenario quantities, if supplied.
+        entity_counts: Enabled entity output counts.
 
     Returns:
         The emitted member record selected for this claim, or a deterministic
         source-shaped fallback record when members are not part of the run.
     """
-    member_index, scenario = _linked_position(
-        seed, claim_index, "member", entity_counts, entity_scenarios
-    )
-    return generate_member(seed, member_index, entity_counts, scenario=scenario)
+    member_index = claim_index % _entity_count(entity_counts, "member")
+    return generate_member(seed, member_index, entity_counts, {}, {}, "member")
 
 
 def _linked_provider(
     seed: int,
     claim_index: int,
-    entity_counts: Mapping[str, int] | None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None,
+    entity_counts: Mapping[str, int],
 ) -> dict[str, object]:
     """Generate the exact provider row selected from the configured output set.
 
     Args:
         seed: Shared deterministic generation seed.
         claim_index: Stable zero-based claim position.
-        entity_counts: Enabled entity output counts, if supplied.
-        entity_scenarios: Enabled entity scenario quantities, if supplied.
+        entity_counts: Enabled entity output counts.
 
     Returns:
         The emitted provider record selected for this claim, or a deterministic
         source-shaped fallback record when providers are not part of the run.
     """
-    provider_index, scenario = _linked_position(
-        seed, claim_index, "provider", entity_counts, entity_scenarios
-    )
-    return generate_provider(seed, provider_index, scenario=scenario)
-
-
-def _linked_position(
-    seed: int,
-    claim_index: int,
-    entity_name: str,
-    entity_counts: Mapping[str, int] | None,
-    entity_scenarios: Mapping[str, Mapping[str, int]] | None,
-) -> tuple[int, Scenario | None]:
-    """Select the emitted relationship row and its corresponding variation.
-
-    Args:
-        seed: Shared deterministic generation seed.
-        claim_index: Stable zero-based claim position.
-        entity_name: Related entity to select.
-        entity_counts: Enabled entity output counts, if supplied.
-        entity_scenarios: Enabled entity scenario quantities, if supplied.
-
-    Returns:
-        The output-row position and internal variation to use for generation.
-    """
-    count = _entity_count(entity_counts, entity_name)
-    output_index = claim_index % count
-    scenarios = entity_scenarios.get(entity_name, {}) if entity_scenarios else {}
-    return output_index, plan(count, scenarios, seed).variation_for(output_index)
+    provider_index = claim_index % _entity_count(entity_counts, "provider")
+    return generate_provider(seed, provider_index, entity_counts, {}, {}, "provider")
 
 
 def _compact_date(value: date) -> str:

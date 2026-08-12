@@ -2,11 +2,6 @@
   "profile": "member",
   "headers": [
     {
-      "name": "FILE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
       "name": "INGESTION_DATE",
       "type": "text",
       "max_length": 255
@@ -37,162 +32,12 @@
       "max_length": 255
     },
     {
-      "name": "PRODUCT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "GDF_VERSION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "DATA_CATEGORY",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "LOB",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.dataset_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.tenant_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.schema_version",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.client_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.client_system",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.message_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.produced_at",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.source_format",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.source_system",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.batch_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.message_seq",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.correlation_id",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.source.raw_file_ref",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_CONSTANT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_CLIENT_VENDOR_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_FILE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_FILE_SEQUENCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_FILE_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_RECORD_COUNT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "HDR_PRODUCED_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
       "name": "ROWID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.producer_version",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.source.isa_control",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "cotiviti.source.gs_control",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PAYER_SHORT",
       "type": "text",
       "max_length": 255
     }
   ],
   "root": [
-    {
-      "name": "CM_CLIENT_DATA_PLATFORM",
-      "type": "text",
-      "max_length": 255
-    },
     {
       "name": "CM_MEMBER_CLIENT_ID",
       "type": "text",
@@ -1407,50 +1252,10 @@
       "name": "CM_WORKING_STATUS_SEGMENTATION_NAME",
       "type": "text",
       "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_RELATIONSHIP_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_SOURCE_RECORD_TAG",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_RECORD_STATUS",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_SOURCE_UPDATED_AT",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_ENROLLMENTS",
-      "type": "text",
-      "max_length": 255
     }
   ],
   "groups": {
     "CM_MEMBER_ADDRESSES": [
-      {
-        "name": "CM_CLIENT_DATA_PLATFORM",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CM_MEMBER_CLIENT_ID",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CM_MEMBER_CLIENT_MASTER_ID",
-        "type": "text",
-        "max_length": 255
-      },
       {
         "name": "CM_MEMBER_ADDRESS_CLIENT_ID",
         "type": "text",
@@ -1535,16 +1340,6 @@
         "name": "CM_MEMBER_ADDRESS_TERMINATION_DATE",
         "type": "text",
         "max_length": 255
-      },
-      {
-        "name": "CM_MEMBER_ADDRESS_TYPE_CODE",
-        "type": "text",
-        "max_length": 255
-      },
-      {
-        "name": "CM_MEMBER_ADDRESS_END_DATE",
-        "type": "text",
-        "max_length": 255
       }
     ],
     "CM_MEMBER_COB": [
@@ -1571,10 +1366,6 @@
     ]
   },
   "required_parent_fields": {
-    "CM_MEMBER_ADDRESSES": [
-      "CM_CLIENT_DATA_PLATFORM",
-      "CM_MEMBER_CLIENT_ID",
-      "CM_MEMBER_CLIENT_MASTER_ID"
-    ]
+    "CM_MEMBER_ADDRESSES": []
   }
 }
