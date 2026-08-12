@@ -21,7 +21,7 @@ The project separates the fields that *can* be generated from the fields that ar
 
 ```mermaid
 flowchart LR
-    A["GDF workbook"] --> B["Complete GDF field catalog<br/>all available attributes"]
+    A["schema/gdf workbook"] --> B["Complete GDF field catalog<br/>all available attributes"]
     B --> C["JSON Schemas<br/>validate all available fields"]
     D["Simple client profile file<br/>headers and client values"] --> F["Entity builder"]
     E["Layout profile<br/>selected headers, root fields, groups"] --> G["Layout projection"]
@@ -34,22 +34,22 @@ flowchart LR
 
 ### GDF fields and schemas
 
-The GDF workbook is the complete field catalog. Keep
-[`scripts/extract_gdf_catalogs.py`](scripts/extract_gdf_catalogs.py) when the
-workbook changes; it updates the JSON Schemas under [schemas/](schemas/) so
-they continue to acknowledge every available provider, member, and claim
-field, including fields that are not presently written.
+The Excel workbook in [`schema/gdf/`](schema/gdf/) is the complete field
+catalog. Replace it with an updated workbook, or add a newer `.xlsx` file; the
+next generation run automatically detects the newest workbook and refreshes
+the JSON Schemas under [`schema/json/`](schema/json/). This keeps every
+available provider, member, and claim field—even fields not emitted today.
 
 From the repository root, refresh schema properties with:
 
 ```sh
-uv run python scripts/extract_gdf_catalogs.py /path/to/GDF-layout.xlsx
+uv run python schema/tools/extract-gdf-catalogs.py schema/gdf/GDF\ Request\ File\ Layouts\ Standard.xlsx
 ```
 
 Or verify that no GDF field is missing without writing files:
 
 ```sh
-uv run python scripts/extract_gdf_catalogs.py /path/to/GDF-layout.xlsx --verify
+uv run python schema/tools/extract-gdf-catalogs.py schema/gdf/GDF\ Request\ File\ Layouts\ Standard.xlsx --verify
 ```
 
 The schemas are the extension point for future layouts. A field is not removed
@@ -57,7 +57,7 @@ merely because a current source sample does not use it.
 
 ### Layouts control output
 
-The JSON files under [src/healthcare_test_data/layouts/](src/healthcare_test_data/layouts/) are the output contract. A layout explicitly declares:
+The JSON files under [src/test_data_generator/layouts/](src/test_data_generator/layouts/) are the output contract. A layout explicitly declares:
 
 - transport/header fields;
 - root fields;
@@ -70,7 +70,7 @@ Nested projection is generic. If a nested object repeats a value already held by
 
 ### Sample patterns and client headers
 
-[`src/healthcare_test_data/sample_shapes.json`](src/healthcare_test_data/sample_shapes.json)
+[`src/test_data_generator/samples/sample_shapes.json`](src/test_data_generator/samples/sample_shapes.json)
 contains type-only patterns extracted from the supplied provider, member,
 professional/institutional claim, and professional/institutional payment
 samples. It makes the origin of optional defaults explicit without copying any
@@ -78,7 +78,7 @@ source values. Entity builders provide the realistic synthetic values; the
 pattern file fills remaining sample fields with type-compatible blanks.
 
 `client` selects an entry in
-[`src/healthcare_test_data/client_profiles.json`](src/healthcare_test_data/client_profiles.json).
+[`src/test_data_generator/configuration/client_profiles.json`](src/test_data_generator/configuration/client_profiles.json).
 That single file owns client-specific headers and values (payer, platforms,
 product, source-system values, and similar envelope metadata). Entity builders
 do not contain client-specific header literals.
@@ -129,13 +129,14 @@ uv sync --extra dev
 Generate with the checked-in configuration:
 
 ```sh
-make generate
+uv run generate-data
 ```
 
-Or provide another configuration file:
+`generate-data` automatically refreshes schemas from `schema/gdf/` first. To
+use another configuration file:
 
 ```sh
-uv run python -m healthcare_test_data generate --config path/to/config.json
+uv run python -m test_data_generator generate --config path/to/config.json
 ```
 
 For the checked-in configuration, generated files appear in `./output`:
@@ -162,15 +163,16 @@ make verify
 
 ```text
 generator.config.json                         # One simple generation request
-schemas/                                      # Complete GDF-aware JSON Schemas
-src/healthcare_test_data/
-├── entities/
-│   └── provider.py, member.py, claim.py       # Source-shaped record builders
+schema/
+├── gdf/                                      # Replaceable GDF Excel source
+├── json/                                     # Complete GDF-aware JSON Schemas
+└── tools/                                    # GDF schema refresh utility
+src/test_data_generator/
+├── configuration/                            # Client profiles and config loading
+├── core/                                     # Generation, validation, identifiers
+├── entities/                                 # Provider, member, and claim builders
 ├── layouts/                                  # Current JSON output-selection contracts
-├── client_profiles.json                       # Client header/value differences
-├── sample_shapes.json                         # Type patterns from all supplied samples
-├── config.py                                 # Public config normalization/validation
-├── engine.py                                 # Generate, project, validate, publish
+├── samples/                                  # Sample type patterns and source references
 └── cli.py                                    # Command-line entry point
 ```
 

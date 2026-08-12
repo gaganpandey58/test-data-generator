@@ -10,10 +10,10 @@ from random import Random
 
 from faker import Faker
 
-from healthcare_test_data.client_profiles import record_header_values
-from healthcare_test_data.identifiers import deterministic_uuid4
-from healthcare_test_data.layouts import load_layout
-from healthcare_test_data.sample_shapes import complete_record
+from test_data_generator.configuration.profiles import record_header_values
+from test_data_generator.core.identifiers import deterministic_uuid4
+from test_data_generator.layouts import load_layout
+from test_data_generator.samples.shapes import complete_record
 
 _LOCATIONS = (
     ("AZ", "Tucson", "85704", "Pima", "Southwest"),

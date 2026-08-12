@@ -6,7 +6,7 @@ Only :func:`generate` is exported as the supported programmatic entry point;
 the remaining modules contain the configuration, planning, and output details.
 """
 
-from healthcare_test_data.cli import generate
+from test_data_generator.cli import generate
 
 __version__ = "0.1.0"
 

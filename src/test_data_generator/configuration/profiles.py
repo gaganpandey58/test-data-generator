@@ -10,7 +10,7 @@ from importlib.resources import files
 from types import MappingProxyType
 from typing import Mapping
 
-from healthcare_test_data.layouts import load_layout
+from test_data_generator.layouts import load_layout
 
 _ENTITY_LAYOUTS = {
     "provider": "provider",
@@ -83,7 +83,7 @@ def nested_header_values(
 def _profiles() -> dict[str, object]:
     """Read and validate the package-level client profile document."""
     try:
-        resource = files("healthcare_test_data").joinpath("client_profiles.json")
+        resource = files(__package__).joinpath("client_profiles.json")
         value = json.loads(resource.read_text())
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeError("Could not load client_profiles.json") from error

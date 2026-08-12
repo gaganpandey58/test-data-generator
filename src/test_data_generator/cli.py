@@ -7,12 +7,13 @@ details of parsing, validation, and atomic file publication.
 """
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
-from healthcare_test_data.config import RunConfig, load_config
-from healthcare_test_data.engine import run_entity
-from healthcare_test_data.errors import ConfigurationError, GenerationError
+from test_data_generator.configuration.config import RunConfig, load_config
+from test_data_generator.core.engine import run_entity
+from test_data_generator.core.errors import ConfigurationError, GenerationError
 
 
 class CommandError(RuntimeError):
@@ -39,6 +40,7 @@ def generate(config: Path) -> None:
     Raises:
         CommandError: If configuration loading or entity generation fails.
     """
+    _refresh_gdf_schemas()
     try:
         run_config = load_config(config)
     except ConfigurationError as error:
@@ -115,3 +117,42 @@ def main() -> int:
         print("Generation failed", file=sys.stderr)
         return 2
     return 0
+
+
+def run_default() -> int:
+    """Generate using the repository's standard ``generator.config.json`` file.
+
+    This is the short console command installed as ``generate-data``. It keeps
+    normal use to one command while ``main`` remains available for an optional
+    alternate configuration path.
+    """
+    try:
+        generate(Path("generator.config.json"))
+    except CommandError as error:
+        print(error, file=sys.stderr)
+        return 2
+    return 0
+
+
+def _refresh_gdf_schemas() -> None:
+    """Synchronize schemas with the newest workbook under ``schema/gdf``.
+
+    Replacing the existing workbook or adding a newer ``.xlsx`` file is enough:
+    the next generation run refreshes available GDF properties before records
+    are produced. Layouts still decide which fields appear in JSONL.
+    """
+    project_root = Path(__file__).resolve().parents[2]
+    gdf_directory = project_root / "schema" / "gdf"
+    workbooks = sorted(gdf_directory.glob("*.xlsx"), key=lambda path: path.stat().st_mtime)
+    if not workbooks:
+        return
+    command = [
+        sys.executable,
+        str(project_root / "schema" / "tools" / "extract-gdf-catalogs.py"),
+        str(workbooks[-1]),
+    ]
+    result = subprocess.run(command, cwd=project_root, check=False, capture_output=True, text=True)
+    if result.returncode:
+        raise CommandError(
+            "GDF schema refresh failed. Check schema/gdf for a valid Excel workbook."
+        )

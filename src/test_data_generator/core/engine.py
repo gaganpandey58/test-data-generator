@@ -10,9 +10,9 @@ from typing import Any, cast
 import orjson
 from jsonschema import Draft202012Validator, ValidationError  # type: ignore[import-untyped]
 
-from healthcare_test_data.config import EntityConfig, resolve_output_path
-from healthcare_test_data.errors import GenerationError
-from healthcare_test_data.layouts import project_record
+from test_data_generator.configuration.config import EntityConfig, resolve_output_path
+from test_data_generator.core.errors import GenerationError
+from test_data_generator.layouts import project_record
 
 
 def run_entity(

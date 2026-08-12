@@ -127,9 +127,9 @@ def extract_catalogs(workbook_path: Path) -> dict[str, list[str]]:
 
 
 SCHEMA_PATHS = {
-    "provider": Path("schemas/provider/provider.schema.json"),
-    "member": Path("schemas/member/member.schema.json"),
-    "claim": Path("schemas/claim/claim.schema.json"),
+    "provider": Path("schema/json/provider/provider.schema.json"),
+    "member": Path("schema/json/member/member.schema.json"),
+    "claim": Path("schema/json/claim/claim.schema.json"),
 }
 
 
@@ -176,7 +176,7 @@ def refresh_schemas(workbook_path: Path, schema_root: Path, verify: bool = False
 
     Args:
         workbook_path: Source GDF workbook.
-        schema_root: Project root containing the ``schemas`` directory.
+        schema_root: Project root containing the ``schema/json`` directory.
         verify: When true, make no edits and return one if a field is missing.
 
     Returns:
@@ -215,7 +215,7 @@ def main(arguments: list[str]) -> int:
         raise SystemExit("Usage: extract_gdf_catalogs.py WORKBOOK [--verify]")
     workbook_path = Path(arguments[0]).expanduser().resolve()
     return refresh_schemas(
-        workbook_path, Path(__file__).resolve().parents[1], verify="--verify" in arguments
+        workbook_path, Path(__file__).resolve().parents[2], verify="--verify" in arguments
     )
 
 

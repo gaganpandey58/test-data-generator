@@ -10,6 +10,6 @@ typecheck:
 	uv run mypy
 
 generate:
-	uv run python -m healthcare_test_data generate --config generator.config.json
+	uv run generate-data
 
 verify: lint format-check typecheck

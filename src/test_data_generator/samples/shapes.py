@@ -63,7 +63,7 @@ def complete_record(record: Mapping[str, object], *sources: str) -> dict[str, ob
 def _sources() -> Mapping[str, object]:
     """Read and validate the one packaged sample-pattern document."""
     try:
-        raw = json.loads(files("healthcare_test_data").joinpath("sample_shapes.json").read_text())
+        raw = json.loads(files(__package__).joinpath("sample_shapes.json").read_text())
         sources = raw["sources"]
     except (OSError, KeyError, json.JSONDecodeError, TypeError) as error:
         raise RuntimeError("Could not load packaged sample_shapes.json") from error

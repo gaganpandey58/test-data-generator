@@ -15,13 +15,13 @@ from typing import Any, Mapping
 
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
-from healthcare_test_data.client_profiles import (
+from test_data_generator.configuration.profiles import (
     available_clients,
     load_client_headers,
     load_client_values,
 )
-from healthcare_test_data.errors import ConfigurationError
-from healthcare_test_data.layouts import available_profiles, load_layout
+from test_data_generator.core.errors import ConfigurationError
+from test_data_generator.layouts import available_profiles, load_layout
 
 
 @dataclass(frozen=True)
@@ -209,14 +209,14 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
     Returns:
         Per-entity internal defaults used while normalizing public config.
     """
-    schema_root = Path(__file__).resolve().parents[2] / "schemas"
+    schema_root = Path(__file__).resolve().parents[3] / "schema" / "json"
     return {
         "provider": {
             "enabled": False,
             "count": 0,
             "profile": "provider",
             "schema": str(schema_root / "provider/provider.schema.json"),
-            "module": "healthcare_test_data.entities.provider",
+            "module": "test_data_generator.entities.provider",
             "filename": "providers.jsonl",
         },
         "member": {
@@ -224,7 +224,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "count": 0,
             "profile": "member",
             "schema": str(schema_root / "member/member.schema.json"),
-            "module": "healthcare_test_data.entities.member",
+            "module": "test_data_generator.entities.member",
             "filename": "members.jsonl",
         },
         "claim_professional": {
@@ -232,7 +232,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "count": 0,
             "profile": "claim-professional",
             "schema": str(schema_root / "claim/claim.schema.json"),
-            "module": "healthcare_test_data.entities.claim",
+            "module": "test_data_generator.entities.claim",
             "filename": "professional-claims.jsonl",
         },
         "claim_institutional": {
@@ -240,7 +240,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "count": 0,
             "profile": "claim-institutional",
             "schema": str(schema_root / "claim/claim.schema.json"),
-            "module": "healthcare_test_data.entities.claim",
+            "module": "test_data_generator.entities.claim",
             "filename": "institutional-claims.jsonl",
         },
     }
@@ -357,7 +357,7 @@ def _load_packaged_schema() -> dict[str, Any]:
         ConfigurationError: If the packaged schema cannot be read, decoded, or
             is not a JSON object.
     """
-    resource = files("healthcare_test_data").joinpath("run_config.schema.json")
+    resource = files(__package__).joinpath("run_config.schema.json")
     try:
         value = json.loads(resource.read_text(encoding="utf-8"))
     except OSError as error:

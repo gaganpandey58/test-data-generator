@@ -10,15 +10,15 @@ from collections.abc import Mapping
 from datetime import date, timedelta
 from random import Random
 
-from healthcare_test_data.client_profiles import (
+from test_data_generator.configuration.profiles import (
     nested_header_values,
     record_header_values,
 )
-from healthcare_test_data.entities.member import generate_record as generate_member
-from healthcare_test_data.entities.provider import generate_record as generate_provider
-from healthcare_test_data.identifiers import deterministic_uuid4
-from healthcare_test_data.layouts import load_layout
-from healthcare_test_data.sample_shapes import complete_record
+from test_data_generator.core.identifiers import deterministic_uuid4
+from test_data_generator.entities.member import generate_record as generate_member
+from test_data_generator.entities.provider import generate_record as generate_provider
+from test_data_generator.layouts import load_layout
+from test_data_generator.samples.shapes import complete_record
 
 
 def generate_record(

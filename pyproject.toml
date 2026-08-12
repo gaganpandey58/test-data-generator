@@ -13,6 +13,9 @@ dependencies = [
     "orjson>=3.10",
 ]
 
+[project.scripts]
+generate-data = "test_data_generator.cli:run_default"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.6",
@@ -20,8 +23,8 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/healthcare_test_data"]
-include = ["src/healthcare_test_data/**/*.json"]
+packages = ["src/test_data_generator"]
+include = ["src/test_data_generator/**/*.json"]
 
 [tool.ruff]
 target-version = "py312"
@@ -36,4 +39,4 @@ convention = "google"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/healthcare_test_data"]
+files = ["src/test_data_generator"]
