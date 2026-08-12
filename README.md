@@ -158,22 +158,6 @@ Run the source lint, format, and type checks:
 make verify
 ```
 
-Run the test suite:
-
-```sh
-uv run pytest
-```
-
-The tests verify the key contracts:
-
-- complete GDF field availability in schemas;
-- optional comparison of schemas with the supplied GDF workbook when it is available locally;
-- simple config and count validation;
-- client-profile header selection;
-- separate professional and institutional claim generation;
-- `CM_MEMBER_COB` layout selection; and
-- layout projection plus generic, declarative nested-field deduplication.
-
 ## Project layout
 
 ```text
@@ -188,7 +172,6 @@ src/healthcare_test_data/
 ├── config.py                                 # Public config normalization/validation
 ├── engine.py                                 # Generate, project, validate, publish
 └── cli.py                                    # Command-line entry point
-tests/                                        # Small extractor, config, and output-contract checks
 ```
 
 ## Current scope
