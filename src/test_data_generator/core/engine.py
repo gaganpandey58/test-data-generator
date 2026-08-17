@@ -11,9 +11,8 @@ import orjson
 from jsonschema import Draft202012Validator, ValidationError  # type: ignore[import-untyped]
 
 from test_data_generator.configuration.config import EntityConfig, resolve_output_path
-from test_data_generator.configuration.profiles import record_header_values
 from test_data_generator.core.errors import GenerationError
-from test_data_generator.layouts import project_record
+from test_data_generator.layouts import load_layout, project_record
 from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.scenarios import UpdateRequest, resolve_update
 from test_data_generator.update.validation import validate_update_contract
@@ -124,7 +123,7 @@ def _order_headers(record: dict[str, object], entity: EntityConfig) -> dict[str,
     """Apply the configured root-header order after layout projection."""
     if entity.header_order == "source":
         return record
-    headers = set(record_header_values(entity.name, entity.client_headers)).intersection(record)
+    headers = {field.name for field in load_layout(entity.profile).headers}.intersection(record)
     ordered_headers = {key: record[key] for key in record if key in headers}
     body = {key: value for key, value in record.items() if key not in headers}
     if entity.header_order == "first":

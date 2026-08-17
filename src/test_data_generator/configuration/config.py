@@ -227,7 +227,11 @@ def _selected_entity(
     Returns:
         Enabled internal entity definition with the requested layout profile.
     """
-    result = {**defaults, "enabled": True, "count": selection["count"]}
+    count_value = selection.get("count")
+    if not isinstance(count_value, int):
+        raise ConfigurationError("Entity selection count must be an integer")
+    count = count_value
+    result = {**defaults, "enabled": count > 0, "count": count}
     if isinstance(selection.get("updates"), dict):
         updates = cast(dict[str, object], selection["updates"])
         result["updates"] = {str(key): value for key, value in updates.items()}

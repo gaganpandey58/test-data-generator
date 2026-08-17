@@ -72,7 +72,7 @@
       "additionalProperties": false,
       "required": ["count"],
       "properties": {
-        "count": {"type": "integer", "minimum": 1},
+        "count": {"type": "integer", "minimum": 0},
         "layout": {"type": "string", "minLength": 1},
         "output_order": {
           "type": "object",

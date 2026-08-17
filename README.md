@@ -116,6 +116,11 @@ can use only `"claim-professional"` today.
 
 `count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Scenario quantities and scenario maps are not accepted. Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records.
 
+An entity with `count: 0` is treated as disabled. It is accepted by the
+configuration schema, skipped by both creation and update generation, and its
+stale known output files are removed after a successful run. This allows a
+configuration to generate only the entities with positive counts.
+
 `seed` is not a business date or source-layout version. Reusing the same configuration and seed produces the same test records; changing the seed produces a different deterministic set.
 
 ## Generate data
@@ -225,7 +230,10 @@ the global order in `generation.output_order.headers`:
 Supported values are `source`, `first`, and `last`. An entity can override the
 global value with `output_order.headers` inside its `member`, `provider`, or
 `claims` configuration block. Ordering is applied after layout projection for
-both creation and update JSONL files.
+both creation and update JSONL files. The layout header set includes fields
+such as `INGESTION_DATE`, `INGESTION_EPOCH`, `ROWID`, `cotiviti.message_id`,
+`cotiviti.produced_at`, `cotiviti.batch_id`, `cotiviti.message_seq`,
+`cotiviti.correlation_id`, `cotiviti.source.raw_file_ref`, and `FILE_TYPE`.
 
 To audit the DOCX revision and preserve its tables as source evidence:
 
