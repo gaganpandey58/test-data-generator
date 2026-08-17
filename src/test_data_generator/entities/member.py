@@ -62,6 +62,7 @@ def generate_record(
     record.update(
         {
             "CM_MEMBER_CLIENT_ID": member_id,
+            "CM_PAYER_SHORT": str(client_headers.get("CM_PAYER_SHORT", "")),
             "CM_MEMBER_CLIENT_MASTER_ID": f"MM{1500000000 + index:010d}",
             "CM_MEMBER_DEPENDENT_NUMBER": 1 if dependent else 0,
             "CM_SUBSCRIBER_CLIENT_ID": f"SUB{subscriber_index + 1:010d}",

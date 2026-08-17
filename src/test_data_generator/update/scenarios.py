@@ -62,12 +62,15 @@ def resolve_fields(request: UpdateRequest, rules: EntityRules) -> tuple[str, ...
         selected = [field for field in request.include if field in known]
     elif request.scenario in {
         UpdateScenario.UPDATE_REQUIRED_FIELDS,
-        UpdateScenario.MISSING_REQUIRED_FIELD,
         UpdateScenario.MISSING_MULTIPLE_FIELDS,
     }:
         selected = [
             name for name, rule in known.items() if rule.required and name not in rules.keys
         ]
+    elif request.scenario == UpdateScenario.MISSING_REQUIRED_FIELD:
+        selected = [
+            name for name, rule in known.items() if rule.required and name not in rules.keys
+        ][:1]
     elif request.scenario == UpdateScenario.UPDATE_OPTIONAL_FIELDS:
         selected = [
             name for name, rule in known.items() if not rule.required and name not in rules.keys
@@ -132,18 +135,22 @@ def resolve_update(
             if _remove_field(result, field):
                 removed.append(field)
     else:
-        for field in selected:
-            old = _find_field(result, field)
-            new = _changed_value(old, field, randomizer)
-            _replace_field(result, field, new)
-            if new != old:
-                changed.append(field)
         if request.scenario == UpdateScenario.INVALID_KEY:
             for field in selected:
-                _replace_field(result, field, f"INVALID-{field}-{index + 1}")
-                if field not in changed:
-                    changed.append(field)
+                _replace_field(
+                    result,
+                    field,
+                    _invalid_key_value(_find_field(result, field), field, index),
+                )
+                changed.append(field)
                 invalidated.append(field)
+        else:
+            for field in selected:
+                old = _find_field(result, field)
+                new = _changed_value(old, field, randomizer)
+                _replace_field(result, field, new)
+                if new != old:
+                    changed.append(field)
     total = sum((rules.fields[field].weight for field in changed), Decimal("0"))
     threshold = request.threshold
     if threshold is None:
@@ -192,6 +199,8 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.last_name().upper()
         elif "MIDDLE_NAME" in upper_field:
             candidate = faker.first_name()[0].upper()
+        elif "GENDER" in upper_field:
+            candidate = randomizer.choice(("F", "M", "X"))
         elif "CITY" in upper_field:
             candidate = faker.city().upper()
         elif "STATE" in upper_field:
@@ -206,10 +215,32 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.bothify("??????????").upper()
         else:
             candidate = faker.word().upper()
-        if candidate == value:
+        if candidate == value and "GENDER" in upper_field:
+            candidate = next(option for option in ("F", "M", "X") if option != value)
+        elif candidate == value:
             candidate = f"{faker.word().upper()}X"
         return candidate
     return randomizer.randrange(1000, 9999)
+
+
+def _invalid_key_value(value: object, field: str, index: int) -> object:
+    """Change one key character while preserving the source key shape."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        candidate = value + 1
+        if len(str(candidate)) == len(str(value)):
+            return candidate
+        return value - 1
+    if isinstance(value, str) and value:
+        characters = list(value)
+        for position in range(len(characters) - 1, -1, -1):
+            character = characters[position]
+            if character.isdigit():
+                characters[position] = str((int(character) + 1) % 10)
+                return "".join(characters)
+            if character.isalpha():
+                characters[position] = "X" if character.upper() != "X" else "Y"
+                return "".join(characters)
+    return f"INVALID{index + 1:04d}"
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:

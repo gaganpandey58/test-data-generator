@@ -149,7 +149,9 @@ def generate_record(
     if isinstance(address, Mapping):
         record["CH_PATIENT_ZIP"] = address.get("CM_MEMBER_ZIP", "")
     _remove_profile_exclusions(record, claim_type)
-    return _complete_source_shape(record, claim_type)
+    completed = _complete_source_shape(record, claim_type)
+    completed.setdefault("CH_CLIENT_CLAIM_ID", claim_id)
+    return completed
 
 
 def _line(
