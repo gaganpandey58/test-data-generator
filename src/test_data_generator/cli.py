@@ -162,9 +162,15 @@ def _remove_disabled_outputs(run_config: RunConfig) -> None:
     for filename in run_config.disabled_filenames:
         if filename in enabled_filenames:
             continue
-        path = output_directory / filename
-        if path.is_file() or path.is_symlink():
-            path.unlink()
+        update_filename = filename.removesuffix(".jsonl") + ".update.jsonl"
+        paths = (
+            output_directory / filename,
+            run_config.creation_directory / filename,
+            run_config.update_directory / update_filename,
+        )
+        for path in paths:
+            if path.is_file() or path.is_symlink():
+                path.unlink()
 
 
 def main() -> int:
