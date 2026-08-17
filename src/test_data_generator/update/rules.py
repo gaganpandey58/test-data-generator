@@ -17,6 +17,16 @@ class FieldRule:
     weight: Decimal
     elasticity: str = "0"
     survivorship: str = ""
+    required_in: tuple[str, ...] = ()
+    optional_in: tuple[str, ...] = ()
+
+    def is_required_for(self, context: str) -> bool:
+        """Resolve requiredness for one matching or update context."""
+        if context in self.required_in:
+            return True
+        if context in self.optional_in:
+            return False
+        return self.required
 
 
 @dataclass(frozen=True)
@@ -83,8 +93,18 @@ def _fields(value: object, entity: str) -> dict[str, FieldRule]:
         try:
             weight = Decimal(str(definition["weight"]))
             required = bool(definition["required"])
+            required_in = _strings(
+                definition.get("required_in", []), f"{entity}.{name}.required_in"
+            )
+            optional_in = _strings(
+                definition.get("optional_in", []), f"{entity}.{name}.optional_in"
+            )
         except (KeyError, ValueError, ArithmeticError) as error:
             raise ConfigurationError(f"Field rule {entity}.{name} is incomplete") from error
+        if set(required_in).intersection(optional_in):
+            raise ConfigurationError(
+                f"Field rule {entity}.{name} cannot be required and optional in the same context"
+            )
         if weight < 0:
             raise ConfigurationError(f"Field rule {entity}.{name} has a negative weight")
         result[name] = FieldRule(
@@ -93,6 +113,8 @@ def _fields(value: object, entity: str) -> dict[str, FieldRule]:
             weight=weight,
             elasticity=str(definition.get("elasticity", "0")),
             survivorship=str(definition.get("survivorship", "")),
+            required_in=required_in,
+            optional_in=optional_in,
         )
     return result
 

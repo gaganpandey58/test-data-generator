@@ -3,6 +3,7 @@
   "seed": 20260805,
   "output_directory": "./output",
   "generation": {
+    "output_order": {"headers": "last"},
     "creation": {"enabled": true, "directory": "new-test-data"},
     "updates": {
       "enabled": true,

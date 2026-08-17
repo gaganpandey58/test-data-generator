@@ -17,6 +17,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "output_order": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headers": {"enum": ["source", "first", "last"]}
+          }
+        },
         "creation": {
           "type": "object",
           "additionalProperties": false,
@@ -67,6 +74,13 @@
       "properties": {
         "count": {"type": "integer", "minimum": 1},
         "layout": {"type": "string", "minLength": 1},
+        "output_order": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headers": {"enum": ["source", "first", "last"]}
+          }
+        },
         "updates": {
           "type": "object",
           "additionalProperties": false,

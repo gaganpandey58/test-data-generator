@@ -51,6 +51,7 @@ class EntityConfig:
     module: str
     filename: str
     update: Mapping[str, object]
+    header_order: str = "source"
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,7 @@ def load_config(path: Path) -> RunConfig:
                 module=raw_entity["module"],
                 filename=filename,
                 update=raw_entity.get("updates", {}),
+                header_order=str(raw_entity.get("header_order", "source")),
             )
         )
     _validate_unique_filenames(entities)
@@ -192,6 +194,14 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
             value = claims.get(stream)
             if isinstance(value, dict):
                 entities[entity_name] = _selected_entity(entities[entity_name], value)
+    generation = raw_config.get("generation")
+    output_order = generation.get("output_order") if isinstance(generation, dict) else None
+    global_header_order = (
+        output_order.get("headers", "source") if isinstance(output_order, dict) else "source"
+    )
+    for entity in entities.values():
+        if entity.get("header_order") is None:
+            entity["header_order"] = global_header_order
     return {
         "client": raw_config.get("client", "chc"),
         "seed": raw_config.get("seed", 20260805),
@@ -223,6 +233,9 @@ def _selected_entity(
         result["updates"] = {str(key): value for key, value in updates.items()}
     if "layout" in selection:
         result["profile"] = selection["layout"]
+    output_order = selection.get("output_order")
+    if isinstance(output_order, dict) and "headers" in output_order:
+        result["header_order"] = output_order["headers"]
     return result
 
 
@@ -247,6 +260,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "module": "test_data_generator.entities.provider",
             "filename": "providers.jsonl",
             "updates": {},
+            "header_order": None,
         },
         "member": {
             "enabled": False,
@@ -256,6 +270,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "module": "test_data_generator.entities.member",
             "filename": "members.jsonl",
             "updates": {},
+            "header_order": None,
         },
         "claim_professional": {
             "enabled": False,
@@ -265,6 +280,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "module": "test_data_generator.entities.claim",
             "filename": "professional-claims.jsonl",
             "updates": {},
+            "header_order": None,
         },
         "claim_institutional": {
             "enabled": False,
@@ -274,6 +290,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "module": "test_data_generator.entities.claim",
             "filename": "institutional-claims.jsonl",
             "updates": {},
+            "header_order": None,
         },
     }
 

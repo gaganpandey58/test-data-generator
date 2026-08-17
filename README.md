@@ -158,7 +158,7 @@ The field names below are the currently supported runtime fields from the
 normalized rule catalog. The catalog remains the source of truth:
 [`member-provider-claims-key-survivorship.json`](src/test_data_generator/configuration/member-provider-claims-key-survivorship.json).
 
-| Entity | Matching keys (`INVALID_KEY`) | Required update fields | Optional update fields |
+| Entity | Matching keys (`INVALID_KEY`) | Baseline required update fields | Baseline optional update fields |
 | --- | --- | --- | --- |
 | Member | `CM_MEMBER_CLIENT_ID` | `CM_PAYER_SHORT`, `CM_MEMBER_FIRST_NAME`, `CM_MEMBER_LAST_NAME`, `CM_MEMBER_BIRTH_DATE`, `CM_MEMBER_GENDER`, `CM_MEMBER_SSN` | `CM_MEMBER_STATE`, `CM_MEMBER_ZIP` |
 | Provider | `CP_PROVIDER_NPI`, `CP_PROVIDER_FEDERAL_TAX_ID`, `CP_PROVIDER_CLIENT_ID` | `CP_PROVIDER_FIRST_NAME`, `CP_PROVIDER_LAST_NAME`, `CP_PROVIDER_TAXONOMY_CODE` | `CP_PROVIDER_BILLING_GROUP_NAME`, `CP_PROVIDER_ZIP` |
@@ -167,13 +167,20 @@ normalized rule catalog. The catalog remains the source of truth:
 
 Scenario selection rules:
 
+Required and optional classification is context-aware. A field can be
+required for one matching method or update scenario and optional for another;
+the catalog uses `required_in` and `optional_in` for those overrides, while
+the legacy `required` value remains the fallback. For example,
+`CM_MEMBER_FIRST_NAME` is eligible in both `UPDATE_REQUIRED_FIELDS` and
+`UPDATE_OPTIONAL_FIELDS` according to the active context.
+
 | Scenario | Supported fields |
 | --- | --- |
 | `UPDATE_SINGLE_FIELD` | Exactly one required or optional non-key field from the table above. |
-| `UPDATE_REQUIRED_FIELDS` | One or more fields from the **Required update fields** column. If `fields` is omitted, all eligible required non-key fields are selected. |
-| `UPDATE_OPTIONAL_FIELDS` | One or more fields from the **Optional update fields** column. |
-| `MISSING_REQUIRED_FIELD` | Exactly one field from the **Required update fields** column. |
-| `MISSING_MULTIPLE_FIELDS` | Two or more fields from the **Required update fields** column. |
+| `UPDATE_REQUIRED_FIELDS` | One or more fields from the **required-in-context** set. If `fields` is omitted, all eligible required non-key fields are selected. |
+| `UPDATE_OPTIONAL_FIELDS` | One or more fields from the **optional-in-context** set. |
+| `MISSING_REQUIRED_FIELD` | Exactly one field from the **required-in-context** set. |
+| `MISSING_MULTIPLE_FIELDS` | Two or more fields from the **required-in-context** set. |
 | `MISSING_SELECTED_FIELDS` | Any explicitly selected required or optional non-key field. |
 | `INVALID_KEY` | One or more fields from the **Matching keys** column. |
 | `CHANGE_WEIGHT_BELOW_LIMIT` | Any eligible non-key fields whose catalog weights total below the selected matching-method threshold. |
@@ -200,6 +207,25 @@ records source document revision `0.9`, entity keys, matching methods, field
 classification, elasticity, weights, and survivorship behavior. The DOCX is
 the business source; the JSON catalog is the runtime contract and must be
 regenerated/reviewed when the source document changes.
+
+### Header ordering
+
+JSON object order does not affect parsing, but the output order can be
+configured for readability or systems that compare serialized fixtures. Set
+the global order in `generation.output_order.headers`:
+
+```json
+{
+  "generation": {
+    "output_order": {"headers": "last"}
+  }
+}
+```
+
+Supported values are `source`, `first`, and `last`. An entity can override the
+global value with `output_order.headers` inside its `member`, `provider`, or
+`claims` configuration block. Ordering is applied after layout projection for
+both creation and update JSONL files.
 
 To audit the DOCX revision and preserve its tables as source evidence:
 

@@ -11,6 +11,7 @@ import orjson
 from jsonschema import Draft202012Validator, ValidationError  # type: ignore[import-untyped]
 
 from test_data_generator.configuration.config import EntityConfig, resolve_output_path
+from test_data_generator.configuration.profiles import record_header_values
 from test_data_generator.core.errors import GenerationError
 from test_data_generator.layouts import project_record
 from test_data_generator.update.rules import EntityRules
@@ -84,7 +85,7 @@ def run_update_entity(
             for index in range(entity.count):
                 base = _build_record(entity, seed, index, counts, generate_record)
                 resolved = resolve_update(base, request, rules, seed, index)
-                updated = project_record(resolved.record, entity.profile)
+                updated = _order_headers(project_record(resolved.record, entity.profile), entity)
                 validate_update_contract(base, updated, request, resolved, rules)
                 missing_scenarios = {
                     "MISSING_REQUIRED_FIELD",
@@ -116,7 +117,21 @@ def _build_record(
     record = generate_record(
         seed, index, counts, entity.client_headers, entity.client_values, entity.profile
     )
-    return project_record(record, entity.profile)
+    return _order_headers(project_record(record, entity.profile), entity)
+
+
+def _order_headers(record: dict[str, object], entity: EntityConfig) -> dict[str, object]:
+    """Apply the configured root-header order after layout projection."""
+    if entity.header_order == "source":
+        return record
+    headers = set(record_header_values(entity.name, entity.client_headers)).intersection(record)
+    ordered_headers = {key: record[key] for key in record if key in headers}
+    body = {key: value for key, value in record.items() if key not in headers}
+    if entity.header_order == "first":
+        return {**ordered_headers, **body}
+    if entity.header_order == "last":
+        return {**body, **ordered_headers}
+    raise GenerationError(f"Unsupported header order {entity.header_order!r}")
 
 
 def _load_generator(module_name: str) -> Callable[..., dict[str, object]]:

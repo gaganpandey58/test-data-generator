@@ -56,6 +56,7 @@ class ResolvedUpdate:
 def resolve_fields(request: UpdateRequest, rules: EntityRules) -> tuple[str, ...]:
     """Resolve explicit fields, include/exclude controls, and scenario defaults."""
     known = rules.fields
+    context = request.scenario.value
     if request.fields:
         selected = list(request.fields)
     elif request.include:
@@ -65,15 +66,21 @@ def resolve_fields(request: UpdateRequest, rules: EntityRules) -> tuple[str, ...
         UpdateScenario.MISSING_MULTIPLE_FIELDS,
     }:
         selected = [
-            name for name, rule in known.items() if rule.required and name not in rules.keys
+            name
+            for name, rule in known.items()
+            if rule.is_required_for(context) and name not in rules.keys
         ]
     elif request.scenario == UpdateScenario.MISSING_REQUIRED_FIELD:
         selected = [
-            name for name, rule in known.items() if rule.required and name not in rules.keys
+            name
+            for name, rule in known.items()
+            if rule.is_required_for(context) and name not in rules.keys
         ][:1]
     elif request.scenario == UpdateScenario.UPDATE_OPTIONAL_FIELDS:
         selected = [
-            name for name, rule in known.items() if not rule.required and name not in rules.keys
+            name
+            for name, rule in known.items()
+            if not rule.is_required_for(context) and name not in rules.keys
         ]
     elif request.scenario == UpdateScenario.INVALID_KEY:
         selected = list(rules.keys)
