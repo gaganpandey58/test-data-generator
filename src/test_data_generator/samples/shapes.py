@@ -1,9 +1,9 @@
-"""Load synthetic defaults from checked-in source-data type patterns.
+"""Load test defaults from checked-in source-data type patterns.
 
 ``sample_shapes.json`` is generated from the supplied provider, member, claim,
 and payment examples. It records field names, nesting, and JSON types only;
 it intentionally stores no source values. Entity builders use this module to
-fill optional fields with safe synthetic blanks while retaining the values they
+fill optional fields with safe test blanks while retaining the values they
 generate deliberately.
 """
 
@@ -25,7 +25,7 @@ def available_sources() -> frozenset[str]:
 
 
 def blank_record(source: str) -> dict[str, object]:
-    """Create a source-shaped record with safe synthetic blank values.
+    """Create a source-shaped record with safe test blank values.
 
     Args:
         source: Packaged sample-pattern identifier.
@@ -50,7 +50,7 @@ def complete_record(record: Mapping[str, object], *sources: str) -> dict[str, ob
         sources: One or more packaged source-pattern identifiers.
 
     Returns:
-        A source-complete synthetic record. Source values are never read or
+        A source-complete test record. Source values are never read or
         copied; only field names, nesting, and JSON kinds are used.
     """
     descriptor: dict[str, object] = {}

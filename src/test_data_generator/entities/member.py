@@ -58,9 +58,6 @@ def generate_record(
     member_id = f"MBR{index + 1:010d}"
     client_platform = str(client_headers.get("CM_CLIENT_DATA_PLATFORM", ""))
     values = dict(client_values)
-    # The EIP reference sample is the authoritative JSON-kind contract.  Add
-    # GDF-only fields first, then let sample defaults preserve kinds for fields
-    # that appear in both sources (for example risk score).
     record = _profile_blanks("member")
     record.update(
         {

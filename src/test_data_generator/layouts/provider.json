@@ -2,12 +2,77 @@
   "profile": "provider",
   "headers": [
     {
-      "name": "INGESTION_DATE",
+      "name": "cotiviti.dataset_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.tenant_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.schema_version",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.client_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.client_system",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.message_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.produced_at",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.source_format",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.source_system",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.batch_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.message_seq",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.correlation_id",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "cotiviti.source.raw_file_ref",
       "type": "text",
       "max_length": 255
     },
     {
       "name": "INGESTION_EPOCH",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "ROWID",
       "type": "text",
       "max_length": 255
     },
@@ -32,7 +97,32 @@
       "max_length": 255
     },
     {
-      "name": "ROWID",
+      "name": "PRODUCT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "GDF_VERSION",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "FILE_TYPE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "DATA_CATEGORY",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "LOB",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INGESTION_DATE",
       "type": "text",
       "max_length": 255
     }

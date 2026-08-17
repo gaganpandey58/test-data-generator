@@ -215,7 +215,7 @@ def _line(
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "",
                 "CD_RENDERING_PROVIDER_ENTITY_TYPE": "P",
-                "CD_RENDERING_PROVIDER_FIRST_NAME": "SYNTHETIC",
+                "CD_RENDERING_PROVIDER_FIRST_NAME": "Test",
                 "CD_RENDERING_PROVIDER_LAST_NAME": "PROVIDER",
                 "CD_RENDERING_PROVIDER_TAXONOMY_CODE": "207Q00000X",
                 "CH_CLAIM_FILING_INDICATOR_CODE": "CI",
@@ -265,10 +265,10 @@ def _complete_source_shape(record: dict[str, object], claim_type: str) -> dict[s
 
     Claims carry payment fields in the same generated JSON object. Both
     supplied source patterns therefore participate in the default/type pass,
-    while all populated values remain synthetic values from this generator.
+    while all populated values remain test values from this generator.
 
     Args:
-        record: Synthetic claim envelope ready for source-shape completion.
+        record: Test claim envelope ready for source-shape completion.
         claim_type: ``P`` for professional or ``O`` for institutional.
 
     Returns:
@@ -290,14 +290,14 @@ def _transport_headers(
 
     The sample payloads use flattened ``cotiviti.*`` keys rather than a
     nested transport object.  These values deliberately model that wire
-    format while remaining synthetic and repeatable.  Institutional sample
+    format while remaining test and repeatable.  Institutional sample
     records carry a UUID ``ROWID``; professional records omit it entirely.
 
     Args:
         seed: Shared generation seed used for deterministic UUID namespaces.
         index: Stable zero-based row position within the selected claim profile.
         claim_type: ``P`` for 837 professional or ``O`` for 837 institutional.
-        claim_id: Synthetic claim identifier used in source-control metadata.
+        claim_id: Test claim identifier used in source-control metadata.
         entity_name: Optional configured entity name for traceable namespaces.
         client_headers: Resolved client-specific header values, if supplied.
 
@@ -309,7 +309,7 @@ def _transport_headers(
         "claim_professional" if claim_type == "P" else "claim_institutional"
     )
     sequence = index + 1
-    batch = f"synthetic-{namespace}-{seed}-{sequence:06d}"
+    batch = f"test-{namespace}-{seed}-{sequence:06d}"
     profile_entity = entity_name or (
         "claim_professional" if claim_type == "P" else "claim_institutional"
     )
@@ -320,7 +320,7 @@ def _transport_headers(
         "DATA_CATEGORY": "MEDICAL_CLAIMS",
         "GDF_VERSION": "v2.9",
         "PUBLISHER_NAME": "test-data-generator",
-        "x-connector-name": "synthetic-eip-837",
+        "x-connector-name": "test-eip-837",
         "cotiviti.dataset_id": "medical_claims",
         "cotiviti.schema_version": "gdf-eip-v1",
         "cotiviti.source_format": f"edi_x12_{file_type}",

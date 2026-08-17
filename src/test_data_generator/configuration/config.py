@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path, PureWindowsPath
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
@@ -50,6 +50,7 @@ class EntityConfig:
     schema: Path
     module: str
     filename: str
+    update: Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,11 @@ class RunConfig:
     output_directory: Path
     entities: tuple[EntityConfig, ...]
     disabled_filenames: tuple[str, ...]
+    creation_directory: Path
+    update_directory: Path
+    rule_catalog: Path | None
+    updates_enabled: bool
+    update_defaults: Mapping[str, object]
 
 
 def load_config(path: Path) -> RunConfig:
@@ -93,6 +99,7 @@ def load_config(path: Path) -> RunConfig:
         client = raw_config["client"]
         seed = raw_config["seed"]
         output_directory = _resolve_path(raw_config["output_directory"], config_path.parent)
+        generation = raw_config["generation"]
         raw_entities = raw_config["entities"]
     except KeyError as error:
         raise ConfigurationError(f"Invalid configuration: missing {error.args[0]!r}") from error
@@ -125,15 +132,32 @@ def load_config(path: Path) -> RunConfig:
                 schema=schema,
                 module=raw_entity["module"],
                 filename=filename,
+                update=raw_entity.get("updates", {}),
             )
         )
     _validate_unique_filenames(entities)
+    generation_config = generation if isinstance(generation, dict) else {}
+    creation_config = generation_config.get("creation", {})
+    update_config = generation_config.get("updates", {})
+    creation_directory = output_directory / str(creation_config.get("directory", "new-test-data"))
+    update_directory = output_directory / str(update_config.get("directory", "update-test-data"))
+    rule_catalog_value = update_config.get("rule_catalog")
+    rule_catalog = (
+        _resolve_path(str(rule_catalog_value), config_path.parent)
+        if isinstance(rule_catalog_value, str)
+        else None
+    )
     return RunConfig(
         client=client,
         seed=seed,
         output_directory=output_directory,
         entities=tuple(entities),
         disabled_filenames=tuple(disabled_filenames),
+        creation_directory=creation_directory,
+        update_directory=update_directory,
+        rule_catalog=rule_catalog,
+        updates_enabled=bool(update_config.get("enabled", False)),
+        update_defaults=update_config,
     )
 
 
@@ -172,6 +196,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         "client": raw_config.get("client", "chc"),
         "seed": raw_config.get("seed", 20260805),
         "output_directory": raw_config.get("output_directory", "./output"),
+        "generation": raw_config.get("generation", {}),
         "entities": entities,
     }
 
@@ -193,6 +218,9 @@ def _selected_entity(
         Enabled internal entity definition with the requested layout profile.
     """
     result = {**defaults, "enabled": True, "count": selection["count"]}
+    if isinstance(selection.get("updates"), dict):
+        updates = cast(dict[str, object], selection["updates"])
+        result["updates"] = {str(key): value for key, value in updates.items()}
     if "layout" in selection:
         result["profile"] = selection["layout"]
     return result
@@ -218,6 +246,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "schema": str(schema_root / "provider/provider.schema.json"),
             "module": "test_data_generator.entities.provider",
             "filename": "providers.jsonl",
+            "updates": {},
         },
         "member": {
             "enabled": False,
@@ -226,6 +255,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "schema": str(schema_root / "member/member.schema.json"),
             "module": "test_data_generator.entities.member",
             "filename": "members.jsonl",
+            "updates": {},
         },
         "claim_professional": {
             "enabled": False,
@@ -234,6 +264,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "test_data_generator.entities.claim",
             "filename": "professional-claims.jsonl",
+            "updates": {},
         },
         "claim_institutional": {
             "enabled": False,
@@ -242,6 +273,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "test_data_generator.entities.claim",
             "filename": "institutional-claims.jsonl",
+            "updates": {},
         },
     }
 

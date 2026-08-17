@@ -13,6 +13,40 @@
     "client": {"type": "string", "minLength": 1},
     "seed": {"type": "integer"},
     "output_directory": {"type": "string", "minLength": 1},
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "creation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "directory": {"type": "string", "minLength": 1}
+          }
+        },
+        "updates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "directory": {"type": "string", "minLength": 1},
+            "rule_catalog": {"type": "string", "minLength": 1},
+            "default_scenario": {"type": "string", "minLength": 1},
+            "matching_method": {"type": "string", "minLength": 1},
+            "threshold": {"type": "number"},
+            "field_selection": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "include": {"type": "array", "items": {"type": "string"}},
+                "exclude": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    },
     "provider": {"$ref": "#/$defs/entity"},
     "member": {"$ref": "#/$defs/entity"},
     "claims": {
@@ -32,7 +66,19 @@
       "required": ["count"],
       "properties": {
         "count": {"type": "integer", "minimum": 1},
-        "layout": {"type": "string", "minLength": 1}
+        "layout": {"type": "string", "minLength": 1},
+        "updates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scenario": {"type": "string", "minLength": 1},
+            "fields": {"type": "array", "items": {"type": "string"}},
+            "include": {"type": "array", "items": {"type": "string"}},
+            "exclude": {"type": "array", "items": {"type": "string"}},
+            "matching_method": {"type": "string", "minLength": 1},
+            "threshold": {"type": "number"}
+          }
+        }
       }
     }
   }

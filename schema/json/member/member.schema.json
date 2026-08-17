@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://healthcare-test-data.local/schemas/member/member.schema.json",
-  "title": "Synthetic member record",
+  "$id": "member.schema.json",
+  "title": "Member record",
   "type": "object",
   "additionalProperties": true,
   "required": [

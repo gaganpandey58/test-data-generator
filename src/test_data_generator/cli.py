@@ -9,11 +9,14 @@ details of parsing, validation, and atomic file publication.
 import argparse
 import subprocess
 import sys
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from test_data_generator.configuration.config import RunConfig, load_config
-from test_data_generator.core.engine import run_entity
+from test_data_generator.core.engine import run_entity, run_update_entity
 from test_data_generator.core.errors import ConfigurationError, GenerationError
+from test_data_generator.update.rules import load_rule_catalog
+from test_data_generator.update.scenarios import UpdateRequest, UpdateScenario
 
 
 class CommandError(RuntimeError):
@@ -26,7 +29,7 @@ class CommandError(RuntimeError):
     """
 
 
-def generate(config: Path) -> None:
+def generate(config: Path, mode: str = "all") -> None:
     """Generate every enabled entity described by one configuration file.
 
     The function loads and validates the supplied configuration once, passes
@@ -36,36 +39,113 @@ def generate(config: Path) -> None:
 
     Args:
         config: Path to the root JSON generation configuration.
+        mode: ``all``, ``creation``, or ``updates``.
 
     Raises:
         CommandError: If configuration loading or entity generation fails.
     """
+    if mode not in {"all", "creation", "updates"}:
+        raise CommandError(f"Unknown generation mode {mode!r}")
     _refresh_gdf_schemas()
     try:
         run_config = load_config(config)
     except ConfigurationError as error:
         raise CommandError(f"Configuration failed for {config.resolve()}: {error}") from error
 
-    entity_counts = {entity.name: entity.count for entity in run_config.entities}
-    for entity in run_config.entities:
+    rules = None
+    if mode in {"all", "updates"} and run_config.updates_enabled:
+        if run_config.rule_catalog is None:
+            raise CommandError("Updates are enabled but no rule_catalog is configured")
         try:
-            output_path = run_entity(
-                entity,
-                run_config.seed,
-                run_config.output_directory,
-                entity_counts,
+            rules = load_rule_catalog(run_config.rule_catalog)
+        except ConfigurationError as error:
+            raise CommandError(f"Update rule catalog failed: {error}") from error
+
+    entity_counts = {entity.name: entity.count for entity in run_config.entities}
+    if mode in {"all", "creation"}:
+        for entity in run_config.entities:
+            try:
+                output_path = run_entity(
+                    entity,
+                    run_config.seed,
+                    run_config.creation_directory,
+                    entity_counts,
+                )
+            except GenerationError as error:
+                raise CommandError(
+                    f"Generation failed for entity {entity.name!r} using schema "
+                    f"{entity.schema}: {error}"
+                ) from error
+            except Exception as error:
+                raise CommandError(
+                    f"Generation failed for entity {entity.name!r} using schema {entity.schema}"
+                ) from error
+            print(f"{entity.name}: {entity.count} records -> {output_path}")
+    if mode in {"all", "updates"} and run_config.updates_enabled:
+        assert rules is not None
+        for entity in run_config.entities:
+            entity_rules = rules.get(entity.name)
+            if entity_rules is None:
+                raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
+            request = _update_request(run_config, entity)
+            try:
+                output_path, manifest_path = run_update_entity(
+                    entity,
+                    run_config.seed,
+                    run_config.update_directory,
+                    entity_counts,
+                    request,
+                    entity_rules,
+                )
+            except (GenerationError, ValueError) as error:
+                raise CommandError(
+                    f"Update generation failed for entity {entity.name!r}: {error}"
+                ) from error
+            print(
+                f"{entity.name}: {entity.count} updates -> {output_path} (manifest {manifest_path})"
             )
-        except GenerationError as error:
-            raise CommandError(
-                f"Generation failed for entity {entity.name!r} using schema "
-                f"{entity.schema}: {error}"
-            ) from error
-        except Exception as error:
-            raise CommandError(
-                f"Generation failed for entity {entity.name!r} using schema {entity.schema}"
-            ) from error
-        print(f"{entity.name}: {entity.count} records -> {output_path}")
     _remove_disabled_outputs(run_config)
+
+
+def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
+    """Resolve global and entity-specific update settings into one request."""
+    entity_config = entity
+    raw = dict(run_config.update_defaults)
+    global_selection = raw.get("field_selection")
+    if isinstance(global_selection, dict):
+        raw.update(global_selection)
+    entity_update = getattr(entity_config, "update", {})
+    if isinstance(entity_update, dict):
+        raw.update(entity_update)
+    scenario_value = str(raw.get("scenario", raw.get("default_scenario", "UPDATE_SINGLE_FIELD")))
+    try:
+        scenario = UpdateScenario(scenario_value)
+    except ValueError as error:
+        raise CommandError(f"Unknown update scenario {scenario_value!r}") from error
+    fields = _string_tuple(raw, "fields")
+    include = _string_tuple(raw, "include")
+    exclude = _string_tuple(raw, "exclude")
+    threshold = raw.get("threshold")
+    try:
+        parsed_threshold = Decimal(str(threshold)) if threshold is not None else None
+    except (InvalidOperation, ValueError) as error:
+        raise CommandError("Update threshold must be a decimal number") from error
+    return UpdateRequest(
+        scenario=scenario,
+        fields=fields,
+        include=include,
+        exclude=exclude,
+        matching_method=str(raw["matching_method"]) if "matching_method" in raw else None,
+        threshold=parsed_threshold,
+    )
+
+
+def _string_tuple(values: dict[str, object], key: str) -> tuple[str, ...]:
+    """Read an optional string-list setting from normalized configuration."""
+    value = values.get(key, ())
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        return ()
+    return tuple(value)
 
 
 def _remove_disabled_outputs(run_config: RunConfig) -> None:
@@ -106,10 +186,11 @@ def main() -> int:
         "generate", help="Generate enabled entity JSONL files."
     )
     generate_parser.add_argument("--config", required=True, type=Path)
+    generate_parser.add_argument("--mode", choices=("all", "creation", "updates"), default="all")
     arguments = parser.parse_args()
 
     try:
-        generate(arguments.config)
+        generate(arguments.config, arguments.mode)
     except CommandError as error:
         print(error, file=sys.stderr)
         return 2

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://healthcare-test-data.local/schemas/provider/provider.schema.json",
-  "title": "Synthetic provider record",
+  "$id": "provider.schema.json",
+  "title": "Provider record",
   "type": "object",
   "additionalProperties": true,
   "required": [

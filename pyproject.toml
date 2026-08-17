@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "test-data-generator"
 version = "0.1.0"
-description = "Configuration-driven synthetic test data generation for healthcare entities."
+description = "Configuration-driven test data generation for entities."
 requires-python = ">=3.12"
 dependencies = [
     "Faker>=26",

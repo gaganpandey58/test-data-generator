@@ -56,7 +56,7 @@ def generate_record(
     state, city, zip_code, county, region = randomizer.choice(_LOCATIONS)
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     individual = randomizer.choice((True, False))
-    record_type = "I" if individual else "O"
+    record_type = "I" if individual else "P"
     first = faker.first_name().upper() if individual else ""
     middle = faker.first_name()[0].upper() if individual else ""
     last = faker.last_name().upper() if individual else f"{faker.company().upper()} MEDICAL GROUP"
@@ -127,7 +127,7 @@ def generate_record(
                     str(values.get("provider_network_name", "")),
                 )
             ],
-            "CP_CUSTOM_FIELD_01": "SYNTHETIC",
+            "CP_CUSTOM_FIELD_01": "Test",
         }
     )
     record.update(_transport_headers(seed, index, client_headers))
@@ -258,7 +258,7 @@ def _transport_headers(
         "cotiviti.message_id": deterministic_uuid4(seed, f"{namespace}:message:{sequence}"),
         "cotiviti.produced_at": f"2026-08-05T00:{index % 60:02d}:00Z",
         "cotiviti.source_format": "provider_roster",
-        "cotiviti.batch_id": f"synthetic-provider-{seed}-{sequence:06d}",
+        "cotiviti.batch_id": f"test-provider-{seed}-{sequence:06d}",
         "cotiviti.message_seq": sequence,
         "cotiviti.correlation_id": deterministic_uuid4(seed, f"{namespace}:correlation"),
         "cotiviti.source.raw_file_ref": f"providers-{seed}-{sequence:06d}.csv",

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://test-data-generator.local/schemas/claim/claim.schema.json",
-  "title": "Synthetic Cotiviti/EIP 837 claim",
+  "$id": "claim.schema.json",
+  "title": "Claim record",
   "description": "One schema for the two internally separated professional and institutional claim streams.",
   "oneOf": [
     {

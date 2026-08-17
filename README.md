@@ -1,8 +1,8 @@
 # Test Data Generator
 
-Generate deterministic, synthetic healthcare JSON Lines (JSONL) data for providers, members, professional claims, and institutional claims. The output uses the field names, JSON structure, and record relationships represented by the supplied source samples, without copying real data.
+Generate deterministic, test healthcare JSON Lines (JSONL) data for providers, members, professional claims, and institutional claims. The output uses the field names, JSON structure, and record relationships represented by the supplied source samples, without copying real data.
 
-The generator has one deliberately simple purpose today: create **happy-path** records. It does not generate duplicate, stale, incomplete, replacement, void, or matching/survivorship scenarios. The small generator/layout boundary leaves room to add those later without rebuilding the current workflow.
+The generator creates deterministic new records and can now derive update fixtures from those records. Update scenarios are driven by the checked-in `Member_Provider_ClaimsKeysAndSurvivorship(5).docx` rule catalog, with optional field-level selection for targeted tests.
 
 ## What it writes
 
@@ -74,7 +74,7 @@ Nested projection is generic. If a nested object repeats a value already held by
 contains type-only patterns extracted from the supplied provider, member,
 professional/institutional claim, and professional/institutional payment
 samples. It makes the origin of optional defaults explicit without copying any
-source values. Entity builders provide the realistic synthetic values; the
+source values. Entity builders provide the realistic test values; the
 pattern file fills remaining sample fields with type-compatible blanks.
 
 `client` selects an entry in
@@ -116,7 +116,7 @@ can use only `"claim-professional"` today.
 
 `count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Scenario quantities and scenario maps are not accepted. Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records.
 
-`seed` is not a business date or source-layout version. Reusing the same configuration and seed produces the same synthetic records; changing the seed produces a different deterministic set.
+`seed` is not a business date or source-layout version. Reusing the same configuration and seed produces the same test records; changing the seed produces a different deterministic set.
 
 ## Generate data
 
@@ -132,6 +132,39 @@ Generate with the checked-in configuration:
 uv run generate-data
 ```
 
+The default configuration generates both creation and update fixtures. New data
+is written under `output/new-test-data/`; update data and one JSONL manifest per
+stream are written under `output/update-test-data/`. Each update is derived
+from the matching creation record using the same seed and row index.
+
+Run only one side of the workflow when needed:
+
+```sh
+uv run python -m test_data_generator generate --config generator.config.json --mode creation
+uv run python -m test_data_generator generate --config generator.config.json --mode updates
+```
+
+Supported update scenarios include `UPDATE_SINGLE_FIELD`,
+`UPDATE_REQUIRED_FIELDS`, `UPDATE_OPTIONAL_FIELDS`, `MISSING_REQUIRED_FIELD`,
+`MISSING_MULTIPLE_FIELDS`, `MISSING_SELECTED_FIELDS`, `INVALID_KEY`,
+`CHANGE_WEIGHT_BELOW_LIMIT`, `CHANGE_WEIGHT_AT_LIMIT`, and
+`POST_MATCH_WEIGHT_LIMIT_EXCEEDED`. A per-entity `updates` block can specify
+`fields`, `include`, `exclude`, `matching_method`, and `threshold`; explicit
+fields take precedence over include/exclude selection.
+
+The normalized catalog at
+`src/test_data_generator/configuration/member-provider-claims-key-survivorship.json`
+records source document revision `0.9`, entity keys, matching methods, field
+classification, elasticity, weights, and survivorship behavior. The DOCX is
+the business source; the JSON catalog is the runtime contract and must be
+regenerated/reviewed when the source document changes.
+
+To audit the DOCX revision and preserve its tables as source evidence:
+
+```sh
+make extract-source
+```
+
 `generate-data` automatically refreshes schemas from `schema/gdf/` first. To
 use another configuration file:
 
@@ -143,10 +176,15 @@ For the checked-in configuration, generated files appear in `./output`:
 
 ```text
 output/
-├── providers.jsonl
-├── members.jsonl
-├── professional-claims.jsonl
-└── institutional-claims.jsonl
+├── new-test-data/
+│   ├── providers.jsonl
+│   ├── members.jsonl
+│   ├── professional-claims.jsonl
+│   └── institutional-claims.jsonl
+└── update-test-data/
+    ├── providers.update.jsonl
+    ├── providers.update.manifest.jsonl
+    └── ...
 ```
 
 Each line is a complete JSON object. Records are validated against their JSON Schema before publication. Files are written atomically, so a failed entity run does not replace that entity's prior output. If an entity is omitted from a later successful run, only its known generated output is removed; unrelated output-directory files are not touched.
@@ -179,6 +217,6 @@ src/test_data_generator/
 ## Current scope
 
 - JSONL is the only output format.
-- Data is synthetic and intended for development, integration, and processing exercises; it is not a full matching, survivorship, or adjudication engine.
+- Data is test and intended for development, integration, and processing exercises; the generator produces matching/survivorship fixtures but is not a production matching or adjudication engine.
 - Provider, member, professional claim, and institutional claim are the currently supported entity streams.
-- Future scenario generation can be layered in after happy-path generation without changing the simple config, layout, and entity builders.
+- Update generation is layered after creation generation; scenario rules and manifests are reusable across supported entity streams.

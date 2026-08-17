@@ -2,18 +2,31 @@
   "client": "chc",
   "seed": 20260805,
   "output_directory": "./output",
+  "generation": {
+    "creation": {"enabled": true, "directory": "new-test-data"},
+    "updates": {
+      "enabled": true,
+      "directory": "update-test-data",
+      "rule_catalog": "src/test_data_generator/configuration/member-provider-claims-key-survivorship.json",
+      "default_scenario": "UPDATE_SINGLE_FIELD"
+    }
+  },
   "provider": {
-    "count": 10
+    "count": 100,
+    "updates": {"scenario": "UPDATE_SINGLE_FIELD", "fields": ["CP_PROVIDER_FIRST_NAME"]}
   },
   "member": {
-    "count": 10
+    "count": 1,
+    "updates": {"scenario": "UPDATE_SINGLE_FIELD", "fields": ["CM_MEMBER_FIRST_NAME"]}
   },
   "claims": {
     "professional": {
-      "count": 10
+      "count": 1,
+      "updates": {"scenario": "UPDATE_SINGLE_FIELD", "fields": ["CH_PATIENT_FIRST_NAME"]}
     },
     "institutional": {
-      "count": 10
+      "count": 1,
+      "updates": {"scenario": "UPDATE_SINGLE_FIELD", "fields": ["CH_PATIENT_FIRST_NAME"]}
     }
   }
 }

@@ -1,1371 +1,1467 @@
 {
   "profile": "member",
   "headers": [
-    {
-      "name": "INGESTION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "INGESTION_EPOCH",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "PAYER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "PAYER_PLATFORM",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CLIENT_DATA_PLATFORM",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "PUBLISHER_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "ROWID",
-      "type": "text",
-      "max_length": 255
-    }
-  ],
-  "root": [
-    {
-      "name": "CM_MEMBER_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_CLIENT_MASTER_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_DEPENDENT_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBSCRIBER_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBSCRIBER_CLIENT_MASTER_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBSCRIBER_SSN",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_ALTERNATE_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_SSN",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_MEDICARE_HICN_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_MEDICARE_BENEFICIARY_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_MEDICAID_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_MEDICAL_RECORD_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_FIRST_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_MIDDLE_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_LAST_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_NAME_SUFFIX",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_BIRTH_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_DEATH_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_GENDER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_EDUCATION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_RACE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_RACE_SOURCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_ETHNICITY_SOURCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_HISPANIC_ORIGIN_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SPOKEN_LANGUAGE_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_WRITTEN_LANGUAGE_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_OTHER_LANGUAGE_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SPOKEN_LANGUAGE_SOURCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_WRITTEN_LANGUAGE_SOURCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_OTHER_LANGUAGE_SOURCE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_INTERPRETER_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_RELATIONSHIP_TO_SUBSCRIBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GUARDIAN_LAST_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GUARDIAN_FIRST_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GUARDIAN_MIDDLE_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GUARDIAN_EMAIL",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_RISK_SCORE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_RISK_SCORE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_OTHER_INSURANCE_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PAYER_ESRD_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_ESRD_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_HOSPICE_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_INSTITUTIONALIZED_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_DISABLED_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_ESRD_COORDINATION_PERIOD_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_ESRD_COORDINATION_PERIOD_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_FIRST_DIALYSIS_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_HOME_TREATMENT_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_CCD_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_RECORD_START_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_RECORD_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_03",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_04",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_05",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_06",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_07",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_08",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_09",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_10",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_11",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_12",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_13",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_14",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_15",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_16",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_17",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_18",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_19",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_20",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_21",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_22",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_23",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_24",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_25",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_26",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_27",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_28",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_29",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CME_CUSTOM_FIELD_30",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_AMP_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_APTC_ELIGIBLITY_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_CHEMICAL_DEPENDENCY_AMBULATORY_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_CHEMICAL_DEPENDENCY_ICARE_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_CHEMICAL_DEPENDENCY_INPATIENT_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_DENTAL_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_DISABILITY_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_MEDICAL_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_MENTAL_HEALTH_AMBULATORY_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_MENTAL_HEALTH_ICARE_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_MENTAL_HEALTH_INPATIENT_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_PHARMACY_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_PLAN_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_PLAN_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_BENEFIT_PLAN_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CARE_MANAGEMENT_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CLIENT_LOB",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CMS_MMR_RUN_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_COST_SHARING_REDUCTION_VARIANT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_AMOUNT_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_AMOUNT_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_DATE_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_DATE_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_DATE_03",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_DATE_04",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_03",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_04",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_05",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_06",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_07",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_08",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_09",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_10",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_11",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_12",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_13",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_14",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_15",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_16",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_17",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_18",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_19",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_20",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_21",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_22",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_23",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_CUSTOM_FIELD_24",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYEE_BENEFIT_COVERAGE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_ADDRESS_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_ADDRESS_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_ADDRESS_03",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_CITY",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_EMAIL",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_FAX",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_GROUP_SIC_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_GROUP_SIC_CODE_DESCRIPTION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_PHONE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_SIZE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_SIZE_DESCRIPTION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_SIZE_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_SIZE_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_STATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_ZIP",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYER_ZIP_PLUS_FOUR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_LEAVE_BEGIN_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_LEAVE_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_LEAVE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_STATUS_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_STATUS_DESCRIPTION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_EMPLOYMENT_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GOVERNMENT_PLAN_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_ADDRESS_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_ADDRESS_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_CITY",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_FUNDING_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_PHONE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_SIZE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_SIZE_DESCRIPTION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_SIZE_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_SIZE_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_STATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_GROUP_ZIP",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_HIOS_ISSUER_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_INSURANCE_LOB",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_INSURANCE_LOB_SUBTYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_ISSUER_REPORTING_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_03",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_04",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_05",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_06",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_07",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_08",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_09",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_10",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_01",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_02",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_03",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_04",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_05",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_06",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_07",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_08",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_09",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_10",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LONG_TERM_ILLNESS_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LOW_INCOME_PERIOD_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LOW_INCOME_PERIOD_START_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_LOW_INCOME_SUBSIDY_PREMIUM",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEDICAID_ELIGIBILITY_CATEGORY_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEDICAID_ELIGIBILITY_REASON_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEDICAID_ENROLLMENT_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEDICAID_EXPANSION_QHP_WAIVER_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEDICARE_ENTITLEMENT_REASON",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEDICARE_OREC_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_BENEFIT_PLAN_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_BENEFIT_PLAN_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_ENROLLMENT_NOTES",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_GROUP_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_GROUP_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_ORIGINAL_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_SUBGROUP_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_SUBGROUP_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_TERMINATION_REASON",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_WORKING_STATUS_SEGMENTATION_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_MEMBER_WORKING_STATUS_SEGMENTATION_TERMINATION_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_NETWORK_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PAYER_EMPLOYEE_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PAYER_ORGANIZATION_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PAYER_ORGANIZATION_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PAYMENT_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PLAN_COVERAGE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PLAN_METAL_LEVEL",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PLAN_STATE_CODE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_FIRST_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_LAST_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_MASTER_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_NPI",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRIMARY_CARE_PROVIDER_START_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRODUCT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_PRODUCT_REPORTABLE_INDICATOR",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_REGULATORY_STATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SPECIAL_NEEDS_PROGRAM_ENROLLEE_TYPE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBGROUP_NAME",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBGROUP_NUMBER",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBGROUP_SIZE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBGROUP_SIZE_DESCRIPTION",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBGROUP_SIZE_EFFECTIVE_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_SUBGROUP_SIZE_END_DATE",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_WORKING_STATUS_SEGMENTATION_CLIENT_ID",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CM_WORKING_STATUS_SEGMENTATION_NAME",
-      "type": "text",
-      "max_length": 255
-    }
-  ],
-  "groups": {
-    "CM_MEMBER_ADDRESSES": [
       {
-        "name": "CM_MEMBER_ADDRESS_CLIENT_ID",
+        "name": "FILE_TYPE",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_TYPE",
+        "name": "INGESTION_DATE",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR",
+        "name": "INGESTION_EPOCH",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_01",
+        "name": "PAYER",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_02",
+        "name": "PAYER_PLATFORM",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_03",
+        "name": "CLIENT_DATA_PLATFORM",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_CITY",
+        "name": "PUBLISHER_NAME",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_STATE",
+        "name": "PRODUCT",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ZIP",
+        "name": "GDF_VERSION",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ZIP_PLUS_FOUR",
+        "name": "DATA_CATEGORY",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_COUNTY",
+        "name": "LOB",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_EMAIL",
+        "name": "ROWID",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_PHONE",
+        "name": "cotiviti.dataset_id",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_PHONE_EXTENSION",
+        "name": "cotiviti.tenant_id",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ALTERNATE_PHONE",
+        "name": "cotiviti.schema_version",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_START_DATE",
+        "name": "cotiviti.client_id",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_ADDRESS_TERMINATION_DATE",
+        "name": "cotiviti.client_system",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.message_id",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.produced_at",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.source_format",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.source_system",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.batch_id",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.message_seq",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.correlation_id",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "cotiviti.source.raw_file_ref",
         "type": "text",
         "max_length": 255
       }
     ],
-    "CM_MEMBER_COB": [
+    "root"
+    :
+    [
       {
-        "name": "CM_MEMBER_COB_ORDER_NUMBER",
+        "name": "CM_MEMBER_CLIENT_ID",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_OTHER_PAYER_NAME",
+        "name": "CM_MEMBER_CLIENT_MASTER_ID",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_COB_EFFECTIVE_DATE",
+        "name": "CM_MEMBER_DEPENDENT_NUMBER",
         "type": "text",
         "max_length": 255
       },
       {
-        "name": "CM_MEMBER_COB_TERMINATION_DATE",
+        "name": "CM_SUBSCRIBER_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBSCRIBER_CLIENT_MASTER_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBSCRIBER_SSN",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_ALTERNATE_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_SSN",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_MEDICARE_HICN_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_MEDICARE_BENEFICIARY_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_MEDICAID_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_MEDICAL_RECORD_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_FIRST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_MIDDLE_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_LAST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_NAME_SUFFIX",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_BIRTH_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_DEATH_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_GENDER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_EDUCATION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_RACE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_RACE_SOURCE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_ETHNICITY_SOURCE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_HISPANIC_ORIGIN_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SPOKEN_LANGUAGE_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_WRITTEN_LANGUAGE_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_OTHER_LANGUAGE_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SPOKEN_LANGUAGE_SOURCE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_WRITTEN_LANGUAGE_SOURCE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_OTHER_LANGUAGE_SOURCE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_INTERPRETER_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_RELATIONSHIP_TO_SUBSCRIBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GUARDIAN_LAST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GUARDIAN_FIRST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GUARDIAN_MIDDLE_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GUARDIAN_EMAIL",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_RISK_SCORE_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_RISK_SCORE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_OTHER_INSURANCE_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PAYER_ESRD_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_ESRD_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_HOSPICE_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_INSTITUTIONALIZED_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_DISABLED_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_ESRD_COORDINATION_PERIOD_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_ESRD_COORDINATION_PERIOD_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_FIRST_DIALYSIS_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_HOME_TREATMENT_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_CCD_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_RECORD_START_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_RECORD_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_04",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_05",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_06",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_07",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_08",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_09",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_10",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_11",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_12",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_13",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_14",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_15",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_16",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_17",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_18",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_19",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_20",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_21",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_22",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_23",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_24",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_25",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_26",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_27",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_28",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_29",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CME_CUSTOM_FIELD_30",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_AMP_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_APTC_ELIGIBLITY_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_CHEMICAL_DEPENDENCY_AMBULATORY_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_CHEMICAL_DEPENDENCY_ICARE_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_CHEMICAL_DEPENDENCY_INPATIENT_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_DENTAL_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_DISABILITY_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_MEDICAL_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_MENTAL_HEALTH_AMBULATORY_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_MENTAL_HEALTH_ICARE_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_MENTAL_HEALTH_INPATIENT_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_PHARMACY_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_PLAN_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_PLAN_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_BENEFIT_PLAN_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CARE_MANAGEMENT_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CLIENT_LOB",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CMS_MMR_RUN_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_COST_SHARING_REDUCTION_VARIANT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_AMOUNT_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_AMOUNT_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_DATE_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_DATE_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_DATE_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_DATE_04",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_04",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_05",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_06",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_07",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_08",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_09",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_10",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_11",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_12",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_13",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_14",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_15",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_16",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_17",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_18",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_19",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_20",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_21",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_22",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_23",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_CUSTOM_FIELD_24",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYEE_BENEFIT_COVERAGE_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_ADDRESS_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_ADDRESS_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_ADDRESS_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_CITY",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_EMAIL",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_FAX",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_GROUP_SIC_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_GROUP_SIC_CODE_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_PHONE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_SIZE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_SIZE_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_SIZE_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_SIZE_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_STATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_ZIP",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYER_ZIP_PLUS_FOUR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_LEAVE_BEGIN_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_LEAVE_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_LEAVE_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_STATUS_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_STATUS_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_EMPLOYMENT_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GOVERNMENT_PLAN_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_ADDRESS_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_ADDRESS_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_CITY",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_FUNDING_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_PHONE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_SIZE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_SIZE_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_SIZE_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_SIZE_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_STATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_GROUP_ZIP",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_HIOS_ISSUER_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_INSURANCE_LOB",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_INSURANCE_LOB_SUBTYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_ISSUER_REPORTING_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_04",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_05",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_06",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_07",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_08",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_09",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_10",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_01",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_02",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_03",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_04",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_05",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_06",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_07",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_08",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_09",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LEVEL_OF_AGGREGATION_DESCRIPTION_10",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LONG_TERM_ILLNESS_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LOW_INCOME_PERIOD_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LOW_INCOME_PERIOD_START_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_LOW_INCOME_SUBSIDY_PREMIUM",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEDICAID_ELIGIBILITY_CATEGORY_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEDICAID_ELIGIBILITY_REASON_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEDICAID_ENROLLMENT_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEDICAID_EXPANSION_QHP_WAIVER_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEDICARE_ENTITLEMENT_REASON",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEDICARE_OREC_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_BENEFIT_PLAN_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_BENEFIT_PLAN_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_ENROLLMENT_NOTES",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_GROUP_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_GROUP_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_ORIGINAL_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_SUBGROUP_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_SUBGROUP_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_TERMINATION_REASON",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_WORKING_STATUS_SEGMENTATION_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_MEMBER_WORKING_STATUS_SEGMENTATION_TERMINATION_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_NETWORK_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PAYER_EMPLOYEE_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PAYER_ORGANIZATION_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PAYER_ORGANIZATION_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PAYMENT_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PLAN_COVERAGE_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PLAN_METAL_LEVEL",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PLAN_STATE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_FIRST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_LAST_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_MASTER_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_NPI",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRIMARY_CARE_PROVIDER_START_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRODUCT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_PRODUCT_REPORTABLE_INDICATOR",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_REGULATORY_STATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SPECIAL_NEEDS_PROGRAM_ENROLLEE_TYPE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBGROUP_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBGROUP_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBGROUP_SIZE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBGROUP_SIZE_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBGROUP_SIZE_EFFECTIVE_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_SUBGROUP_SIZE_END_DATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_WORKING_STATUS_SEGMENTATION_CLIENT_ID",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "CM_WORKING_STATUS_SEGMENTATION_NAME",
         "type": "text",
         "max_length": 255
       }
-    ]
-  },
-  "required_parent_fields": {
-    "CM_MEMBER_ADDRESSES": []
-  }
-}
+    ],
+    "groups"
+    :
+    {
+      "CM_MEMBER_ADDRESSES": [
+        {
+          "name": "CM_MEMBER_ADDRESS_CLIENT_ID",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_TYPE",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_01",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_02",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_03",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_CITY",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_STATE",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ZIP",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ZIP_PLUS_FOUR",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_COUNTY",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_EMAIL",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_PHONE",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_PHONE_EXTENSION",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ALTERNATE_PHONE",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_START_DATE",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_ADDRESS_TERMINATION_DATE",
+          "type": "text",
+          "max_length": 255
+        }
+      ],
+      "CM_MEMBER_COB": [
+        {
+          "name": "CM_MEMBER_COB_ORDER_NUMBER",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_OTHER_PAYER_NAME",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_COB_EFFECTIVE_DATE",
+          "type": "text",
+          "max_length": 255
+        },
+        {
+          "name": "CM_MEMBER_COB_TERMINATION_DATE",
+          "type": "text",
+          "max_length": 255
+        }
+      ]
+    },
+    "required_parent_fields"
+    :
+    {
+      "CM_MEMBER_ADDRESSES": []
+    }
+    }
