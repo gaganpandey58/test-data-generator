@@ -295,3 +295,4 @@ src/test_data_generator/
 - Data is test and intended for development, integration, and processing exercises; the generator produces matching/survivorship fixtures but is not a production matching or adjudication engine.
 - Provider, member, professional claim, and institutional claim are the currently supported entity streams.
 - Update generation is layered after creation generation; scenario rules are reusable across supported entity streams.
+
