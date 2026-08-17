@@ -17,3 +17,5 @@ requirements
 docs/superpowers/specs
 docs/superpowers/plans
 docs
+tests
+tmp-test-output

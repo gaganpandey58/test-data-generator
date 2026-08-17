@@ -7,6 +7,8 @@ from itertools import combinations
 from random import Random
 from typing import Mapping
 
+from faker import Faker
+
 from test_data_generator.update.rules import EntityRules
 
 
@@ -174,12 +176,40 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
     if isinstance(value, bool):
         return not value
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return value + 1
+        if isinstance(value, int):
+            int_candidate = randomizer.randrange(max(0, value - 100), value + 101)
+            return int_candidate if int_candidate != value else value + 1
+        float_candidate = round(randomizer.uniform(max(0, value - 100), value + 100), 2)
+        return float_candidate if float_candidate != value else round(value + 1, 2)
     if isinstance(value, str):
-        return (
-            f"{value}-UPDATED" if value else f"UPDATED-{field}-{randomizer.randrange(1000, 9999)}"
-        )
-    return f"UPDATED-{field}-{randomizer.randrange(1000, 9999)}"
+        faker = Faker("en_US")
+        faker.seed_instance(randomizer.randrange(1, 2**31 - 1))
+        upper_field = field.upper()
+        candidate: object
+        if "FIRST_NAME" in upper_field:
+            candidate = faker.first_name().upper()
+        elif "LAST_NAME" in upper_field:
+            candidate = faker.last_name().upper()
+        elif "MIDDLE_NAME" in upper_field:
+            candidate = faker.first_name()[0].upper()
+        elif "CITY" in upper_field:
+            candidate = faker.city().upper()
+        elif "STATE" in upper_field:
+            candidate = faker.state_abbr()
+        elif "ZIP" in upper_field:
+            candidate = faker.postcode()[:5]
+        elif "DATE" in upper_field and len(value) == 8 and value.isdigit():
+            candidate = faker.date_between(start_date="-10y", end_date="today").strftime("%Y%m%d")
+        elif "SSN" in upper_field:
+            candidate = faker.ssn().replace("-", "")
+        elif "ID" in upper_field or "NUMBER" in upper_field:
+            candidate = faker.bothify("??????????").upper()
+        else:
+            candidate = faker.word().upper()
+        if candidate == value:
+            candidate = f"{faker.word().upper()}X"
+        return candidate
+    return randomizer.randrange(1000, 9999)
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:

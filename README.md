@@ -133,8 +133,8 @@ uv run generate-data
 ```
 
 The default configuration generates both creation and update fixtures. New data
-is written under `output/new-test-data/`; update data and one JSONL manifest per
-stream are written under `output/update-test-data/`. Each update is derived
+is written under `output/new-test-data/`; update data is written under
+`output/update-test-data/`. Each update is derived
 from the matching creation record using the same seed and row index.
 
 Run only one side of the workflow when needed:
@@ -151,6 +151,48 @@ Supported update scenarios include `UPDATE_SINGLE_FIELD`,
 `POST_MATCH_WEIGHT_LIMIT_EXCEEDED`. A per-entity `updates` block can specify
 `fields`, `include`, `exclude`, `matching_method`, and `threshold`; explicit
 fields take precedence over include/exclude selection.
+
+### Update scenario field reference
+
+The field names below are the currently supported runtime fields from the
+normalized rule catalog. The catalog remains the source of truth:
+[`member-provider-claims-key-survivorship.json`](src/test_data_generator/configuration/member-provider-claims-key-survivorship.json).
+
+| Entity | Matching keys (`INVALID_KEY`) | Required update fields | Optional update fields |
+| --- | --- | --- | --- |
+| Member | `CM_MEMBER_CLIENT_ID` | `CM_PAYER_SHORT`, `CM_MEMBER_FIRST_NAME`, `CM_MEMBER_LAST_NAME`, `CM_MEMBER_BIRTH_DATE`, `CM_MEMBER_GENDER`, `CM_MEMBER_SSN` | `CM_MEMBER_STATE`, `CM_MEMBER_ZIP` |
+| Provider | `CP_PROVIDER_NPI`, `CP_PROVIDER_FEDERAL_TAX_ID`, `CP_PROVIDER_CLIENT_ID` | `CP_PROVIDER_FIRST_NAME`, `CP_PROVIDER_LAST_NAME`, `CP_PROVIDER_TAXONOMY_CODE` | `CP_PROVIDER_BILLING_GROUP_NAME`, `CP_PROVIDER_ZIP` |
+| Professional Claim | `CH_CLIENT_CLAIM_ID`, `CH_PATIENT_CLIENT_ID`, `CH_BILLING_PROVIDER_NPI` | `CH_CLAIM_SERVICE_FROM_DATE`, `CH_CLAIM_SERVICE_TO_DATE`, `CH_CLAIM_FREQUENCY_CODE`, `CH_PATIENT_ACCOUNT_CONTROL_NUMBER` | `CH_PATIENT_FIRST_NAME`, `CH_CHARGE_AMOUNT`, `CH_PAID_AMOUNT` |
+| Institutional Claim | `CH_CLIENT_CLAIM_ID`, `CH_PATIENT_CLIENT_ID`, `CH_BILLING_PROVIDER_NPI` | `CH_TYPE_OF_BILL_CODE`, `CH_CLAIM_SERVICE_FROM_DATE`, `CH_CLAIM_SERVICE_TO_DATE`, `CH_PATIENT_ACCOUNT_CONTROL_NUMBER` | `CH_PATIENT_FIRST_NAME`, `CH_CHARGE_AMOUNT`, `CH_PAID_AMOUNT` |
+
+Scenario selection rules:
+
+| Scenario | Supported fields |
+| --- | --- |
+| `UPDATE_SINGLE_FIELD` | Exactly one required or optional non-key field from the table above. |
+| `UPDATE_REQUIRED_FIELDS` | One or more fields from the **Required update fields** column. If `fields` is omitted, all eligible required non-key fields are selected. |
+| `UPDATE_OPTIONAL_FIELDS` | One or more fields from the **Optional update fields** column. |
+| `MISSING_REQUIRED_FIELD` | Exactly one field from the **Required update fields** column. |
+| `MISSING_MULTIPLE_FIELDS` | Two or more fields from the **Required update fields** column. |
+| `MISSING_SELECTED_FIELDS` | Any explicitly selected required or optional non-key field. |
+| `INVALID_KEY` | One or more fields from the **Matching keys** column. |
+| `CHANGE_WEIGHT_BELOW_LIMIT` | Any eligible non-key fields whose catalog weights total below the selected matching-method threshold. |
+| `CHANGE_WEIGHT_AT_LIMIT` | Any eligible non-key fields whose catalog weights total exactly equal the selected matching-method threshold. |
+| `POST_MATCH_WEIGHT_LIMIT_EXCEEDED` | Any eligible non-key fields whose catalog weights exceed the selected matching-method threshold; matching keys remain unchanged. |
+
+Example for a targeted Member update:
+
+```json
+{
+  "member": {
+    "count": 1,
+    "updates": {
+      "scenario": "UPDATE_SINGLE_FIELD",
+      "fields": ["CM_MEMBER_SSN"]
+    }
+  }
+}
+```
 
 The normalized catalog at
 `src/test_data_generator/configuration/member-provider-claims-key-survivorship.json`
@@ -183,7 +225,6 @@ output/
 │   └── institutional-claims.jsonl
 └── update-test-data/
     ├── providers.update.jsonl
-    ├── providers.update.manifest.jsonl
     └── ...
 ```
 
@@ -219,4 +260,4 @@ src/test_data_generator/
 - JSONL is the only output format.
 - Data is test and intended for development, integration, and processing exercises; the generator produces matching/survivorship fixtures but is not a production matching or adjudication engine.
 - Provider, member, professional claim, and institutional claim are the currently supported entity streams.
-- Update generation is layered after creation generation; scenario rules and manifests are reusable across supported entity streams.
+- Update generation is layered after creation generation; scenario rules are reusable across supported entity streams.

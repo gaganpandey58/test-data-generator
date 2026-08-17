@@ -89,7 +89,7 @@ def generate(config: Path, mode: str = "all") -> None:
                 raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
             request = _update_request(run_config, entity)
             try:
-                output_path, manifest_path = run_update_entity(
+                output_path = run_update_entity(
                     entity,
                     run_config.seed,
                     run_config.update_directory,
@@ -101,9 +101,7 @@ def generate(config: Path, mode: str = "all") -> None:
                 raise CommandError(
                     f"Update generation failed for entity {entity.name!r}: {error}"
                 ) from error
-            print(
-                f"{entity.name}: {entity.count} updates -> {output_path} (manifest {manifest_path})"
-            )
+            print(f"{entity.name}: {entity.count} updates -> {output_path}")
     _remove_disabled_outputs(run_config)
 
 
