@@ -55,7 +55,9 @@
         }
       }
     },
-    "provider": {"$ref": "#/$defs/entity"},
+    "provider": {
+      "$ref": "#/$defs/provider_entity"
+    },
     "provider_nppes": {
       "type": "object",
       "additionalProperties": false,
@@ -65,24 +67,47 @@
         "sample": {"type": "string", "minLength": 1}
       }
     },
-    "member": {"$ref": "#/$defs/entity"},
+    "member": {"$ref": "#/$defs/counted_entity"},
     "claims": {
       "type": "object",
       "minProperties": 1,
       "additionalProperties": false,
       "properties": {
-        "professional": {"$ref": "#/$defs/entity"},
-        "institutional": {"$ref": "#/$defs/entity"}
+        "professional": {"$ref": "#/$defs/counted_entity"},
+        "institutional": {"$ref": "#/$defs/counted_entity"}
       }
     }
   },
   "$defs": {
+    "provider_entity": {
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"anyOf": [{"required": ["count"]}, {"required": ["nppes"]}, {"required": ["cdf"]}]}
+      ]
+    },
+    "counted_entity": {
+      "allOf": [{"$ref": "#/$defs/entity"}, {"required": ["count"]}]
+    },
     "entity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["count"],
       "properties": {
         "count": {"type": "integer", "minimum": 0},
+        "nppes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count"],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0},
+            "sample": {"type": "string", "minLength": 1}
+          }
+        },
+        "cdf": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["additional_count"],
+          "properties": {"additional_count": {"type": "integer", "minimum": 0}}
+        },
         "layout": {"type": "string", "minLength": 1},
         "output_order": {
           "type": "object",

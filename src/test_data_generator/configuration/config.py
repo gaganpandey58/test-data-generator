@@ -79,6 +79,7 @@ class RunConfig:
     nppes_count: int = 0
     nppes_sample: Path | None = None
     nppes_filename: str = "provider_nppes.jsonl"
+    provider_linked: bool = False
 
 
 def load_config(path: Path) -> RunConfig:
@@ -98,6 +99,10 @@ def load_config(path: Path) -> RunConfig:
     config_path = path.resolve()
     raw_config = _load_json(config_path, "configuration")
     _validate_schema(raw_config)
+    provider_linked = isinstance(raw_config.get("provider"), dict) and (
+        isinstance(raw_config["provider"].get("nppes"), dict)
+        or isinstance(raw_config["provider"].get("cdf"), dict)
+    )
     raw_config = _normalize_config(raw_config)
     try:
         client = raw_config["client"]
@@ -183,6 +188,7 @@ def load_config(path: Path) -> RunConfig:
         update_defaults=update_config,
         nppes_count=nppes_count,
         nppes_sample=nppes_sample,
+        provider_linked=provider_linked,
     )
 
 
@@ -206,6 +212,28 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     for name in ("provider", "member"):
         value = raw_config.get(name)
         if isinstance(value, dict):
+            if name == "provider" and (
+                isinstance(value.get("nppes"), dict) or isinstance(value.get("cdf"), dict)
+            ):
+                nppes = value.get("nppes", {})
+                cdf = value.get("cdf", {})
+                nppes_count = nppes.get("count", 0) if isinstance(nppes, dict) else 0
+                additional_count = cdf.get("additional_count", 0) if isinstance(cdf, dict) else 0
+                selection = {
+                    key: item for key, item in value.items() if key not in {"nppes", "cdf"}
+                }
+                selection["count"] = int(nppes_count) + int(additional_count)
+                entities[name] = _selected_entity(entities[name], selection)
+                normalized_nppes = {
+                    "count": int(nppes_count),
+                    **(
+                        {"sample": nppes["sample"]}
+                        if isinstance(nppes, dict) and isinstance(nppes.get("sample"), str)
+                        else {}
+                    ),
+                }
+                raw_config["provider_nppes"] = normalized_nppes
+                continue
             entities[name] = _selected_entity(entities[name], value)
 
     claims = raw_config.get("claims")

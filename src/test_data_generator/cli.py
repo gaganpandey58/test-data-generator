@@ -15,7 +15,11 @@ from pathlib import Path
 from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import run_entity, run_update_entity
 from test_data_generator.core.errors import ConfigurationError, GenerationError
-from test_data_generator.provider_cdf import generate_nppes_file, generate_provider_cdf
+from test_data_generator.provider_cdf import (
+    generate_linked_provider_fixtures,
+    generate_nppes_file,
+    generate_provider_cdf,
+)
 from test_data_generator.update.rules import load_rule_catalog
 from test_data_generator.update.scenarios import UpdateRequest, UpdateScenario
 
@@ -65,6 +69,29 @@ def generate(config: Path, mode: str = "all") -> None:
     entity_counts = {entity.name: entity.count for entity in run_config.entities}
     if mode in {"all", "creation"}:
         for entity in run_config.entities:
+            if (
+                entity.name == "provider"
+                and run_config.provider_linked
+                and run_config.nppes_count > 0
+            ):
+                assert run_config.nppes_sample is not None
+                try:
+                    paths = generate_linked_provider_fixtures(
+                        run_config.nppes_sample,
+                        run_config.creation_directory,
+                        run_config.nppes_count,
+                        entity.count - run_config.nppes_count,
+                        run_config.seed,
+                        entity.client_headers,
+                        entity.client_values,
+                    )
+                except (OSError, ValueError) as error:
+                    raise CommandError(f"Linked provider generation failed: {error}") from error
+                print(f"provider: {entity.count} records -> {paths['provider_cdf']}")
+                print(
+                    f"provider_nppes: {run_config.nppes_count} records -> {paths['provider_nppes']}"
+                )
+                continue
             try:
                 output_path = run_entity(
                     entity,
@@ -82,7 +109,7 @@ def generate(config: Path, mode: str = "all") -> None:
                     f"Generation failed for entity {entity.name!r} using schema {entity.schema}"
                 ) from error
             print(f"{entity.name}: {entity.count} records -> {output_path}")
-        if run_config.nppes_count > 0:
+        if run_config.nppes_count > 0 and not run_config.provider_linked:
             assert run_config.nppes_sample is not None
             try:
                 nppes_path = generate_nppes_file(

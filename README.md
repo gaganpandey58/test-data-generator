@@ -106,8 +106,10 @@ can use only `"claim-professional"` today.
   "client": "chc",
   "seed": 20260805,
   "output_directory": "./output",
-  "provider": {"count": 10},
-  "provider_nppes": {"count": 10},
+  "provider": {
+    "nppes": {"count": 10},
+    "cdf": {"additional_count": 5}
+  },
   "member": {"count": 10},
   "claims": {
     "professional": {"count": 10},
@@ -179,9 +181,12 @@ writes `provider_nppes.jsonl`; either count can be `0` to skip that file. If the
 NPPES `sample` is omitted, the checked-in reference sample is used:
 
 ```json
-"provider_nppes": {
-  "count": 10,
-  "sample": "src/test_data_generator/samples/reference/provider_nppes_sample.jsonl"
+"provider": {
+  "nppes": {
+    "count": 10,
+    "sample": "src/test_data_generator/samples/reference/provider_nppes_sample.jsonl"
+  },
+  "cdf": {"additional_count": 5}
 }
 ```
 
