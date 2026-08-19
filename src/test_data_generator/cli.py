@@ -15,6 +15,7 @@ from pathlib import Path
 from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import run_entity, run_update_entity
 from test_data_generator.core.errors import ConfigurationError, GenerationError
+from test_data_generator.provider_cdf import generate_provider_cdf
 from test_data_generator.update.rules import load_rule_catalog
 from test_data_generator.update.scenarios import UpdateRequest, UpdateScenario
 
@@ -191,10 +192,29 @@ def main() -> int:
     )
     generate_parser.add_argument("--config", required=True, type=Path)
     generate_parser.add_argument("--mode", choices=("all", "creation", "updates"), default="all")
+    provider_cdf_parser = subcommands.add_parser(
+        "provider-cdf", help="Generate NPPES, provider CDF, and updated CDF fixtures."
+    )
+    provider_cdf_parser.add_argument("--sample-nppes", required=True, type=Path)
+    provider_cdf_parser.add_argument("--output", required=True, type=Path)
+    provider_cdf_parser.add_argument("--count", type=int, default=10)
+    provider_cdf_parser.add_argument("--unmatched-count", type=int, default=2)
+    provider_cdf_parser.add_argument("--seed", type=int, default=20260805)
     arguments = parser.parse_args()
 
     try:
-        generate(arguments.config, arguments.mode)
+        if arguments.command == "provider-cdf":
+            paths = generate_provider_cdf(
+                arguments.sample_nppes,
+                arguments.output,
+                arguments.count,
+                arguments.unmatched_count,
+                arguments.seed,
+            )
+            for name, path in paths.items():
+                print(f"{name}: {path}")
+        else:
+            generate(arguments.config, arguments.mode)
     except CommandError as error:
         print(error, file=sys.stderr)
         return 2

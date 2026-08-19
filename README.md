@@ -149,6 +149,28 @@ uv run python -m test_data_generator generate --config generator.config.json --m
 uv run python -m test_data_generator generate --config generator.config.json --mode updates
 ```
 
+### Provider NPPES/CDF fixtures
+
+Generate matched and unmatched provider fixtures from the supplied NPPES
+sample with:
+
+```sh
+uv run python -m test_data_generator provider-cdf \
+  --sample-nppes src/test_data_generator/samples/reference/provider_nppes_sample.jsonl \
+  --output output/provider-cdf \
+  --count 10 \
+  --unmatched-count 2
+```
+
+This writes `provider_nppes.jsonl`, `provider_cdf.jsonl`, and
+`provider_cdf_updated.jsonl`. The first `count` CDF NPIs match the generated
+NPPES NPIs; the additional CDF records use unique NPIs absent from NPPES and
+are preserved unchanged in the updated file. NPPES objects are read using the
+sample's exact field names, nested structures, and value types. Matched CDF
+records reuse the existing provider generator and update provider names,
+credentials, taxonomy, license, enumeration, and mailing-address fields from
+the corresponding NPPES record.
+
 Supported update scenarios include `UPDATE_SINGLE_FIELD`,
 `UPDATE_REQUIRED_FIELDS`, `UPDATE_OPTIONAL_FIELDS`, `MISSING_REQUIRED_FIELD`,
 `MISSING_MULTIPLE_FIELDS`, `MISSING_SELECTED_FIELDS`, `INVALID_KEY`,
