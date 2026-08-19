@@ -1,5 +1,6 @@
 """Scenario resolution and deterministic record mutation."""
 
+from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -10,6 +11,7 @@ from typing import Mapping
 from faker import Faker
 
 from test_data_generator.update.rules import EntityRules
+from test_data_generator.update.synchronization import synchronize_record
 
 
 class UpdateScenario(StrEnum):
@@ -51,6 +53,7 @@ class ResolvedUpdate:
     threshold_relation: str
     expected_match: bool
     expected_apply: bool
+    synchronized_fields: tuple[str, ...] = ()
 
 
 def resolve_fields(request: UpdateRequest, rules: EntityRules) -> tuple[str, ...]:
@@ -128,7 +131,8 @@ def resolve_update(
     ):
         selection_threshold = request.threshold or rules.methods[0].needed_weight
         selected = _select_weight_fields(rules, selection_threshold, request.scenario)
-    result = dict(base)
+    original = deepcopy(dict(base))
+    result = deepcopy(original)
     changed: list[str] = []
     removed: list[str] = []
     invalidated: list[str] = []
@@ -158,6 +162,7 @@ def resolve_update(
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
+    synchronized = synchronize_record(original, result, tuple(changed))
     total = sum((rules.fields[field].weight for field in changed), Decimal("0"))
     threshold = request.threshold
     if threshold is None:
@@ -183,6 +188,7 @@ def resolve_update(
         expected_match=not invalidated,
         expected_apply=request.scenario != UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED
         and not invalidated,
+        synchronized_fields=synchronized,
     )
 
 
