@@ -76,6 +76,9 @@ class RunConfig:
     rule_catalog: Path | None
     updates_enabled: bool
     update_defaults: Mapping[str, object]
+    nppes_count: int = 0
+    nppes_sample: Path | None = None
+    nppes_filename: str = "provider_nppes.jsonl"
 
 
 def load_config(path: Path) -> RunConfig:
@@ -107,8 +110,26 @@ def load_config(path: Path) -> RunConfig:
     if client not in available_clients():
         raise ConfigurationError(f"Invalid configuration: unknown client profile {client!r}")
 
-    entities: list[EntityConfig] = []
     disabled_filenames: list[str] = []
+    # Remove filenames emitted before the provider CDF naming contract changed.
+    disabled_filenames.extend(("providers.jsonl", "provider.jsonl"))
+    nppes_config = raw_config.get("provider_nppes", {})
+    nppes_count = int(nppes_config.get("count", 0)) if isinstance(nppes_config, dict) else 0
+    default_sample = (
+        Path(__file__).resolve().parents[1] / "samples/reference/provider_nppes_sample.jsonl"
+    )
+    sample_value = nppes_config.get("sample") if isinstance(nppes_config, dict) else None
+    nppes_sample = (
+        _resolve_path(str(sample_value), config_path.parent) if sample_value else default_sample
+    )
+    if nppes_count > 0 and not nppes_sample.is_file():
+        raise ConfigurationError(
+            f"Enabled provider_nppes references missing sample file {nppes_sample}"
+        )
+    if nppes_count == 0:
+        disabled_filenames.append("provider_nppes.jsonl")
+
+    entities: list[EntityConfig] = []
     for name, raw_entity in raw_entities.items():
         if not raw_entity["enabled"]:
             _validate_filename(name, raw_entity["filename"], output_directory)
@@ -160,6 +181,8 @@ def load_config(path: Path) -> RunConfig:
         rule_catalog=rule_catalog,
         updates_enabled=bool(update_config.get("enabled", False)),
         update_defaults=update_config,
+        nppes_count=nppes_count,
+        nppes_sample=nppes_sample,
     )
 
 
@@ -207,6 +230,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         "seed": raw_config.get("seed", 20260805),
         "output_directory": raw_config.get("output_directory", "./output"),
         "generation": raw_config.get("generation", {}),
+        "provider_nppes": raw_config.get("provider_nppes", {}),
         "entities": entities,
     }
 
@@ -262,7 +286,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "profile": "provider",
             "schema": str(schema_root / "provider/provider.schema.json"),
             "module": "test_data_generator.entities.provider",
-            "filename": "providers.jsonl",
+            "filename": "provider_cdf.jsonl",
             "updates": {},
             "header_order": None,
         },

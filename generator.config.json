@@ -16,6 +16,10 @@
     "count": 100,
     "updates": {"scenario": "UPDATE_SINGLE_FIELD", "fields": ["CP_PROVIDER_FIRST_NAME"]}
   },
+  "provider_nppes": {
+    "count": 10,
+    "sample": "src/test_data_generator/samples/reference/provider_nppes_sample.jsonl"
+  },
   "member": {
     "count": 1,
     "updates": {"scenario": "UPDATE_SINGLE_FIELD", "fields": ["CM_MEMBER_FIRST_NAME"]}

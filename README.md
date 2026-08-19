@@ -8,7 +8,8 @@ The generator creates deterministic new records and can now derive update fixtur
 
 | Entity | Output file | Description |
 | --- | --- | --- |
-| Provider | `providers.jsonl` | Provider identity, address, and network data. |
+| Provider CDF | `provider_cdf.jsonl` | Provider identity, address, and network data. |
+| Provider NPPES | `provider_nppes.jsonl` | NPPES provider reference data using the checked-in sample shape. |
 | Member | `members.jsonl` | Member, address, enrollment, and coordination-of-benefits data. |
 | Professional claim | `professional-claims.jsonl` | Professional claim headers, details, and embedded payment fields. |
 | Institutional claim | `institutional-claims.jsonl` | Institutional claim headers, details, and embedded payment fields. |
@@ -106,6 +107,7 @@ can use only `"claim-professional"` today.
   "seed": 20260805,
   "output_directory": "./output",
   "provider": {"count": 10},
+  "provider_nppes": {"count": 10},
   "member": {"count": 10},
   "claims": {
     "professional": {"count": 10},
@@ -170,6 +172,18 @@ sample's exact field names, nested structures, and value types. Matched CDF
 records reuse the existing provider generator and update provider names,
 credentials, taxonomy, license, enumeration, and mailing-address fields from
 the corresponding NPPES record.
+
+The normal configuration-driven generation supports the two provider streams
+independently. `provider` writes `provider_cdf.jsonl`, while `provider_nppes`
+writes `provider_nppes.jsonl`; either count can be `0` to skip that file. If the
+NPPES `sample` is omitted, the checked-in reference sample is used:
+
+```json
+"provider_nppes": {
+  "count": 10,
+  "sample": "src/test_data_generator/samples/reference/provider_nppes_sample.jsonl"
+}
+```
 
 Supported update scenarios include `UPDATE_SINGLE_FIELD`,
 `UPDATE_REQUIRED_FIELDS`, `UPDATE_OPTIONAL_FIELDS`, `MISSING_REQUIRED_FIELD`,
@@ -291,12 +305,13 @@ For the checked-in configuration, generated files appear in `./output`:
 ```text
 output/
 ├── new-test-data/
-│   ├── providers.jsonl
+│   ├── provider_cdf.jsonl
+│   ├── provider_nppes.jsonl
 │   ├── members.jsonl
 │   ├── professional-claims.jsonl
 │   └── institutional-claims.jsonl
 └── update-test-data/
-    ├── providers.update.jsonl
+    ├── provider_cdf.update.jsonl
     └── ...
 ```
 

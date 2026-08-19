@@ -36,9 +36,7 @@ def generate_provider_cdf(
     templates = _read_nppes_objects(sample_path)
     if not templates:
         raise ValueError(f"NPPES sample {sample_path} contains no records")
-    nppes_records = [
-        _nppes_record(templates[index % len(templates)], index, seed) for index in range(count)
-    ]
+    nppes_records = _generate_nppes_records(templates, count, seed)
     nppes_by_npi = {str(record["NPI"]): record for record in nppes_records}
     cdf_records = [
         _cdf_record(str(nppes["NPI"]), seed, index) for index, nppes in enumerate(nppes_records)
@@ -60,6 +58,16 @@ def generate_provider_cdf(
     _write_jsonl(paths["provider_cdf"], cdf_records)
     _write_jsonl(paths["provider_cdf_updated"], updated_records)
     return paths
+
+
+def generate_nppes_file(sample_path: Path, output_path: Path, count: int, seed: int) -> Path:
+    """Generate one configured NPPES JSONL file from the checked-in sample."""
+    if count < 1:
+        raise ValueError("NPPES count must be at least 1")
+    records = _generate_nppes_records(_read_nppes_objects(sample_path), count, seed)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(output_path, records)
+    return output_path
 
 
 def _read_nppes_objects(path: Path) -> list[dict[str, object]]:
@@ -90,6 +98,14 @@ def _nppes_record(template: Mapping[str, object], index: int, seed: int) -> dict
     record["NPI"] = _nppes_npi(index)
     record["ROWID"] = deterministic_uuid4(seed + index, "provider-nppes")
     return record
+
+
+def _generate_nppes_records(
+    templates: list[dict[str, object]], count: int, seed: int
+) -> list[dict[str, object]]:
+    if not templates:
+        raise ValueError("NPPES sample contains no records")
+    return [_nppes_record(templates[index % len(templates)], index, seed) for index in range(count)]
 
 
 def _cdf_record(npi: str, seed: int, index: int) -> dict[str, object]:

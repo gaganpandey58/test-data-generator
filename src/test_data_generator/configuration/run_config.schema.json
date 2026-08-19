@@ -6,6 +6,7 @@
   "required": ["client"],
   "anyOf": [
     {"required": ["provider"]},
+    {"required": ["provider_nppes"]},
     {"required": ["member"]},
     {"required": ["claims"]}
   ],
@@ -55,6 +56,15 @@
       }
     },
     "provider": {"$ref": "#/$defs/entity"},
+    "provider_nppes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "sample": {"type": "string", "minLength": 1}
+      }
+    },
     "member": {"$ref": "#/$defs/entity"},
     "claims": {
       "type": "object",
