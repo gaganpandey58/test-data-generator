@@ -216,6 +216,14 @@ A per-entity `updates` block can specify
 `fields`, `include`, `exclude`, `matching_method`, and `threshold`; explicit
 fields take precedence over include/exclude selection.
 
+Field lists may contain comma-separated values and surrounding whitespace. Names
+are matched case-insensitively after normalization; punctuation such as the `+`
+in `CP+Provider_npi` is normalized to `_`, and `Provider_npi` is an alias for
+`CP_PROVIDER_NPI`. Matching keys may only be selected with `INVALID`, because
+changing them would prevent the update from matching the existing entity. An
+`INVALID` fixture is intentionally allowed to violate the JSON Schema; its
+value must be present in the invalid-value catalog.
+
 ### Update field reference
 
 The field names below are the currently supported runtime fields from the

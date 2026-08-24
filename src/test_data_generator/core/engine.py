@@ -86,7 +86,7 @@ def run_update_entity(
                 resolved = resolve_update(base, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
                 validate_update_contract(base, updated, request, resolved, rules)
-                if request.operation != OperationType.MISSING:
+                if request.operation not in {OperationType.MISSING, OperationType.INVALID}:
                     try:
                         validator.validate(updated)
                     except ValidationError as error:

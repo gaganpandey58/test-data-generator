@@ -195,7 +195,9 @@ def _string_tuple(values: dict[str, object], key: str) -> tuple[str, ...]:
     value = values.get(key, ())
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         return ()
-    return tuple(value)
+    return tuple(
+        item.strip() for value_item in value for item in value_item.split(",") if item.strip()
+    )
 
 
 def _remove_disabled_outputs(run_config: RunConfig) -> None:

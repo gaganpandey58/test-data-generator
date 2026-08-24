@@ -1,6 +1,7 @@
 """Scenario resolution and deterministic record mutation."""
 
 import json
+import re
 from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
@@ -77,9 +78,9 @@ def resolve_fields(
     """Resolve explicit fields or select eligible fields from the rule catalog."""
     known = rules.fields
     if request.fields:
-        selected = list(request.fields)
+        selected = _normalize_fields(request.fields, known)
     elif request.include:
-        selected = [field for field in request.include if field in known]
+        selected = [field for field in _normalize_fields(request.include, known) if field in known]
     elif request.operation in {
         OperationType.UPDATE,
         OperationType.MISSING,
@@ -93,17 +94,44 @@ def resolve_fields(
         selected = [Random(seed * 1_000_003 + index).choice(selected)] if selected else []
     else:
         selected = [name for name in known if name not in rules.keys]
-    selected = [field for field in selected if field not in request.exclude]
+    excluded = set(_normalize_fields(request.exclude, known))
+    selected = [field for field in selected if field not in excluded]
     if any(field not in known for field in selected):
-        raise ValueError("Update selection contains an unknown field")
+        unknown = next(field for field in selected if field not in known)
+        raise ValueError(f"Update selection contains an unknown field {unknown!r}")
     if (
         any(field in rules.keys for field in selected)
         and request.operation != OperationType.INVALID
     ):
-        raise ValueError("Matching keys may only be selected by INVALID")
+        matching = next(field for field in selected if field in rules.keys)
+        raise ValueError(f"Matching key {matching!r} may only be selected by INVALID operation")
     if not selected:
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
+
+
+def _normalize_fields(fields: tuple[str, ...], known: Mapping[str, object]) -> list[str]:
+    """Split field lists and resolve human-entered aliases to catalog names."""
+    result: list[str] = []
+    canonical = {name.upper(): name for name in known}
+    aliases = {
+        "PROVIDER_NPI": "CP_PROVIDER_NPI",
+        "RECORD_TYPE": "CP_PROVIDER_RECORD_TYPE",
+    }
+    for value in fields:
+        for item in value.split(","):
+            raw = item.strip()
+            if not raw:
+                continue
+            normalized = re.sub(r"[^A-Za-z0-9]+", "_", raw).strip("_").upper()
+            resolved = canonical.get(normalized)
+            if resolved is None:
+                alias = aliases.get(normalized)
+                resolved = canonical.get(alias.upper()) if alias else None
+                if resolved is None and alias is not None:
+                    normalized = alias
+            result.append(resolved or normalized)
+    return result
 
 
 def resolve_update(
