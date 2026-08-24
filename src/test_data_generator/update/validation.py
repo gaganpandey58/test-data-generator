@@ -14,7 +14,7 @@ def validate_update_contract(
     rules: EntityRules,
 ) -> None:
     """Ensure an update changes only what its operation allows."""
-    if request.operation != OperationType.INVALID:
+    if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         for key in rules.keys:
             if base.get(key) != updated.get(key):
                 raise ValueError(f"Update changed protected matching key {key!r}")

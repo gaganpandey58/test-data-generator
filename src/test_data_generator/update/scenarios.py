@@ -99,12 +99,14 @@ def resolve_fields(
     if any(field not in known for field in selected):
         unknown = next(field for field in selected if field not in known)
         raise ValueError(f"Update selection contains an unknown field {unknown!r}")
-    if (
-        any(field in rules.keys for field in selected)
-        and request.operation != OperationType.INVALID
-    ):
+    if any(field in rules.keys for field in selected) and request.operation not in {
+        OperationType.INVALID,
+        OperationType.MISSING,
+    }:
         matching = next(field for field in selected if field in rules.keys)
-        raise ValueError(f"Matching key {matching!r} may only be selected by INVALID operation")
+        raise ValueError(
+            f"Matching key {matching!r} may only be selected by INVALID or MISSING operation"
+        )
     if not selected:
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
@@ -156,6 +158,8 @@ def resolve_update(
         for field in selected:
             if _remove_field(result, field):
                 removed.append(field)
+                if field in rules.keys:
+                    invalidated.append(field)
     else:
         if operation == OperationType.EMPTY:
             for field in selected:
@@ -181,7 +185,7 @@ def resolve_update(
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
-    synchronized = synchronize_record(original, result, tuple(changed))
+    synchronized = synchronize_record(original, result, tuple(changed + removed))
     total = sum((rules.fields[field].weight for field in changed), Decimal("0"))
     threshold = request.threshold
     if threshold is None:
