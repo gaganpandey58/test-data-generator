@@ -1,10 +1,12 @@
 """Scenario resolution and deterministic record mutation."""
 
+import json
 from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from itertools import combinations
+from pathlib import Path
 from random import Random
 from typing import Mapping
 
@@ -29,6 +31,32 @@ class UpdateScenario(StrEnum):
     POST_MATCH_WEIGHT_LIMIT_EXCEEDED = "POST_MATCH_WEIGHT_LIMIT_EXCEEDED"
 
 
+class OperationType(StrEnum):
+    """Generic record mutation operations."""
+
+    UPDATE = "UPDATE"
+    MISSING = "MISSING"
+    EMPTY = "EMPTY"
+    INVALID = "INVALID"
+    WEIGHT_CHANGE = "WEIGHT_CHANGE"
+
+
+def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
+    """Load the field-name keyed invalid-value catalog."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read invalid-value catalog {path}") from error
+    values = raw.get("invalid_values") if isinstance(raw, dict) else None
+    if not isinstance(values, dict):
+        raise ValueError("Invalid-value catalog must contain an invalid_values object")
+    return {
+        str(field): tuple(items)
+        for field, items in values.items()
+        if isinstance(items, list) and items
+    }
+
+
 @dataclass(frozen=True)
 class UpdateRequest:
     """One normalized update request."""
@@ -39,6 +67,9 @@ class UpdateRequest:
     exclude: tuple[str, ...] = ()
     matching_method: str | None = None
     threshold: Decimal | None = None
+    operation: OperationType | None = None
+    condition: str | None = None
+    invalid_values: Mapping[str, tuple[object, ...]] | None = None
 
 
 @dataclass(frozen=True)
@@ -56,14 +87,28 @@ class ResolvedUpdate:
     synchronized_fields: tuple[str, ...] = ()
 
 
-def resolve_fields(request: UpdateRequest, rules: EntityRules) -> tuple[str, ...]:
+def resolve_fields(
+    request: UpdateRequest, rules: EntityRules, seed: int = 0, index: int = 0
+) -> tuple[str, ...]:
     """Resolve explicit fields, include/exclude controls, and scenario defaults."""
     known = rules.fields
     context = request.scenario.value
+    operation = request.operation or _legacy_operation(request.scenario)
     if request.fields:
         selected = list(request.fields)
     elif request.include:
         selected = [field for field in request.include if field in known]
+    elif request.operation is not None and operation in {
+        OperationType.UPDATE,
+        OperationType.MISSING,
+        OperationType.EMPTY,
+        OperationType.INVALID,
+    }:
+        selected = [name for name in known if name not in rules.keys]
+        if operation == OperationType.MISSING:
+            required = [name for name in selected if known[name].is_required_for(context)]
+            selected = required or selected
+        selected = [Random(seed * 1_000_003 + index).choice(selected)] if selected else []
     elif request.scenario in {
         UpdateScenario.UPDATE_REQUIRED_FIELDS,
         UpdateScenario.MISSING_MULTIPLE_FIELDS,
@@ -98,16 +143,25 @@ def resolve_fields(request: UpdateRequest, rules: EntityRules) -> tuple[str, ...
     selected = [field for field in selected if field not in request.exclude]
     if any(field not in known for field in selected):
         raise ValueError("Update selection contains an unknown field")
-    if (
-        any(field in rules.keys for field in selected)
-        and request.scenario != UpdateScenario.INVALID_KEY
-    ):
+    if any(field in rules.keys for field in selected) and operation != OperationType.INVALID:
         raise ValueError("Matching keys may only be selected by INVALID_KEY")
-    if request.scenario == UpdateScenario.UPDATE_SINGLE_FIELD and len(selected) != 1:
+    if (
+        request.scenario == UpdateScenario.UPDATE_SINGLE_FIELD
+        and not request.operation
+        and len(selected) != 1
+    ):
         raise ValueError("UPDATE_SINGLE_FIELD requires exactly one selected field")
-    if request.scenario == UpdateScenario.MISSING_REQUIRED_FIELD and len(selected) != 1:
+    if (
+        request.scenario == UpdateScenario.MISSING_REQUIRED_FIELD
+        and not request.operation
+        and len(selected) != 1
+    ):
         raise ValueError("MISSING_REQUIRED_FIELD requires exactly one selected field")
-    if request.scenario == UpdateScenario.MISSING_MULTIPLE_FIELDS and len(selected) < 2:
+    if (
+        request.scenario == UpdateScenario.MISSING_MULTIPLE_FIELDS
+        and not request.operation
+        and len(selected) < 2
+    ):
         raise ValueError("MISSING_MULTIPLE_FIELDS requires at least two selected fields")
     if not selected:
         raise ValueError("Update scenario resolved no fields")
@@ -118,26 +172,21 @@ def resolve_update(
     base: Mapping[str, object], request: UpdateRequest, rules: EntityRules, seed: int, index: int
 ) -> ResolvedUpdate:
     """Create one deterministic update from one base record."""
-    selected = resolve_fields(request, rules)
-    if (
-        request.scenario
-        in {
-            UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT,
-            UpdateScenario.CHANGE_WEIGHT_AT_LIMIT,
-            UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED,
-        }
-        and not request.fields
-        and not request.include
-    ):
+    selected = resolve_fields(request, rules, seed, index)
+    operation = request.operation or _legacy_operation(request.scenario)
+    if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
         selection_threshold = request.threshold or rules.methods[0].needed_weight
-        selected = _select_weight_fields(rules, selection_threshold, request.scenario)
+        condition = request.condition or _legacy_condition(request.scenario)
+        if condition is None:
+            raise ValueError("WEIGHT_CHANGE requires BELOW_LIMIT, AT_LIMIT, or ABOVE_LIMIT")
+        selected = _select_weight_fields(rules, selection_threshold, condition)
     original = deepcopy(dict(base))
     result = deepcopy(original)
     changed: list[str] = []
     removed: list[str] = []
     invalidated: list[str] = []
     randomizer = Random(seed * 1_000_003 + index * 97 + 41)
-    if request.scenario in {
+    if operation == OperationType.MISSING or request.scenario in {
         UpdateScenario.MISSING_REQUIRED_FIELD,
         UpdateScenario.MISSING_MULTIPLE_FIELDS,
         UpdateScenario.MISSING_SELECTED_FIELDS,
@@ -146,7 +195,24 @@ def resolve_update(
             if _remove_field(result, field):
                 removed.append(field)
     else:
-        if request.scenario == UpdateScenario.INVALID_KEY:
+        if operation == OperationType.EMPTY:
+            for field in selected:
+                old = _find_field(result, field)
+                empty_value: object = None if old is None else "" if isinstance(old, str) else 0
+                _replace_field(result, field, empty_value)
+                if empty_value != old:
+                    changed.append(field)
+        elif operation == OperationType.INVALID and request.scenario != UpdateScenario.INVALID_KEY:
+            catalog = request.invalid_values or {}
+            for field in selected:
+                values = catalog.get(field)
+                if not values:
+                    raise ValueError(f"INVALID field {field!r} has no invalid-value catalog entry")
+                _replace_field(result, field, randomizer.choice(values))
+                changed.append(field)
+                if field in rules.keys:
+                    invalidated.append(field)
+        elif request.scenario == UpdateScenario.INVALID_KEY:
             for field in selected:
                 _replace_field(
                     result,
@@ -158,7 +224,7 @@ def resolve_update(
         else:
             for field in selected:
                 old = _find_field(result, field)
-                new = _changed_value(old, field, randomizer)
+                new: object = _changed_value(old, field, randomizer)
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
@@ -172,11 +238,20 @@ def resolve_update(
         )
         threshold = method.needed_weight
     relation = _relation(total, threshold)
-    if request.scenario == UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT and relation != "below":
+    condition = request.condition or _legacy_condition(request.scenario)
+    if (
+        operation == OperationType.WEIGHT_CHANGE
+        and condition == "BELOW_LIMIT"
+        and relation != "below"
+    ):
         raise ValueError("Selected fields do not produce a below-threshold update")
-    if request.scenario == UpdateScenario.CHANGE_WEIGHT_AT_LIMIT and relation != "equal":
+    if operation == OperationType.WEIGHT_CHANGE and condition == "AT_LIMIT" and relation != "equal":
         raise ValueError("Selected fields do not produce an at-threshold update")
-    if request.scenario == UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED and relation != "above":
+    if (
+        operation == OperationType.WEIGHT_CHANGE
+        and condition == "ABOVE_LIMIT"
+        and relation != "above"
+    ):
         raise ValueError("Selected fields do not produce an above-threshold update")
     return ResolvedUpdate(
         record=result,
@@ -186,7 +261,7 @@ def resolve_update(
         total_weight=total,
         threshold_relation=relation,
         expected_match=not invalidated,
-        expected_apply=request.scenario != UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED
+        expected_apply=not (operation == OperationType.WEIGHT_CHANGE and condition == "ABOVE_LIMIT")
         and not invalidated,
         synchronized_fields=synchronized,
     )
@@ -234,6 +309,32 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = f"{faker.word().upper()}X"
         return candidate
     return randomizer.randrange(1000, 9999)
+
+
+def _legacy_operation(scenario: UpdateScenario) -> OperationType:
+    if scenario in {
+        UpdateScenario.MISSING_REQUIRED_FIELD,
+        UpdateScenario.MISSING_MULTIPLE_FIELDS,
+        UpdateScenario.MISSING_SELECTED_FIELDS,
+    }:
+        return OperationType.MISSING
+    if scenario == UpdateScenario.INVALID_KEY:
+        return OperationType.INVALID
+    if scenario in {
+        UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT,
+        UpdateScenario.CHANGE_WEIGHT_AT_LIMIT,
+        UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED,
+    }:
+        return OperationType.WEIGHT_CHANGE
+    return OperationType.UPDATE
+
+
+def _legacy_condition(scenario: UpdateScenario) -> str | None:
+    return {
+        UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT: "BELOW_LIMIT",
+        UpdateScenario.CHANGE_WEIGHT_AT_LIMIT: "AT_LIMIT",
+        UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED: "ABOVE_LIMIT",
+    }.get(scenario)
 
 
 def _invalid_key_value(value: object, field: str, index: int) -> object:
@@ -311,15 +412,13 @@ def _relation(total: Decimal, threshold: Decimal) -> str:
 
 
 def _select_weight_fields(
-    rules: EntityRules, threshold: Decimal, scenario: UpdateScenario
+    rules: EntityRules, threshold: Decimal, condition: str
 ) -> tuple[str, ...]:
     """Choose the smallest deterministic field combination for a weight boundary."""
     candidates = tuple(name for name in rules.fields if name not in rules.keys)
-    wanted = {
-        UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT: "below",
-        UpdateScenario.CHANGE_WEIGHT_AT_LIMIT: "equal",
-        UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED: "above",
-    }[scenario]
+    wanted = {"BELOW_LIMIT": "below", "AT_LIMIT": "equal", "ABOVE_LIMIT": "above"}.get(condition)
+    if wanted is None:
+        raise ValueError(f"Unknown WEIGHT_CHANGE condition {condition!r}")
     for size in range(1, len(candidates) + 1):
         for combination in combinations(candidates, size):
             total = sum((rules.fields[name].weight for name in combination), Decimal("0"))

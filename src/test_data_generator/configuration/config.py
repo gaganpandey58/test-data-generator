@@ -76,6 +76,7 @@ class RunConfig:
     rule_catalog: Path | None
     updates_enabled: bool
     update_defaults: Mapping[str, object]
+    invalid_values_catalog: Path | None = None
     nppes_count: int = 0
     nppes_filename: str = "provider_nppes.jsonl"
     provider_linked: bool = False
@@ -171,6 +172,14 @@ def load_config(path: Path) -> RunConfig:
         if isinstance(rule_catalog_value, str)
         else None
     )
+    invalid_catalog_value = update_config.get("invalid_values_catalog")
+    invalid_values_catalog = (
+        _resolve_path(str(invalid_catalog_value), config_path.parent)
+        if isinstance(invalid_catalog_value, str)
+        else Path(__file__).with_name("invalid-values.json")
+    )
+    if not invalid_values_catalog.is_file():
+        raise ConfigurationError(f"Invalid-value catalog does not exist: {invalid_values_catalog}")
     return RunConfig(
         client=client,
         seed=seed,
@@ -182,6 +191,7 @@ def load_config(path: Path) -> RunConfig:
         rule_catalog=rule_catalog,
         updates_enabled=bool(update_config.get("enabled", False)),
         update_defaults=update_config,
+        invalid_values_catalog=invalid_values_catalog,
         nppes_count=nppes_count,
         provider_linked=provider_linked,
     )

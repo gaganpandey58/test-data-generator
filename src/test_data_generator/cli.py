@@ -21,7 +21,12 @@ from test_data_generator.provider_cdf import (
     generate_provider_cdf,
 )
 from test_data_generator.update.rules import load_rule_catalog
-from test_data_generator.update.scenarios import UpdateRequest, UpdateScenario
+from test_data_generator.update.scenarios import (
+    OperationType,
+    UpdateRequest,
+    UpdateScenario,
+    load_invalid_values,
+)
 
 
 class CommandError(RuntimeError):
@@ -157,6 +162,19 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
     except ValueError as error:
         raise CommandError(f"Unknown update scenario {scenario_value!r}") from error
     fields = _string_tuple(raw, "fields")
+    operation_config = raw.get("operation")
+    operation_type = None
+    operation_condition = None
+    if isinstance(operation_config, dict):
+        try:
+            operation_type = OperationType(str(operation_config.get("type", "UPDATE")))
+        except ValueError as error:
+            raise CommandError("Unknown update operation") from error
+        if not fields:
+            fields = _string_tuple(operation_config, "fields")
+        operation_condition = (
+            str(operation_config["condition"]) if "condition" in operation_config else None
+        )
     include = _string_tuple(raw, "include")
     exclude = _string_tuple(raw, "exclude")
     threshold = raw.get("threshold")
@@ -171,6 +189,14 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         exclude=exclude,
         matching_method=str(raw["matching_method"]) if "matching_method" in raw else None,
         threshold=parsed_threshold,
+        operation=operation_type,
+        condition=operation_condition,
+        invalid_values=(
+            load_invalid_values(run_config.invalid_values_catalog)
+            if operation_type == OperationType.INVALID
+            and run_config.invalid_values_catalog is not None
+            else None
+        ),
     )
 
 
