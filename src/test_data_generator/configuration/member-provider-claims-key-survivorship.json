@@ -1,5 +1,4 @@
 {
-  "source_document": "Member_Provider_ClaimsKeysAndSurvivorship(5).docx",
   "catalog_version": "0.9",
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
@@ -7,171 +6,1553 @@
     "member": {
       "profile": "member",
       "source_fields": [
-        "CM_PAYER_SHORT", "CM_MEMBER_CLIENT_ID", "CM_MEMBER_FIRST_NAME", "CM_MEMBER_MIDDLE_NAME", "CM_MEMBER_LAST_NAME",
-        "CM_SUBSCRIBER_BIRTH_DATE", "CM_SUBSCRIBER_GENDER", "CM_MEMBER_BIRTH_DATE", "CM_MEMBER_GENDER", "CM_MEMBER_SSN", "CM_MEMBER_ADDRESS_01",
-        "CM_MEMBER_ADDRESS_02", "CM_MEMBER_ADDRESS_03", "CM_MEMBER_STATE", "CM_MEMBER_ZIP",
-        "CM_SUBSCRIBER_CLIENT_ID", "CM_SUBSCRIBER_LAST_NAME", "CM_SUBSCRIBER_FIRST_NAME",
-        "CM_SUBSCRIBER_MIDDLE_NAME", "CM_SUBSCRIBER_NAME_SUFFIX", "CM_SUBSCRIBER_ADDRESS_01",
-        "CM_SUBSCRIBER_ADDRESS_02", "CM_SUBSCRIBER_CITY", "CM_SUBSCRIBER_STATE", "CM_SUBSCRIBER_ZIP",
-        "CM_PATIENT_LAST_NAME", "CM_PATIENT_FIRST_NAME", "CM_PATIENT_MIDDLE_NAME", "CM_PATIENT_NAME_SUFFIX",
-        "CM_PATIENT_BIRTH_DATE", "CM_PATIENT_GENDER", "CM_PATIENT_ADDRESS_01", "CM_PATIENT_CITY",
-        "CM_PATIENT_STATE", "CM_PATIENT_ZIP"
+        "CM_PAYER_SHORT",
+        "CM_MEMBER_CLIENT_ID",
+        "CM_MEMBER_FIRST_NAME",
+        "CM_MEMBER_MIDDLE_NAME",
+        "CM_MEMBER_LAST_NAME",
+        "CM_SUBSCRIBER_BIRTH_DATE",
+        "CM_SUBSCRIBER_GENDER",
+        "CM_MEMBER_BIRTH_DATE",
+        "CM_MEMBER_GENDER",
+        "CM_MEMBER_SSN",
+        "CM_MEMBER_ADDRESS_01",
+        "CM_MEMBER_ADDRESS_02",
+        "CM_MEMBER_ADDRESS_03",
+        "CM_MEMBER_STATE",
+        "CM_MEMBER_ZIP",
+        "CM_SUBSCRIBER_CLIENT_ID",
+        "CM_SUBSCRIBER_LAST_NAME",
+        "CM_SUBSCRIBER_FIRST_NAME",
+        "CM_SUBSCRIBER_MIDDLE_NAME",
+        "CM_SUBSCRIBER_NAME_SUFFIX",
+        "CM_SUBSCRIBER_ADDRESS_01",
+        "CM_SUBSCRIBER_ADDRESS_02",
+        "CM_SUBSCRIBER_CITY",
+        "CM_SUBSCRIBER_STATE",
+        "CM_SUBSCRIBER_ZIP",
+        "CM_PATIENT_LAST_NAME",
+        "CM_PATIENT_FIRST_NAME",
+        "CM_PATIENT_MIDDLE_NAME",
+        "CM_PATIENT_NAME_SUFFIX",
+        "CM_PATIENT_BIRTH_DATE",
+        "CM_PATIENT_GENDER",
+        "CM_PATIENT_ADDRESS_01",
+        "CM_PATIENT_CITY",
+        "CM_PATIENT_STATE",
+        "CM_PATIENT_ZIP"
       ],
-      "keys": ["CM_MEMBER_CLIENT_ID"],
+      "keys": [
+        "CM_MEMBER_CLIENT_ID"
+      ],
       "matching_methods": [
-        {"name": "member_id_payer", "needed_weight": 2, "fields": ["CM_MEMBER_CLIENT_ID", "CM_PAYER_SHORT"]},
-        {"name": "member_id_dob_gender", "needed_weight": 3, "fields": ["CM_MEMBER_CLIENT_ID", "CM_MEMBER_BIRTH_DATE", "CM_MEMBER_GENDER"]},
-        {"name": "name_dob_gender", "needed_weight": 4, "fields": ["CM_MEMBER_FIRST_NAME", "CM_MEMBER_LAST_NAME", "CM_MEMBER_BIRTH_DATE", "CM_MEMBER_GENDER"]},
-        {"name": "configured_weighted", "needed_weight": 4, "fields": ["CM_MEMBER_FIRST_NAME", "CM_MEMBER_LAST_NAME", "CM_MEMBER_BIRTH_DATE", "CM_MEMBER_SSN", "CM_MEMBER_STATE", "CM_MEMBER_ZIP"]}
+        {
+          "name": "member_id_payer",
+          "needed_weight": 2,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_PAYER_SHORT"
+          ]
+        },
+        {
+          "name": "member_id_dob_gender",
+          "needed_weight": 3,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ]
+        },
+        {
+          "name": "name_dob_gender",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ]
+        },
+        {
+          "name": "configured_weighted",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ]
+        }
       ],
       "fields": {
-        "CM_MEMBER_CLIENT_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CM_PAYER_SHORT": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CM_MEMBER_FIRST_NAME": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven", "required_in": ["name_dob_gender"], "optional_in": ["member_id_payer"]},
-        "CM_MEMBER_MIDDLE_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CM_MEMBER_LAST_NAME": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CM_MEMBER_BIRTH_DATE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CM_MEMBER_GENDER": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CM_MEMBER_SSN": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CM_MEMBER_STATE": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CM_MEMBER_ZIP": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"}
+        "CM_MEMBER_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CM_PAYER_SHORT": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CM_MEMBER_FIRST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "name_dob_gender"
+          ],
+          "optional_in": [
+            "member_id_payer"
+          ]
+        },
+        "CM_MEMBER_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_LAST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_BIRTH_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_GENDER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_SSN": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_STATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_ZIP": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
       }
     },
     "provider": {
       "profile": "provider",
       "source_fields": [
-        "CP_PROVIDER_ENTITY_TYPE", "CP_PROVIDER_CLIENT_ID", "CP_PROVIDER_FIRST_NAME", "CP_PROVIDER_MIDDLE_NAME", "CP_PROVIDER_LAST_NAME",
-        "CP_PROVIDER_FULL_NAME", "CP_PROVIDER_NPI", "CP_PROVIDER_FEDERAL_TAX_ID",
-        "CP_PROVIDER_PRIMARY_SPECIALTY_CODE", "CP_PROVIDER_ADDRESS_01", "CP_PROVIDER_ADDRESS_02",
-        "CP_PROVIDER_ADDRESS_03", "CP_PROVIDER_STATE", "CP_PROVIDER_ZIP", "CP_PROVIDER_TAXONOMY_CODE", "CP_PROVIDER_BILLING_GROUP_NAME"
+        "CP_PROVIDER_ENTITY_TYPE",
+        "CP_PROVIDER_CLIENT_ID",
+        "CP_PROVIDER_FIRST_NAME",
+        "CP_PROVIDER_MIDDLE_NAME",
+        "CP_PROVIDER_LAST_NAME",
+        "CP_PROVIDER_FULL_NAME",
+        "CP_PROVIDER_NPI",
+        "CP_PROVIDER_FEDERAL_TAX_ID",
+        "CP_PROVIDER_PRIMARY_SPECIALTY_CODE",
+        "CP_PROVIDER_ADDRESS_01",
+        "CP_PROVIDER_ADDRESS_02",
+        "CP_PROVIDER_ADDRESS_03",
+        "CP_PROVIDER_STATE",
+        "CP_PROVIDER_ZIP",
+        "CP_PROVIDER_TAXONOMY_CODE",
+        "CP_PROVIDER_BILLING_GROUP_NAME"
       ],
-      "keys": ["CP_PROVIDER_NPI", "CP_PROVIDER_FEDERAL_TAX_ID", "CP_PROVIDER_CLIENT_ID"],
+      "keys": [
+        "CP_PROVIDER_NPI",
+        "CP_PROVIDER_FEDERAL_TAX_ID",
+        "CP_PROVIDER_CLIENT_ID"
+      ],
       "matching_methods": [
-        {"name": "deterministic_provider", "needed_weight": 1, "fields": ["CP_PROVIDER_NPI", "CP_PROVIDER_FEDERAL_TAX_ID", "CP_PROVIDER_CLIENT_ID"]},
-        {"name": "provider_name_taxonomy", "needed_weight": 3, "fields": ["CP_PROVIDER_LAST_NAME", "CP_PROVIDER_FIRST_NAME", "CP_PROVIDER_TAXONOMY_CODE", "CP_PROVIDER_ZIP"]},
-        {"name": "provider_org_taxonomy", "needed_weight": 2, "fields": ["CP_PROVIDER_BILLING_GROUP_NAME", "CP_PROVIDER_TAXONOMY_CODE", "CP_PROVIDER_ZIP"]}
+        {
+          "name": "deterministic_provider",
+          "needed_weight": 1,
+          "fields": [
+            "CP_PROVIDER_NPI",
+            "CP_PROVIDER_FEDERAL_TAX_ID",
+            "CP_PROVIDER_CLIENT_ID"
+          ]
+        },
+        {
+          "name": "provider_name_taxonomy",
+          "needed_weight": 3,
+          "fields": [
+            "CP_PROVIDER_LAST_NAME",
+            "CP_PROVIDER_FIRST_NAME",
+            "CP_PROVIDER_TAXONOMY_CODE",
+            "CP_PROVIDER_ZIP"
+          ]
+        },
+        {
+          "name": "provider_org_taxonomy",
+          "needed_weight": 2,
+          "fields": [
+            "CP_PROVIDER_BILLING_GROUP_NAME",
+            "CP_PROVIDER_TAXONOMY_CODE",
+            "CP_PROVIDER_ZIP"
+          ]
+        }
       ],
       "fields": {
-        "CP_PROVIDER_NPI": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CP_PROVIDER_FEDERAL_TAX_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CP_PROVIDER_CLIENT_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CP_PROVIDER_FIRST_NAME": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven", "required_in": ["provider_name_taxonomy"], "optional_in": ["provider_org_taxonomy"]},
-        "CP_PROVIDER_MIDDLE_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CP_PROVIDER_LAST_NAME": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CP_PROVIDER_BILLING_GROUP_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CP_PROVIDER_TAXONOMY_CODE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CP_PROVIDER_ZIP": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"}
+        "CP_PROVIDER_NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CP_PROVIDER_FEDERAL_TAX_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CP_PROVIDER_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CP_PROVIDER_FIRST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "provider_name_taxonomy"
+          ],
+          "optional_in": [
+            "provider_org_taxonomy"
+          ]
+        },
+        "CP_PROVIDER_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_LAST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_BILLING_GROUP_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_TAXONOMY_CODE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_ZIP": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
       }
     },
     "claim_professional": {
       "profile": "claim-professional",
       "source_fields": [
-        "CH_PATIENT_CLIENT_ID", "CD_SERVICE_FROM_DATE", "CD_SERVICE_TO_DATE", "CH_CLAIM_SERVICE_FROM_DATE",
-        "CH_CLAIM_SERVICE_TO_DATE", "CH_BILLING_PROVIDER_NPI", "CH_RENDERING_PROVIDER_NPI", "CH_PATIENT_FIRST_NAME",
-        "CD_PLACE_OF_SERVICE_CODE", "CH_CLAIM_FREQUENCY_CODE", "CH_DIAGNOSIS_CODE_01",
-        "CD_SUBMITTED_REVENUE_CODE", "CH_BILLING_PROVIDER_CLAIM_ID", "CH_PAYER_ORGANIZATION_NAME",
-        "CH_CLIENT_CLAIM_ID", "CH_CLIENT_ORIGINAL_CLAIM_ID", "CH_PLACE_OF_SERVICE_CODE",
-        "CH_TYPE_OF_BILL_CODE", "CH_BILLING_PROVIDER_FEDERAL_TAX_ID", "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
-        "CH_SUBSCRIBER_CLIENT_ID", "CH_CHARGE_AMOUNT", "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-        "CD_SUBMITTED_PROCEDURE_CODE", "CD_SUBMITTED_PROCEDURE_MODIFIER_01", "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-        "CD_SUBMITTED_PROCEDURE_MODIFIER_03", "CD_SUBMITTED_PROCEDURE_MODIFIER_04", "CD_CHARGE_AMOUNT",
-        "CH_CLAIM_PAID_DATE", "CD_LINE_PAID_DATE", "CH_ALLOWED_AMOUNT", "CH_COINSURANCE_AMOUNT",
-        "CH_COPAY_AMOUNT", "CH_DEDUCTIBLE_AMOUNT", "CH_PATIENT_LIABILITY_AMOUNT", "CH_PAID_AMOUNT",
-        "CH_PATIENT_RESPONSIBILITY_AMOUNT", "CH_DENIED_AMOUNT", "CH_DISALLOWED_AMOUNT",
-        "CH_NON_COVERED_AMOUNT", "CH_CONTRACT_AMOUNT", "CH_PRIOR_PAYMENT_AMOUNT", "CD_ALLOWED_AMOUNT",
-        "CD_COINSURANCE_AMOUNT", "CD_COPAY_AMOUNT", "CD_DEDUCTIBLE_AMOUNT", "CD_PATIENT_LIABILITY_AMOUNT",
-        "CD_PAID_AMOUNT", "CD_DENIED_AMOUNT", "CD_DISALLOWED_AMOUNT", "CD_NON_COVERED_AMOUNT",
-        "CD_DISCOUNT_AMOUNT", "CD_OTHER_REDUCTION_AMOUNT", "CH_PATIENT_ADDRESS_01", "CH_PATIENT_BIRTH_DATE",
-        "CH_PATIENT_CITY", "CH_PATIENT_GENDER", "CH_PATIENT_LAST_NAME", "CH_PATIENT_MIDDLE_NAME",
-        "CH_PATIENT_NAME_SUFFIX", "CH_PATIENT_STATE", "CH_PATIENT_ZIP", "CH_SUBSCRIBER_ADDRESS_01",
-        "CH_SUBSCRIBER_ADDRESS_02", "CH_SUBSCRIBER_BIRTH_DATE", "CH_SUBSCRIBER_CITY",
-        "CH_SUBSCRIBER_FIRST_NAME", "CH_SUBSCRIBER_GENDER", "CH_SUBSCRIBER_LAST_NAME",
-        "CH_SUBSCRIBER_MIDDLE_NAME", "CH_SUBSCRIBER_NAME_SUFFIX", "CH_SUBSCRIBER_STATE", "CH_SUBSCRIBER_ZIP"
+        "CH_PATIENT_CLIENT_ID",
+        "CD_SERVICE_FROM_DATE",
+        "CD_SERVICE_TO_DATE",
+        "CH_CLAIM_SERVICE_FROM_DATE",
+        "CH_CLAIM_SERVICE_TO_DATE",
+        "CH_BILLING_PROVIDER_NPI",
+        "CH_RENDERING_PROVIDER_NPI",
+        "CH_PATIENT_FIRST_NAME",
+        "CD_PLACE_OF_SERVICE_CODE",
+        "CH_CLAIM_FREQUENCY_CODE",
+        "CH_DIAGNOSIS_CODE_01",
+        "CD_SUBMITTED_REVENUE_CODE",
+        "CH_BILLING_PROVIDER_CLAIM_ID",
+        "CH_PAYER_ORGANIZATION_NAME",
+        "CH_CLIENT_CLAIM_ID",
+        "CH_CLIENT_ORIGINAL_CLAIM_ID",
+        "CH_PLACE_OF_SERVICE_CODE",
+        "CH_TYPE_OF_BILL_CODE",
+        "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+        "CH_SUBSCRIBER_CLIENT_ID",
+        "CH_CHARGE_AMOUNT",
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+        "CD_SUBMITTED_PROCEDURE_CODE",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+        "CD_CHARGE_AMOUNT",
+        "CH_CLAIM_PAID_DATE",
+        "CD_LINE_PAID_DATE",
+        "CH_ALLOWED_AMOUNT",
+        "CH_COINSURANCE_AMOUNT",
+        "CH_COPAY_AMOUNT",
+        "CH_DEDUCTIBLE_AMOUNT",
+        "CH_PATIENT_LIABILITY_AMOUNT",
+        "CH_PAID_AMOUNT",
+        "CH_PATIENT_RESPONSIBILITY_AMOUNT",
+        "CH_DENIED_AMOUNT",
+        "CH_DISALLOWED_AMOUNT",
+        "CH_NON_COVERED_AMOUNT",
+        "CH_CONTRACT_AMOUNT",
+        "CH_PRIOR_PAYMENT_AMOUNT",
+        "CD_ALLOWED_AMOUNT",
+        "CD_COINSURANCE_AMOUNT",
+        "CD_COPAY_AMOUNT",
+        "CD_DEDUCTIBLE_AMOUNT",
+        "CD_PATIENT_LIABILITY_AMOUNT",
+        "CD_PAID_AMOUNT",
+        "CD_DENIED_AMOUNT",
+        "CD_DISALLOWED_AMOUNT",
+        "CD_NON_COVERED_AMOUNT",
+        "CD_DISCOUNT_AMOUNT",
+        "CD_OTHER_REDUCTION_AMOUNT",
+        "CH_PATIENT_ADDRESS_01",
+        "CH_PATIENT_BIRTH_DATE",
+        "CH_PATIENT_CITY",
+        "CH_PATIENT_GENDER",
+        "CH_PATIENT_LAST_NAME",
+        "CH_PATIENT_MIDDLE_NAME",
+        "CH_PATIENT_NAME_SUFFIX",
+        "CH_PATIENT_STATE",
+        "CH_PATIENT_ZIP",
+        "CH_SUBSCRIBER_ADDRESS_01",
+        "CH_SUBSCRIBER_ADDRESS_02",
+        "CH_SUBSCRIBER_BIRTH_DATE",
+        "CH_SUBSCRIBER_CITY",
+        "CH_SUBSCRIBER_FIRST_NAME",
+        "CH_SUBSCRIBER_GENDER",
+        "CH_SUBSCRIBER_LAST_NAME",
+        "CH_SUBSCRIBER_MIDDLE_NAME",
+        "CH_SUBSCRIBER_NAME_SUFFIX",
+        "CH_SUBSCRIBER_STATE",
+        "CH_SUBSCRIBER_ZIP"
       ],
-      "keys": ["CH_CLIENT_CLAIM_ID", "CH_PATIENT_CLIENT_ID", "CH_BILLING_PROVIDER_NPI"],
+      "keys": [
+        "CH_CLIENT_CLAIM_ID",
+        "CH_PATIENT_CLIENT_ID",
+        "CH_BILLING_PROVIDER_NPI"
+      ],
       "matching_methods": [
-        {"name": "professional_claim_primary", "needed_weight": 4, "fields": ["CH_PATIENT_CLIENT_ID", "CH_CLAIM_SERVICE_FROM_DATE", "CH_CLAIM_SERVICE_TO_DATE", "CH_BILLING_PROVIDER_NPI", "CH_PATIENT_ACCOUNT_CONTROL_NUMBER", "CH_CHARGE_AMOUNT"]},
-        {"name": "professional_claim_fallback", "needed_weight": 3, "fields": ["CH_PATIENT_CLIENT_ID", "CH_CLAIM_SERVICE_FROM_DATE", "CH_BILLING_PROVIDER_NPI", "CH_CLAIM_FREQUENCY_CODE"]}
+        {
+          "name": "professional_claim_primary",
+          "needed_weight": 4,
+          "fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+            "CH_CHARGE_AMOUNT"
+          ]
+        },
+        {
+          "name": "professional_claim_fallback",
+          "needed_weight": 3,
+          "fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_CLAIM_FREQUENCY_CODE"
+          ]
+        }
       ],
       "fields": {
-        "CH_CLIENT_CLAIM_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CH_PATIENT_CLIENT_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CH_BILLING_PROVIDER_NPI": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CH_PATIENT_FIRST_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven", "required_in": ["professional_claim_primary"], "optional_in": ["professional_claim_fallback"]},
-        "CH_PATIENT_MIDDLE_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_PATIENT_LAST_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CLAIM_SERVICE_FROM_DATE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CLAIM_SERVICE_TO_DATE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CLAIM_FREQUENCY_CODE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CHARGE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_CHARGE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_ALLOWED_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_ALLOWED_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_COINSURANCE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_COINSURANCE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_COPAY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_COPAY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_DEDUCTIBLE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_DEDUCTIBLE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_PATIENT_LIABILITY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_PATIENT_LIABILITY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_PAID_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"}
+        "CH_CLIENT_CLAIM_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CH_PATIENT_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CH_BILLING_PROVIDER_NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CH_PATIENT_FIRST_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "professional_claim_primary"
+          ],
+          "optional_in": [
+            "professional_claim_fallback"
+          ]
+        },
+        "CH_PATIENT_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_PATIENT_LAST_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_SERVICE_FROM_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_SERVICE_TO_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_FREQUENCY_CODE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PAID_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        }
       }
     },
     "claim_institutional": {
       "profile": "claim-institutional",
       "source_fields": [
-        "CH_PATIENT_CLIENT_ID", "CH_CLAIM_SERVICE_FROM_DATE", "CH_CLAIM_SERVICE_TO_DATE", "CH_PATIENT_FIRST_NAME",
-        "CH_BILLING_PROVIDER_NPI", "CH_CLAIM_FREQUENCY_CODE", "CH_TYPE_OF_BILL_CODE",
-        "CH_DIAGNOSIS_CODE_01", "CH_PATIENT_ACCOUNT_CONTROL_NUMBER", "CH_SUBSCRIBER_CLIENT_ID",
-        "CH_CHARGE_AMOUNT", "CH_CLIENT_CLAIM_ID", "CH_CLIENT_ORIGINAL_CLAIM_ID",
-        "CH_PLACE_OF_SERVICE_CODE", "CH_BILLING_PROVIDER_FEDERAL_TAX_ID", "CH_RENDERING_PROVIDER_NPI",
-        "CD_SERVICE_FROM_DATE", "CD_SERVICE_TO_DATE", "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-        "CD_SUBMITTED_PROCEDURE_CODE", "CD_SUBMITTED_PROCEDURE_MODIFIER_01", "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-        "CD_SUBMITTED_PROCEDURE_MODIFIER_03", "CD_SUBMITTED_PROCEDURE_MODIFIER_04", "CD_SUBMITTED_REVENUE_CODE",
-        "CD_CHARGE_AMOUNT", "CH_CLAIM_PAID_DATE", "CD_LINE_PAID_DATE", "CH_ALLOWED_AMOUNT",
-        "CH_COINSURANCE_AMOUNT", "CH_COPAY_AMOUNT", "CH_DEDUCTIBLE_AMOUNT", "CH_PATIENT_LIABILITY_AMOUNT",
-        "CH_PAID_AMOUNT", "CH_PATIENT_RESPONSIBILITY_AMOUNT", "CH_DENIED_AMOUNT", "CH_DISALLOWED_AMOUNT",
-        "CH_NON_COVERED_AMOUNT", "CH_CONTRACT_AMOUNT", "CH_PRIOR_PAYMENT_AMOUNT", "CD_ALLOWED_AMOUNT",
-        "CD_COINSURANCE_AMOUNT", "CD_COPAY_AMOUNT", "CD_DEDUCTIBLE_AMOUNT", "CD_PATIENT_LIABILITY_AMOUNT",
-        "CD_PAID_AMOUNT", "CD_DENIED_AMOUNT", "CD_DISALLOWED_AMOUNT", "CD_NON_COVERED_AMOUNT",
-        "CD_DISCOUNT_AMOUNT", "CD_OTHER_REDUCTION_AMOUNT", "CH_PATIENT_ADDRESS_01", "CH_PATIENT_BIRTH_DATE",
-        "CH_PATIENT_CITY", "CH_PATIENT_GENDER", "CH_PATIENT_LAST_NAME", "CH_PATIENT_MIDDLE_NAME",
-        "CH_PATIENT_NAME_SUFFIX", "CH_PATIENT_STATE", "CH_PATIENT_ZIP", "CH_SUBSCRIBER_ADDRESS_01",
-        "CH_SUBSCRIBER_ADDRESS_02", "CH_SUBSCRIBER_BIRTH_DATE", "CH_SUBSCRIBER_CITY",
-        "CH_SUBSCRIBER_FIRST_NAME", "CH_SUBSCRIBER_GENDER", "CH_SUBSCRIBER_LAST_NAME",
-        "CH_SUBSCRIBER_MIDDLE_NAME", "CH_SUBSCRIBER_NAME_SUFFIX", "CH_SUBSCRIBER_STATE", "CH_SUBSCRIBER_ZIP"
+        "CH_PATIENT_CLIENT_ID",
+        "CH_CLAIM_SERVICE_FROM_DATE",
+        "CH_CLAIM_SERVICE_TO_DATE",
+        "CH_PATIENT_FIRST_NAME",
+        "CH_BILLING_PROVIDER_NPI",
+        "CH_CLAIM_FREQUENCY_CODE",
+        "CH_TYPE_OF_BILL_CODE",
+        "CH_DIAGNOSIS_CODE_01",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+        "CH_SUBSCRIBER_CLIENT_ID",
+        "CH_CHARGE_AMOUNT",
+        "CH_CLIENT_CLAIM_ID",
+        "CH_CLIENT_ORIGINAL_CLAIM_ID",
+        "CH_PLACE_OF_SERVICE_CODE",
+        "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+        "CH_RENDERING_PROVIDER_NPI",
+        "CD_SERVICE_FROM_DATE",
+        "CD_SERVICE_TO_DATE",
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+        "CD_SUBMITTED_PROCEDURE_CODE",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+        "CD_SUBMITTED_REVENUE_CODE",
+        "CD_CHARGE_AMOUNT",
+        "CH_CLAIM_PAID_DATE",
+        "CD_LINE_PAID_DATE",
+        "CH_ALLOWED_AMOUNT",
+        "CH_COINSURANCE_AMOUNT",
+        "CH_COPAY_AMOUNT",
+        "CH_DEDUCTIBLE_AMOUNT",
+        "CH_PATIENT_LIABILITY_AMOUNT",
+        "CH_PAID_AMOUNT",
+        "CH_PATIENT_RESPONSIBILITY_AMOUNT",
+        "CH_DENIED_AMOUNT",
+        "CH_DISALLOWED_AMOUNT",
+        "CH_NON_COVERED_AMOUNT",
+        "CH_CONTRACT_AMOUNT",
+        "CH_PRIOR_PAYMENT_AMOUNT",
+        "CD_ALLOWED_AMOUNT",
+        "CD_COINSURANCE_AMOUNT",
+        "CD_COPAY_AMOUNT",
+        "CD_DEDUCTIBLE_AMOUNT",
+        "CD_PATIENT_LIABILITY_AMOUNT",
+        "CD_PAID_AMOUNT",
+        "CD_DENIED_AMOUNT",
+        "CD_DISALLOWED_AMOUNT",
+        "CD_NON_COVERED_AMOUNT",
+        "CD_DISCOUNT_AMOUNT",
+        "CD_OTHER_REDUCTION_AMOUNT",
+        "CH_PATIENT_ADDRESS_01",
+        "CH_PATIENT_BIRTH_DATE",
+        "CH_PATIENT_CITY",
+        "CH_PATIENT_GENDER",
+        "CH_PATIENT_LAST_NAME",
+        "CH_PATIENT_MIDDLE_NAME",
+        "CH_PATIENT_NAME_SUFFIX",
+        "CH_PATIENT_STATE",
+        "CH_PATIENT_ZIP",
+        "CH_SUBSCRIBER_ADDRESS_01",
+        "CH_SUBSCRIBER_ADDRESS_02",
+        "CH_SUBSCRIBER_BIRTH_DATE",
+        "CH_SUBSCRIBER_CITY",
+        "CH_SUBSCRIBER_FIRST_NAME",
+        "CH_SUBSCRIBER_GENDER",
+        "CH_SUBSCRIBER_LAST_NAME",
+        "CH_SUBSCRIBER_MIDDLE_NAME",
+        "CH_SUBSCRIBER_NAME_SUFFIX",
+        "CH_SUBSCRIBER_STATE",
+        "CH_SUBSCRIBER_ZIP"
       ],
-      "keys": ["CH_CLIENT_CLAIM_ID", "CH_PATIENT_CLIENT_ID", "CH_BILLING_PROVIDER_NPI"],
+      "keys": [
+        "CH_CLIENT_CLAIM_ID",
+        "CH_PATIENT_CLIENT_ID",
+        "CH_BILLING_PROVIDER_NPI"
+      ],
       "matching_methods": [
-        {"name": "institutional_claim_primary", "needed_weight": 4, "fields": ["CH_PATIENT_CLIENT_ID", "CH_TYPE_OF_BILL_CODE", "CH_CLAIM_SERVICE_FROM_DATE", "CH_CLAIM_SERVICE_TO_DATE", "CH_BILLING_PROVIDER_NPI", "CH_PATIENT_ACCOUNT_CONTROL_NUMBER", "CH_CHARGE_AMOUNT"]},
-        {"name": "institutional_claim_fallback", "needed_weight": 3, "fields": ["CH_PATIENT_CLIENT_ID", "CH_TYPE_OF_BILL_CODE", "CH_CLAIM_SERVICE_FROM_DATE", "CH_BILLING_PROVIDER_NPI"]}
+        {
+          "name": "institutional_claim_primary",
+          "needed_weight": 4,
+          "fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_TYPE_OF_BILL_CODE",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+            "CH_CHARGE_AMOUNT"
+          ]
+        },
+        {
+          "name": "institutional_claim_fallback",
+          "needed_weight": 3,
+          "fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_TYPE_OF_BILL_CODE",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_BILLING_PROVIDER_NPI"
+          ]
+        }
       ],
       "fields": {
-        "CH_CLIENT_CLAIM_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CH_PATIENT_CLIENT_ID": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CH_BILLING_PROVIDER_NPI": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "preserve_key"},
-        "CH_PATIENT_FIRST_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven", "required_in": ["institutional_claim_primary"], "optional_in": ["institutional_claim_fallback"]},
-        "CH_PATIENT_MIDDLE_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_PATIENT_LAST_NAME": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_TYPE_OF_BILL_CODE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CLAIM_SERVICE_FROM_DATE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CLAIM_SERVICE_TO_DATE": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": {"required": true, "weight": 1, "elasticity": "0", "survivorship": "source_driven"},
-        "CH_CHARGE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_CHARGE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_ALLOWED_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_ALLOWED_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_COINSURANCE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_COINSURANCE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_COPAY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_COPAY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_DEDUCTIBLE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_DEDUCTIBLE_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_PATIENT_LIABILITY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CD_PATIENT_LIABILITY_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"},
-        "CH_PAID_AMOUNT": {"required": false, "weight": 1, "elasticity": "0", "survivorship": "replace"}
+        "CH_CLIENT_CLAIM_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CH_PATIENT_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CH_BILLING_PROVIDER_NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CH_PATIENT_FIRST_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "institutional_claim_primary"
+          ],
+          "optional_in": [
+            "institutional_claim_fallback"
+          ]
+        },
+        "CH_PATIENT_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_PATIENT_LAST_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_TYPE_OF_BILL_CODE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_SERVICE_FROM_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_SERVICE_TO_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PAID_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        }
+      }
+    },
+    "payment_professional": {
+      "profile": "payment-professional",
+      "source_fields": [
+        "CH_PATIENT_CLIENT_ID",
+        "CH_CLAIM_SERVICE_FROM_DATE",
+        "CH_CLAIM_SERVICE_TO_DATE",
+        "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+        "CH_BILLING_PROVIDER_NPI",
+        "CH_RENDERING_PROVIDER_NPI",
+        "CH_SUBSCRIBER_CLIENT_ID",
+        "CH_CLAIM_FREQUENCY_CODE",
+        "CH_CHARGE_AMOUNT",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+        "CH_CLAIM_PAID_DATE",
+        "CH_ALLOWED_AMOUNT",
+        "CH_COINSURANCE_AMOUNT",
+        "CH_COPAY_AMOUNT",
+        "CH_DEDUCTIBLE_AMOUNT",
+        "CH_PATIENT_LIABILITY_AMOUNT",
+        "CH_PAID_AMOUNT",
+        "CH_PATIENT_RESPONSIBILITY_AMOUNT",
+        "CH_DENIED_AMOUNT",
+        "CH_DISALLOWED_AMOUNT",
+        "CH_NON_COVERED_AMOUNT",
+        "CH_CONTRACT_AMOUNT",
+        "CH_PRIOR_PAYMENT_AMOUNT",
+        "CD_LINE_PAID_DATE",
+        "CD_SERVICE_FROM_DATE",
+        "CD_SERVICE_TO_DATE",
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+        "CD_SUBMITTED_PROCEDURE_CODE",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+        "CD_CHARGE_AMOUNT",
+        "CD_ALLOWED_AMOUNT",
+        "CD_COINSURANCE_AMOUNT",
+        "CD_COPAY_AMOUNT",
+        "CD_DEDUCTIBLE_AMOUNT",
+        "CD_PATIENT_LIABILITY_AMOUNT",
+        "CD_PAID_AMOUNT",
+        "CD_DENIED_AMOUNT",
+        "CD_DISALLOWED_AMOUNT",
+        "CD_NON_COVERED_AMOUNT",
+        "CD_DISCOUNT_AMOUNT",
+        "CD_OTHER_REDUCTION_AMOUNT",
+        "CH_PLACE_OF_SERVICE_CODE",
+        "CH_DIAGNOSIS_CODE_01"
+      ],
+      "keys": [
+        "CH_PATIENT_CLIENT_ID",
+        "CH_BILLING_PROVIDER_NPI",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+      ],
+      "matching_methods": [
+        {
+          "name": "professional_payment_match",
+          "needed_weight": 1,
+          "fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE",
+            "CH_CHARGE_AMOUNT",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+            "CH_CLAIM_PAID_DATE",
+            "CH_ALLOWED_AMOUNT",
+            "CH_COINSURANCE_AMOUNT",
+            "CH_COPAY_AMOUNT",
+            "CH_DEDUCTIBLE_AMOUNT",
+            "CH_PATIENT_LIABILITY_AMOUNT",
+            "CH_PAID_AMOUNT",
+            "CH_PATIENT_RESPONSIBILITY_AMOUNT",
+            "CH_DENIED_AMOUNT",
+            "CH_DISALLOWED_AMOUNT",
+            "CH_NON_COVERED_AMOUNT",
+            "CH_CONTRACT_AMOUNT",
+            "CH_PRIOR_PAYMENT_AMOUNT",
+            "CD_LINE_PAID_DATE",
+            "CD_SERVICE_FROM_DATE",
+            "CD_SERVICE_TO_DATE",
+            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+            "CD_SUBMITTED_PROCEDURE_CODE",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+            "CD_CHARGE_AMOUNT",
+            "CD_ALLOWED_AMOUNT",
+            "CD_COINSURANCE_AMOUNT",
+            "CD_COPAY_AMOUNT",
+            "CD_DEDUCTIBLE_AMOUNT",
+            "CD_PATIENT_LIABILITY_AMOUNT",
+            "CD_PAID_AMOUNT",
+            "CD_DENIED_AMOUNT",
+            "CD_DISALLOWED_AMOUNT",
+            "CD_NON_COVERED_AMOUNT",
+            "CD_DISCOUNT_AMOUNT",
+            "CD_OTHER_REDUCTION_AMOUNT",
+            "CH_PLACE_OF_SERVICE_CODE",
+            "CH_DIAGNOSIS_CODE_01"
+          ]
+        }
+      ],
+      "fields": {
+        "CH_PATIENT_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_SERVICE_FROM_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_CLAIM_SERVICE_TO_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_BILLING_PROVIDER_FEDERAL_TAX_ID": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_BILLING_PROVIDER_NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_RENDERING_PROVIDER_NPI": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_SUBSCRIBER_CLIENT_ID": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_FREQUENCY_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_PAID_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PAID_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_RESPONSIBILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DENIED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DISALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_NON_COVERED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_CONTRACT_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PRIOR_PAYMENT_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_LINE_PAID_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_SERVICE_FROM_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_SERVICE_TO_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_PAID_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DENIED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DISALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_NON_COVERED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DISCOUNT_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_OTHER_REDUCTION_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PLACE_OF_SERVICE_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_DIAGNOSIS_CODE_01": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
+      }
+    },
+    "payment_institutional": {
+      "profile": "payment-institutional",
+      "source_fields": [
+        "CH_PATIENT_CLIENT_ID",
+        "CH_CLAIM_SERVICE_FROM_DATE",
+        "CH_CLAIM_SERVICE_TO_DATE",
+        "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+        "CH_BILLING_PROVIDER_NPI",
+        "CH_RENDERING_PROVIDER_NPI",
+        "CH_SUBSCRIBER_CLIENT_ID",
+        "CH_CLAIM_FREQUENCY_CODE",
+        "CH_CHARGE_AMOUNT",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+        "CH_CLAIM_PAID_DATE",
+        "CH_ALLOWED_AMOUNT",
+        "CH_COINSURANCE_AMOUNT",
+        "CH_COPAY_AMOUNT",
+        "CH_DEDUCTIBLE_AMOUNT",
+        "CH_PATIENT_LIABILITY_AMOUNT",
+        "CH_PAID_AMOUNT",
+        "CH_PATIENT_RESPONSIBILITY_AMOUNT",
+        "CH_DENIED_AMOUNT",
+        "CH_DISALLOWED_AMOUNT",
+        "CH_NON_COVERED_AMOUNT",
+        "CH_CONTRACT_AMOUNT",
+        "CH_PRIOR_PAYMENT_AMOUNT",
+        "CD_LINE_PAID_DATE",
+        "CD_SERVICE_FROM_DATE",
+        "CD_SERVICE_TO_DATE",
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+        "CD_SUBMITTED_PROCEDURE_CODE",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+        "CD_CHARGE_AMOUNT",
+        "CD_ALLOWED_AMOUNT",
+        "CD_COINSURANCE_AMOUNT",
+        "CD_COPAY_AMOUNT",
+        "CD_DEDUCTIBLE_AMOUNT",
+        "CD_PATIENT_LIABILITY_AMOUNT",
+        "CD_PAID_AMOUNT",
+        "CD_DENIED_AMOUNT",
+        "CD_DISALLOWED_AMOUNT",
+        "CD_NON_COVERED_AMOUNT",
+        "CD_DISCOUNT_AMOUNT",
+        "CD_OTHER_REDUCTION_AMOUNT",
+        "CH_TYPE_OF_BILL_CODE",
+        "CD_SUBMITTED_REVENUE_CODE"
+      ],
+      "keys": [
+        "CH_PATIENT_CLIENT_ID",
+        "CH_BILLING_PROVIDER_NPI",
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+      ],
+      "matching_methods": [
+        {
+          "name": "institutional_payment_match",
+          "needed_weight": 1,
+          "fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE",
+            "CH_CHARGE_AMOUNT",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+            "CH_CLAIM_PAID_DATE",
+            "CH_ALLOWED_AMOUNT",
+            "CH_COINSURANCE_AMOUNT",
+            "CH_COPAY_AMOUNT",
+            "CH_DEDUCTIBLE_AMOUNT",
+            "CH_PATIENT_LIABILITY_AMOUNT",
+            "CH_PAID_AMOUNT",
+            "CH_PATIENT_RESPONSIBILITY_AMOUNT",
+            "CH_DENIED_AMOUNT",
+            "CH_DISALLOWED_AMOUNT",
+            "CH_NON_COVERED_AMOUNT",
+            "CH_CONTRACT_AMOUNT",
+            "CH_PRIOR_PAYMENT_AMOUNT",
+            "CD_LINE_PAID_DATE",
+            "CD_SERVICE_FROM_DATE",
+            "CD_SERVICE_TO_DATE",
+            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+            "CD_SUBMITTED_PROCEDURE_CODE",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+            "CD_CHARGE_AMOUNT",
+            "CD_ALLOWED_AMOUNT",
+            "CD_COINSURANCE_AMOUNT",
+            "CD_COPAY_AMOUNT",
+            "CD_DEDUCTIBLE_AMOUNT",
+            "CD_PATIENT_LIABILITY_AMOUNT",
+            "CD_PAID_AMOUNT",
+            "CD_DENIED_AMOUNT",
+            "CD_DISALLOWED_AMOUNT",
+            "CD_NON_COVERED_AMOUNT",
+            "CD_DISCOUNT_AMOUNT",
+            "CD_OTHER_REDUCTION_AMOUNT",
+            "CH_TYPE_OF_BILL_CODE",
+            "CD_SUBMITTED_REVENUE_CODE"
+          ]
+        }
+      ],
+      "fields": {
+        "CH_PATIENT_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_SERVICE_FROM_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_CLAIM_SERVICE_TO_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_BILLING_PROVIDER_FEDERAL_TAX_ID": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_BILLING_PROVIDER_NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_RENDERING_PROVIDER_NPI": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_SUBSCRIBER_CLIENT_ID": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_FREQUENCY_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CH_CLAIM_PAID_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PAID_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PATIENT_RESPONSIBILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DENIED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_DISALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_NON_COVERED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_CONTRACT_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_PRIOR_PAYMENT_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_LINE_PAID_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_SERVICE_FROM_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_SERVICE_TO_DATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_CHARGE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_ALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COINSURANCE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_COPAY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DEDUCTIBLE_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_PATIENT_LIABILITY_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_PAID_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DENIED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DISALLOWED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_NON_COVERED_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_DISCOUNT_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CD_OTHER_REDUCTION_AMOUNT": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "replace"
+        },
+        "CH_TYPE_OF_BILL_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CD_SUBMITTED_REVENUE_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
       }
     }
   }

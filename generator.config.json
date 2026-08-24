@@ -34,5 +34,9 @@
       "count": 1,
       "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
     }
+  },
+  "payments": {
+    "professional": {"count": 0},
+    "institutional": {"count": 0}
   }
 }

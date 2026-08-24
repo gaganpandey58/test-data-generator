@@ -17,6 +17,8 @@ _ENTITY_LAYOUTS = {
     "member": "member",
     "claim_professional": "claim-professional",
     "claim_institutional": "claim-institutional",
+    "payment_professional": "payment-professional",
+    "payment_institutional": "payment-institutional",
 }
 
 
@@ -99,7 +101,11 @@ def _section(client: str, section: str, entity: str) -> Mapping[str, object]:
     profiles = _profiles()
     try:
         profile = profiles[client]
-        value = profile[section][entity]  # type: ignore[index]
+        source_entity = {
+            "payment_professional": "claim_professional",
+            "payment_institutional": "claim_institutional",
+        }.get(entity, entity)
+        value = profile[section][source_entity]  # type: ignore[index]
     except (KeyError, TypeError) as error:
         raise ValueError(f"Unknown or incomplete client profile {client!r}") from error
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):

@@ -1,6 +1,6 @@
 # Test Data Generator
 
-Generate deterministic, test healthcare JSON Lines (JSONL) data for providers, members, professional claims, and institutional claims. The output uses the field names, JSON structure, and record relationships represented by the supplied source samples, without copying real data.
+Generate deterministic, test healthcare JSON Lines (JSONL) data for providers, members, professional claims, institutional claims, and standalone professional/institutional payments. The output uses the field names, JSON structure, and record relationships represented by the supplied source samples, without copying real data.
 
 The generator creates deterministic new records and can derive update fixtures from those records. Update operations are driven by the checked-in rule catalog, with optional field-level selection for targeted tests.
 
@@ -13,8 +13,10 @@ The generator creates deterministic new records and can derive update fixtures f
 | Member | `members.jsonl` | Member, address, enrollment, and coordination-of-benefits data. |
 | Professional claim | `claims_professional.jsonl` | Professional claim headers, details, and embedded payment fields. |
 | Institutional claim | `claims_institutional.jsonl` | Institutional claim headers, details, and embedded payment fields. |
+| Professional payment | `payments_professional.jsonl` | Standalone Payment P envelope linked to a professional claim. |
+| Institutional payment | `payments_institutional.jsonl` | Standalone Payment I envelope linked to an institutional claim. |
 
-Professional and institutional claims are distinct streams and are always written to separate files. Payment data remains part of each claim object; the generator does not create a separate payment file.
+Professional and institutional claims and payments are distinct streams and are always written to separate files. Existing claim output continues to contain its embedded payment fields; standalone Payment P/I output is additive.
 
 ## Design
 
@@ -114,6 +116,10 @@ can use only `"claim-professional"` today.
   "claims": {
     "professional": {"count": 10},
     "institutional": {"count": 10}
+  },
+  "payments": {
+    "professional": {"count": 10},
+    "institutional": {"count": 10}
   }
 }
 ```
@@ -126,6 +132,19 @@ stale known output files are removed after a successful run. This allows a
 configuration to generate only the entities with positive counts.
 
 `seed` is not a business date or source-layout version. Reusing the same configuration and seed produces the same test records; changing the seed produces a different deterministic set.
+
+### Claim and payment relationships
+
+Payment P and Payment I are generated as separate streams from the same
+deterministic claim row at the same seed/index. The relationship is not based on
+an invented payment identifier. It follows the source survivorship document's
+composite match fields: patient, service dates, billing-provider tax ID/NPI,
+rendering-provider NPI, subscriber, claim frequency, claim/header amount and
+patient control number, plus the Payment P place-of-service/diagnosis fields or
+Payment I type-of-bill/revenue fields. Claim-line matching additionally uses
+line dates, procedure/revenue identifiers, modifiers, and line charge amount.
+The paid-date fields `CH_CLAIM_PAID_DATE` and `CD_LINE_PAID_DATE` are retained
+for payment-date matching.
 
 ## Generate data
 
@@ -329,7 +348,9 @@ output/
 │   ├── provider_nppes.jsonl
 │   ├── members.jsonl
 │   ├── claims_professional.jsonl
-│   └── claims_institutional.jsonl
+│   ├── claims_institutional.jsonl
+│   ├── payments_professional.jsonl
+│   └── payments_institutional.jsonl
 └── update-test-data/
     ├── provider_cdf.update.jsonl
     └── ...
@@ -356,7 +377,7 @@ schema/
 src/test_data_generator/
 ├── configuration/                            # Client profiles and config loading
 ├── core/                                     # Generation, validation, identifiers
-├── entities/                                 # Provider, member, and claim builders
+├── entities/                                 # Provider, member, claim, and payment builders
 ├── layouts/                                  # Current JSON output-selection contracts
 ├── samples/                                  # Sample type patterns and source references
 └── cli.py                                    # Command-line entry point

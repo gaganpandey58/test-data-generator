@@ -8,7 +8,8 @@
     {"required": ["provider"]},
     {"required": ["provider_nppes"]},
     {"required": ["member"]},
-    {"required": ["claims"]}
+    {"required": ["claims"]},
+    {"required": ["payments"]}
   ],
   "properties": {
     "client": {"type": "string", "minLength": 1},
@@ -75,6 +76,15 @@
     },
     "member": {"$ref": "#/$defs/counted_entity"},
     "claims": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "professional": {"$ref": "#/$defs/counted_entity"},
+        "institutional": {"$ref": "#/$defs/counted_entity"}
+      }
+    },
+    "payments": {
       "type": "object",
       "minProperties": 1,
       "additionalProperties": false,

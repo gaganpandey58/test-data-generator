@@ -254,6 +254,16 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
             value = claims.get(stream)
             if isinstance(value, dict):
                 entities[entity_name] = _selected_entity(entities[entity_name], value)
+
+    payments = raw_config.get("payments")
+    if isinstance(payments, dict):
+        for stream, entity_name in (
+            ("professional", "payment_professional"),
+            ("institutional", "payment_institutional"),
+        ):
+            value = payments.get(stream)
+            if isinstance(value, dict):
+                entities[entity_name] = _selected_entity(entities[entity_name], value)
     generation = raw_config.get("generation")
     output_order = generation.get("output_order") if isinstance(generation, dict) else None
     global_header_order = (
@@ -366,6 +376,26 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "updates": {},
             "header_order": None,
         },
+        "payment_professional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "payment-professional",
+            "schema": str(schema_root / "payment/payment.schema.json"),
+            "module": "test_data_generator.entities.payment",
+            "filename": "payments_professional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "payment_institutional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "payment-institutional",
+            "schema": str(schema_root / "payment/payment.schema.json"),
+            "module": "test_data_generator.entities.payment",
+            "filename": "payments_institutional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
     }
 
 
@@ -415,6 +445,8 @@ def _validate_profile(entity: str, profile: object) -> None:
         "member": frozenset({"member"}),
         "claim_professional": frozenset({"claim-professional"}),
         "claim_institutional": frozenset({"claim-institutional"}),
+        "payment_professional": frozenset({"payment-professional"}),
+        "payment_institutional": frozenset({"payment-institutional"}),
     }
     if not isinstance(profile, str) or profile not in available_profiles():
         raise ConfigurationError(f"Enabled entity {entity!r} uses an unknown layout profile")
