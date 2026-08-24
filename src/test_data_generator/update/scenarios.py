@@ -16,21 +16,6 @@ from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.synchronization import synchronize_record
 
 
-class UpdateScenario(StrEnum):
-    """Supported update fixture intents."""
-
-    UPDATE_SINGLE_FIELD = "UPDATE_SINGLE_FIELD"
-    UPDATE_REQUIRED_FIELDS = "UPDATE_REQUIRED_FIELDS"
-    UPDATE_OPTIONAL_FIELDS = "UPDATE_OPTIONAL_FIELDS"
-    MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
-    MISSING_MULTIPLE_FIELDS = "MISSING_MULTIPLE_FIELDS"
-    MISSING_SELECTED_FIELDS = "MISSING_SELECTED_FIELDS"
-    INVALID_KEY = "INVALID_KEY"
-    CHANGE_WEIGHT_BELOW_LIMIT = "CHANGE_WEIGHT_BELOW_LIMIT"
-    CHANGE_WEIGHT_AT_LIMIT = "CHANGE_WEIGHT_AT_LIMIT"
-    POST_MATCH_WEIGHT_LIMIT_EXCEEDED = "POST_MATCH_WEIGHT_LIMIT_EXCEEDED"
-
-
 class OperationType(StrEnum):
     """Generic record mutation operations."""
 
@@ -61,13 +46,12 @@ def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
 class UpdateRequest:
     """One normalized update request."""
 
-    scenario: UpdateScenario
+    operation: OperationType
     fields: tuple[str, ...] = ()
     include: tuple[str, ...] = ()
     exclude: tuple[str, ...] = ()
     matching_method: str | None = None
     threshold: Decimal | None = None
-    operation: OperationType | None = None
     condition: str | None = None
     invalid_values: Mapping[str, tuple[object, ...]] | None = None
 
@@ -90,81 +74,35 @@ class ResolvedUpdate:
 def resolve_fields(
     request: UpdateRequest, rules: EntityRules, seed: int = 0, index: int = 0
 ) -> tuple[str, ...]:
-    """Resolve explicit fields, include/exclude controls, and scenario defaults."""
+    """Resolve explicit fields or select eligible fields from the rule catalog."""
     known = rules.fields
-    context = request.scenario.value
-    operation = request.operation or _legacy_operation(request.scenario)
     if request.fields:
         selected = list(request.fields)
     elif request.include:
         selected = [field for field in request.include if field in known]
-    elif request.operation is not None and operation in {
+    elif request.operation in {
         OperationType.UPDATE,
         OperationType.MISSING,
         OperationType.EMPTY,
         OperationType.INVALID,
     }:
         selected = [name for name in known if name not in rules.keys]
-        if operation == OperationType.MISSING:
-            required = [name for name in selected if known[name].is_required_for(context)]
+        if request.operation == OperationType.MISSING:
+            required = [name for name in selected if known[name].required]
             selected = required or selected
         selected = [Random(seed * 1_000_003 + index).choice(selected)] if selected else []
-    elif request.scenario in {
-        UpdateScenario.UPDATE_REQUIRED_FIELDS,
-        UpdateScenario.MISSING_MULTIPLE_FIELDS,
-    }:
-        selected = [
-            name
-            for name, rule in known.items()
-            if rule.is_required_for(context) and name not in rules.keys
-        ]
-    elif request.scenario == UpdateScenario.MISSING_REQUIRED_FIELD:
-        selected = [
-            name
-            for name, rule in known.items()
-            if rule.is_required_for(context) and name not in rules.keys
-        ][:1]
-    elif request.scenario == UpdateScenario.UPDATE_OPTIONAL_FIELDS:
-        selected = [
-            name
-            for name, rule in known.items()
-            if not rule.is_required_for(context) and name not in rules.keys
-        ]
-    elif request.scenario == UpdateScenario.INVALID_KEY:
-        selected = list(rules.keys)
     else:
         selected = [name for name in known if name not in rules.keys]
-    if (
-        request.scenario == UpdateScenario.UPDATE_SINGLE_FIELD
-        and not request.fields
-        and not request.include
-    ):
-        selected = selected[:1]
     selected = [field for field in selected if field not in request.exclude]
     if any(field not in known for field in selected):
         raise ValueError("Update selection contains an unknown field")
-    if any(field in rules.keys for field in selected) and operation != OperationType.INVALID:
-        raise ValueError("Matching keys may only be selected by INVALID_KEY")
     if (
-        request.scenario == UpdateScenario.UPDATE_SINGLE_FIELD
-        and not request.operation
-        and len(selected) != 1
+        any(field in rules.keys for field in selected)
+        and request.operation != OperationType.INVALID
     ):
-        raise ValueError("UPDATE_SINGLE_FIELD requires exactly one selected field")
-    if (
-        request.scenario == UpdateScenario.MISSING_REQUIRED_FIELD
-        and not request.operation
-        and len(selected) != 1
-    ):
-        raise ValueError("MISSING_REQUIRED_FIELD requires exactly one selected field")
-    if (
-        request.scenario == UpdateScenario.MISSING_MULTIPLE_FIELDS
-        and not request.operation
-        and len(selected) < 2
-    ):
-        raise ValueError("MISSING_MULTIPLE_FIELDS requires at least two selected fields")
+        raise ValueError("Matching keys may only be selected by INVALID")
     if not selected:
-        raise ValueError("Update scenario resolved no fields")
+        raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
 
 
@@ -173,10 +111,10 @@ def resolve_update(
 ) -> ResolvedUpdate:
     """Create one deterministic update from one base record."""
     selected = resolve_fields(request, rules, seed, index)
-    operation = request.operation or _legacy_operation(request.scenario)
+    operation = request.operation
     if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
         selection_threshold = request.threshold or rules.methods[0].needed_weight
-        condition = request.condition or _legacy_condition(request.scenario)
+        condition = request.condition
         if condition is None:
             raise ValueError("WEIGHT_CHANGE requires BELOW_LIMIT, AT_LIMIT, or ABOVE_LIMIT")
         selected = _select_weight_fields(rules, selection_threshold, condition)
@@ -186,11 +124,7 @@ def resolve_update(
     removed: list[str] = []
     invalidated: list[str] = []
     randomizer = Random(seed * 1_000_003 + index * 97 + 41)
-    if operation == OperationType.MISSING or request.scenario in {
-        UpdateScenario.MISSING_REQUIRED_FIELD,
-        UpdateScenario.MISSING_MULTIPLE_FIELDS,
-        UpdateScenario.MISSING_SELECTED_FIELDS,
-    }:
+    if operation == OperationType.MISSING:
         for field in selected:
             if _remove_field(result, field):
                 removed.append(field)
@@ -202,7 +136,7 @@ def resolve_update(
                 _replace_field(result, field, empty_value)
                 if empty_value != old:
                     changed.append(field)
-        elif operation == OperationType.INVALID and request.scenario != UpdateScenario.INVALID_KEY:
+        elif operation == OperationType.INVALID:
             catalog = request.invalid_values or {}
             for field in selected:
                 values = catalog.get(field)
@@ -212,15 +146,6 @@ def resolve_update(
                 changed.append(field)
                 if field in rules.keys:
                     invalidated.append(field)
-        elif request.scenario == UpdateScenario.INVALID_KEY:
-            for field in selected:
-                _replace_field(
-                    result,
-                    field,
-                    _invalid_key_value(_find_field(result, field), field, index),
-                )
-                changed.append(field)
-                invalidated.append(field)
         else:
             for field in selected:
                 old = _find_field(result, field)
@@ -238,7 +163,7 @@ def resolve_update(
         )
         threshold = method.needed_weight
     relation = _relation(total, threshold)
-    condition = request.condition or _legacy_condition(request.scenario)
+    condition = request.condition
     if (
         operation == OperationType.WEIGHT_CHANGE
         and condition == "BELOW_LIMIT"
@@ -309,52 +234,6 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = f"{faker.word().upper()}X"
         return candidate
     return randomizer.randrange(1000, 9999)
-
-
-def _legacy_operation(scenario: UpdateScenario) -> OperationType:
-    if scenario in {
-        UpdateScenario.MISSING_REQUIRED_FIELD,
-        UpdateScenario.MISSING_MULTIPLE_FIELDS,
-        UpdateScenario.MISSING_SELECTED_FIELDS,
-    }:
-        return OperationType.MISSING
-    if scenario == UpdateScenario.INVALID_KEY:
-        return OperationType.INVALID
-    if scenario in {
-        UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT,
-        UpdateScenario.CHANGE_WEIGHT_AT_LIMIT,
-        UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED,
-    }:
-        return OperationType.WEIGHT_CHANGE
-    return OperationType.UPDATE
-
-
-def _legacy_condition(scenario: UpdateScenario) -> str | None:
-    return {
-        UpdateScenario.CHANGE_WEIGHT_BELOW_LIMIT: "BELOW_LIMIT",
-        UpdateScenario.CHANGE_WEIGHT_AT_LIMIT: "AT_LIMIT",
-        UpdateScenario.POST_MATCH_WEIGHT_LIMIT_EXCEEDED: "ABOVE_LIMIT",
-    }.get(scenario)
-
-
-def _invalid_key_value(value: object, field: str, index: int) -> object:
-    """Change one key character while preserving the source key shape."""
-    if isinstance(value, int) and not isinstance(value, bool):
-        candidate = value + 1
-        if len(str(candidate)) == len(str(value)):
-            return candidate
-        return value - 1
-    if isinstance(value, str) and value:
-        characters = list(value)
-        for position in range(len(characters) - 1, -1, -1):
-            character = characters[position]
-            if character.isdigit():
-                characters[position] = str((int(character) + 1) % 10)
-                return "".join(characters)
-            if character.isalpha():
-                characters[position] = "X" if character.upper() != "X" else "Y"
-                return "".join(characters)
-    return f"INVALID{index + 1:04d}"
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:

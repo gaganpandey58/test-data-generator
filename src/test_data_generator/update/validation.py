@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 
 from test_data_generator.update.rules import EntityRules
-from test_data_generator.update.scenarios import ResolvedUpdate, UpdateRequest, UpdateScenario
+from test_data_generator.update.scenarios import OperationType, ResolvedUpdate, UpdateRequest
 
 
 def validate_update_contract(
@@ -13,18 +13,12 @@ def validate_update_contract(
     resolved: ResolvedUpdate,
     rules: EntityRules,
 ) -> None:
-    """Ensure an update changes only what its scenario allows."""
-    if request.scenario != UpdateScenario.INVALID_KEY:
+    """Ensure an update changes only what its operation allows."""
+    if request.operation != OperationType.INVALID:
         for key in rules.keys:
             if base.get(key) != updated.get(key):
                 raise ValueError(f"Update changed protected matching key {key!r}")
-    if request.scenario == UpdateScenario.UPDATE_SINGLE_FIELD and len(resolved.changed_fields) != 1:
-        raise ValueError("UPDATE_SINGLE_FIELD did not change exactly one field")
-    if request.scenario in {
-        UpdateScenario.MISSING_REQUIRED_FIELD,
-        UpdateScenario.MISSING_MULTIPLE_FIELDS,
-        UpdateScenario.MISSING_SELECTED_FIELDS,
-    }:
+    if request.operation == OperationType.MISSING:
         for field in resolved.removed_fields:
             if _find_field(updated, field) is not _MISSING:
                 raise ValueError(f"Selected field {field!r} was not removed")

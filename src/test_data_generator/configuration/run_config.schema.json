@@ -41,7 +41,6 @@
             "directory": {"type": "string", "minLength": 1},
             "rule_catalog": {"type": "string", "minLength": 1},
             "invalid_values_catalog": {"type": "string", "minLength": 1},
-            "default_scenario": {"type": "string", "minLength": 1},
             "matching_method": {"type": "string", "minLength": 1},
             "threshold": {"type": "number"},
             "operation": {"$ref": "#/$defs/operation"},
@@ -142,7 +141,6 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "scenario": {"type": "string", "minLength": 1},
             "fields": {"type": "array", "items": {"type": "string"}},
             "include": {"type": "array", "items": {"type": "string"}},
             "exclude": {"type": "array", "items": {"type": "string"}},

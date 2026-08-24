@@ -24,7 +24,6 @@ from test_data_generator.update.rules import load_rule_catalog
 from test_data_generator.update.scenarios import (
     OperationType,
     UpdateRequest,
-    UpdateScenario,
     load_invalid_values,
 )
 
@@ -156,25 +155,17 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
     entity_update = getattr(entity_config, "update", {})
     if isinstance(entity_update, dict):
         raw.update(entity_update)
-    scenario_value = str(raw.get("scenario", raw.get("default_scenario", "UPDATE_SINGLE_FIELD")))
-    try:
-        scenario = UpdateScenario(scenario_value)
-    except ValueError as error:
-        raise CommandError(f"Unknown update scenario {scenario_value!r}") from error
-    fields = _string_tuple(raw, "fields")
     operation_config = raw.get("operation")
-    operation_type = None
-    operation_condition = None
-    if isinstance(operation_config, dict):
-        try:
-            operation_type = OperationType(str(operation_config.get("type", "UPDATE")))
-        except ValueError as error:
-            raise CommandError("Unknown update operation") from error
-        if not fields:
-            fields = _string_tuple(operation_config, "fields")
-        operation_condition = (
-            str(operation_config["condition"]) if "condition" in operation_config else None
-        )
+    if not isinstance(operation_config, dict):
+        raise CommandError("Updates require an operation object")
+    try:
+        operation_type = OperationType(str(operation_config.get("type", "")))
+    except ValueError as error:
+        raise CommandError("Unknown update operation") from error
+    fields = _string_tuple(operation_config, "fields")
+    operation_condition = (
+        str(operation_config["condition"]) if "condition" in operation_config else None
+    )
     include = _string_tuple(raw, "include")
     exclude = _string_tuple(raw, "exclude")
     threshold = raw.get("threshold")
@@ -183,7 +174,6 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
     except (InvalidOperation, ValueError) as error:
         raise CommandError("Update threshold must be a decimal number") from error
     return UpdateRequest(
-        scenario=scenario,
         fields=fields,
         include=include,
         exclude=exclude,

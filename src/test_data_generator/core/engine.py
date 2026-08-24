@@ -14,7 +14,7 @@ from test_data_generator.configuration.config import EntityConfig, resolve_outpu
 from test_data_generator.core.errors import GenerationError
 from test_data_generator.layouts import load_layout, project_record
 from test_data_generator.update.rules import EntityRules
-from test_data_generator.update.scenarios import UpdateRequest, resolve_update
+from test_data_generator.update.scenarios import OperationType, UpdateRequest, resolve_update
 from test_data_generator.update.validation import validate_update_contract
 
 
@@ -86,12 +86,7 @@ def run_update_entity(
                 resolved = resolve_update(base, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
                 validate_update_contract(base, updated, request, resolved, rules)
-                missing_scenarios = {
-                    "MISSING_REQUIRED_FIELD",
-                    "MISSING_MULTIPLE_FIELDS",
-                    "MISSING_SELECTED_FIELDS",
-                }
-                if request.scenario.value not in missing_scenarios:
+                if request.operation != OperationType.MISSING:
                     try:
                         validator.validate(updated)
                     except ValidationError as error:
