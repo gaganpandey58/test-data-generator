@@ -73,10 +73,21 @@ class ResolvedUpdate:
 
 
 def resolve_fields(
-    request: UpdateRequest, rules: EntityRules, seed: int = 0, index: int = 0
+    request: UpdateRequest,
+    rules: EntityRules,
+    seed: int = 0,
+    index: int = 0,
+    available_fields: set[str] | None = None,
 ) -> tuple[str, ...]:
-    """Resolve explicit fields or select eligible fields from the rule catalog."""
+    """Resolve fields from the catalog and the selected output shape.
+
+    The survivorship catalog can contain fields that are applicable to another
+    profile of the same entity. An update may only mutate fields present in the
+    actual generated record; otherwise a missing field could be added to an
+    unrelated nested object and make the result fail schema validation.
+    """
     known = rules.fields
+    explicit_selection = bool(request.fields or request.include)
     if request.fields:
         selected = _normalize_fields(request.fields, known)
     elif request.include:
@@ -87,13 +98,22 @@ def resolve_fields(
         OperationType.EMPTY,
         OperationType.INVALID,
     }:
-        selected = [name for name in known if name not in rules.keys]
+        selected = [
+            name
+            for name in known
+            if name not in rules.keys and (available_fields is None or name in available_fields)
+        ]
         if request.operation == OperationType.MISSING:
             required = [name for name in selected if known[name].required]
             selected = required or selected
         selected = [Random(seed * 1_000_003 + index).choice(selected)] if selected else []
     else:
         selected = [name for name in known if name not in rules.keys]
+    if available_fields is not None:
+        unavailable = [field for field in selected if field not in available_fields]
+        if unavailable and explicit_selection:
+            raise ValueError(f"Update field {unavailable[0]!r} is not present in generated record")
+        selected = [field for field in selected if field in available_fields]
     excluded = set(_normalize_fields(request.exclude, known))
     selected = [field for field in selected if field not in excluded]
     if any(field not in known for field in selected):
@@ -140,14 +160,14 @@ def resolve_update(
     base: Mapping[str, object], request: UpdateRequest, rules: EntityRules, seed: int, index: int
 ) -> ResolvedUpdate:
     """Create one deterministic update from one base record."""
-    selected = resolve_fields(request, rules, seed, index)
+    selected = resolve_fields(request, rules, seed, index, _field_names(base))
     operation = request.operation
     if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
         selection_threshold = _weight_threshold(request, rules)
         condition = request.condition
         if condition is None:
             raise ValueError("WEIGHT_CHANGE requires BELOW_LIMIT, AT_LIMIT, or ABOVE_LIMIT")
-        selected = _select_weight_fields(rules, selection_threshold, condition)
+        selected = _select_weight_fields(rules, selection_threshold, condition, _field_names(base))
     original = deepcopy(dict(base))
     result = deepcopy(original)
     changed: list[str] = []
@@ -279,18 +299,35 @@ def _find_field(record: Mapping[str, object], field: str) -> object:
     return ""
 
 
-def _replace_field(record: dict[str, object], field: str, value: object) -> bool:
+def _field_names(record: Mapping[str, object]) -> set[str]:
+    """Return field names present in a root or nested generated record."""
+    names: set[str] = set()
+    for field, value in record.items():
+        names.add(field)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, Mapping):
+                    names.update(_field_names(item))
+        elif isinstance(value, Mapping):
+            names.update(_field_names(value))
+    return names
+
+
+def _replace_field(
+    record: dict[str, object], field: str, value: object, *, create: bool = True
+) -> bool:
     if field in record:
         record[field] = value
         return True
     for current in record.values():
         if isinstance(current, list):
             for item in current:
-                if isinstance(item, dict) and _replace_field(item, field, value):
+                if isinstance(item, dict) and _replace_field(item, field, value, create=False):
                     return True
-        elif isinstance(current, dict) and _replace_field(current, field, value):
+        elif isinstance(current, dict) and _replace_field(current, field, value, create=False):
             return True
-    record[field] = value
+    if create:
+        record[field] = value
     return False
 
 
@@ -336,10 +373,17 @@ def _weight_threshold(request: UpdateRequest, rules: EntityRules) -> Decimal:
 
 
 def _select_weight_fields(
-    rules: EntityRules, threshold: Decimal, condition: str
+    rules: EntityRules,
+    threshold: Decimal,
+    condition: str,
+    available_fields: set[str] | None = None,
 ) -> tuple[str, ...]:
     """Choose the smallest deterministic field combination for a weight boundary."""
-    candidates = tuple(name for name in rules.fields if name not in rules.keys)
+    candidates = tuple(
+        name
+        for name in rules.fields
+        if name not in rules.keys and (available_fields is None or name in available_fields)
+    )
     wanted = {"BELOW_LIMIT": "below", "AT_LIMIT": "equal", "ABOVE_LIMIT": "above"}.get(condition)
     if wanted is None:
         raise ValueError(f"Unknown WEIGHT_CHANGE condition {condition!r}")

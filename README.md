@@ -252,6 +252,12 @@ changing them would prevent the update from matching the existing entity. An
 `INVALID` fixture is intentionally allowed to violate the JSON Schema; its
 value must be present in the invalid-value catalog.
 
+Update selection is layout-aware. The survivorship catalog may describe fields
+for multiple Payment or Claim profiles, but an update can only target a field
+emitted by the selected layout. Automatic selection filters to emitted fields;
+an explicit non-emitted field produces a direct configuration error instead of
+a schema `oneOf` failure.
+
 ### Update field reference
 
 The field names below are the currently supported runtime fields from the
