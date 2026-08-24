@@ -74,10 +74,8 @@ def generate(config: Path, mode: str = "all") -> None:
                 and run_config.provider_linked
                 and run_config.nppes_count > 0
             ):
-                assert run_config.nppes_sample is not None
                 try:
                     paths = generate_linked_provider_fixtures(
-                        run_config.nppes_sample,
                         run_config.creation_directory,
                         run_config.nppes_count,
                         entity.count - run_config.nppes_count,
@@ -110,10 +108,8 @@ def generate(config: Path, mode: str = "all") -> None:
                 ) from error
             print(f"{entity.name}: {entity.count} records -> {output_path}")
         if run_config.nppes_count > 0 and not run_config.provider_linked:
-            assert run_config.nppes_sample is not None
             try:
                 nppes_path = generate_nppes_file(
-                    run_config.nppes_sample,
                     run_config.creation_directory / run_config.nppes_filename,
                     run_config.nppes_count,
                     run_config.seed,
@@ -232,9 +228,8 @@ def main() -> int:
     generate_parser.add_argument("--config", required=True, type=Path)
     generate_parser.add_argument("--mode", choices=("all", "creation", "updates"), default="all")
     provider_cdf_parser = subcommands.add_parser(
-        "provider-cdf", help="Generate NPPES, provider CDF, and updated CDF fixtures."
+        "provider-cdf", help="Generate code-defined NPPES and provider CDF fixtures."
     )
-    provider_cdf_parser.add_argument("--sample-nppes", required=True, type=Path)
     provider_cdf_parser.add_argument("--output", required=True, type=Path)
     provider_cdf_parser.add_argument("--count", type=int, default=10)
     provider_cdf_parser.add_argument("--unmatched-count", type=int, default=2)
@@ -244,7 +239,6 @@ def main() -> int:
     try:
         if arguments.command == "provider-cdf":
             paths = generate_provider_cdf(
-                arguments.sample_nppes,
                 arguments.output,
                 arguments.count,
                 arguments.unmatched_count,

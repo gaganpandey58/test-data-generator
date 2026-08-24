@@ -77,7 +77,6 @@ class RunConfig:
     updates_enabled: bool
     update_defaults: Mapping[str, object]
     nppes_count: int = 0
-    nppes_sample: Path | None = None
     nppes_filename: str = "provider_nppes.jsonl"
     provider_linked: bool = False
 
@@ -128,17 +127,6 @@ def load_config(path: Path) -> RunConfig:
     )
     nppes_config = raw_config.get("provider_nppes", {})
     nppes_count = _nppes_total(nppes_config)
-    default_sample = (
-        Path(__file__).resolve().parents[1] / "samples/reference/provider_nppes_sample.jsonl"
-    )
-    sample_value = nppes_config.get("sample") if isinstance(nppes_config, dict) else None
-    nppes_sample = (
-        _resolve_path(str(sample_value), config_path.parent) if sample_value else default_sample
-    )
-    if nppes_count > 0 and not nppes_sample.is_file():
-        raise ConfigurationError(
-            f"Enabled provider_nppes references missing sample file {nppes_sample}"
-        )
     if nppes_count == 0:
         disabled_filenames.append("provider_nppes.jsonl")
 
@@ -195,7 +183,6 @@ def load_config(path: Path) -> RunConfig:
         updates_enabled=bool(update_config.get("enabled", False)),
         update_defaults=update_config,
         nppes_count=nppes_count,
-        nppes_sample=nppes_sample,
         provider_linked=provider_linked,
     )
 
@@ -235,8 +222,12 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 normalized_nppes = {
                     "count": int(nppes_count),
                     **(
-                        {"sample": nppes["sample"]}
-                        if isinstance(nppes, dict) and isinstance(nppes.get("sample"), str)
+                        {
+                            key: int(nppes[key])
+                            for key in ("individual", "organizational")
+                            if key in nppes
+                        }
+                        if isinstance(nppes, dict)
                         else {}
                     ),
                 }

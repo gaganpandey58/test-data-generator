@@ -1,27 +1,17 @@
-"""Generate NPPES-to-provider-CDF matching fixtures.
-
-The NPPES sample is the schema authority. Provider CDF rows are produced by
-the existing provider generator, then matched rows in the updated copy are
-overlaid with the supported NPPES provider fields.
-"""
+"""Generate code-defined NPPES-to-provider-CDF matching fixtures."""
 
 import json
 from copy import deepcopy
 from pathlib import Path
-from random import Random
 from typing import Mapping
 
-from faker import Faker
-
 from test_data_generator.configuration.profiles import load_client_headers, load_client_values
-from test_data_generator.core.identifiers import deterministic_uuid4
 from test_data_generator.entities.provider import generate_record
-from test_data_generator.entities.provider_nppes import split_templates, template_for
+from test_data_generator.entities.provider_nppes import generate_record_from_cdf, generate_records
 from test_data_generator.layouts import project_record
 
 
 def generate_provider_cdf(
-    sample_path: Path,
     output_directory: Path,
     count: int = 10,
     unmatched_count: int = 2,
@@ -34,13 +24,10 @@ def generate_provider_cdf(
     are produced by the normal update-directory workflow, so this helper does
     not create a duplicate ``provider_cdf_updated`` file.
     """
-    return generate_linked_provider_fixtures(
-        sample_path, output_directory, count, unmatched_count, seed
-    )
+    return generate_linked_provider_fixtures(output_directory, count, unmatched_count, seed)
 
 
 def generate_linked_provider_fixtures(
-    sample_path: Path,
     output_directory: Path,
     nppes_count: int,
     additional_cdf_count: int = 0,
@@ -53,28 +40,17 @@ def generate_linked_provider_fixtures(
         raise ValueError("nppes_count must be at least 1")
     if additional_cdf_count < 0:
         raise ValueError("additional_cdf_count cannot be negative")
-    templates = _read_nppes_objects(sample_path)
-    if not templates:
-        raise ValueError(f"NPPES sample {sample_path} contains no records")
-    templates_by_profile = split_templates(templates)
     resolved_headers = client_headers or load_client_headers("chc", "provider")
     resolved_values = client_values or load_client_values("chc", "provider")
     cdf_records = [
-        _cdf_record(_nppes_npi(index), seed, index, resolved_headers, resolved_values)
+        _set_linked_record_type(
+            _cdf_record(_nppes_npi(index), seed, index, resolved_headers, resolved_values),
+            index,
+        )
         for index in range(nppes_count)
     ]
     nppes_records = [
-        _nppes_record_from_cdf(
-            template_for(
-                templates_by_profile,
-                "1" if cdf.get("CP_PROVIDER_RECORD_TYPE") == "I" else "2",
-                index,
-            ),
-            cdf,
-            index,
-            seed,
-        )
-        for index, cdf in enumerate(cdf_records)
+        generate_record_from_cdf(cdf, index, seed) for index, cdf in enumerate(cdf_records)
     ]
     cdf_records.extend(
         _cdf_record(
@@ -96,152 +72,12 @@ def generate_linked_provider_fixtures(
     return paths
 
 
-def generate_nppes_file(sample_path: Path, output_path: Path, count: int, seed: int) -> Path:
-    """Generate one configured NPPES JSONL file from the checked-in sample."""
-    if count < 1:
-        raise ValueError("NPPES count must be at least 1")
-    records = _generate_nppes_records(_read_nppes_objects(sample_path), count, seed)
+def generate_nppes_file(output_path: Path, count: int, seed: int) -> Path:
+    """Generate one configured NPPES JSONL file from the code-defined entity."""
+    records = generate_records(count, seed)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _write_jsonl(output_path, records)
     return output_path
-
-
-def _read_nppes_objects(path: Path) -> list[dict[str, object]]:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise ValueError(f"Could not read NPPES sample {path}") from error
-    decoder = json.JSONDecoder()
-    records: list[dict[str, object]] = []
-    position = 0
-    while position < len(text):
-        while position < len(text) and text[position].isspace():
-            position += 1
-        if position >= len(text):
-            break
-        try:
-            value, position = decoder.raw_decode(text, position)
-        except json.JSONDecodeError as error:
-            raise ValueError(f"NPPES sample {path} contains invalid JSON") from error
-        if not isinstance(value, dict):
-            raise ValueError(f"NPPES sample {path} must contain JSON objects")
-        records.append(value)
-    return records
-
-
-def _nppes_record(template: Mapping[str, object], index: int, seed: int) -> dict[str, object]:
-    record = deepcopy(dict(template))
-    record["NPI"] = _nppes_npi(index)
-    record["ROWID"] = deterministic_uuid4(seed + index, "provider-nppes")
-    return record
-
-
-def _nppes_record_from_cdf(
-    template: Mapping[str, object], cdf: Mapping[str, object], index: int, seed: int
-) -> dict[str, object]:
-    """Format one logical CDF provider using the NPPES sample shape."""
-    record = deepcopy(dict(template))
-    randomizer = Random(seed * 1_000_003 + index)
-    faker = Faker("en_US")
-    faker.seed_instance(seed * 1_000_003 + index)
-    _randomize_nppes_values(record, randomizer, faker)
-    record["NPI"] = str(cdf.get("CP_PROVIDER_NPI", _nppes_npi(index)))
-    individual = cdf.get("CP_PROVIDER_RECORD_TYPE") == "I"
-    record["ENTITY_TYPE_CODE"] = "1" if individual else "2"
-    record["ENTITY_TYPE_DESCRIPTION"] = "Individual" if individual else "Organization"
-    record["PROVIDER_FIRST_NAME"] = cdf.get("CP_PROVIDER_FIRST_NAME", "")
-    record["PROVIDER_MIDDLE_NAME"] = cdf.get("CP_PROVIDER_MIDDLE_NAME", "")
-    record["PROVIDER_LAST_NAME_LEGAL_NAME"] = cdf.get("CP_PROVIDER_LAST_NAME", "")
-    if not individual:
-        record["PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME"] = cdf.get(
-            "CP_PROVIDER_LAST_NAME",
-            cdf.get("CP_PROVIDER_BILLING_GROUP_NAME", cdf.get("CP_PROVIDER_FULL_NAME", "")),
-        )
-        record["PROVIDER_FIRST_NAME"] = ""
-        record["PROVIDER_MIDDLE_NAME"] = ""
-        record["PROVIDER_LAST_NAME_LEGAL_NAME"] = ""
-    record["PROVIDER_NAME_SUFFIX_TEXT"] = cdf.get("CP_PROVIDER_NAME_SUFFIX", "")
-    record["PROVIDER_ENUMERATION_DATE"] = cdf.get("CP_PROVIDER_RECORD_START_DATE", "")
-    record["LAST_UPDATE_DATE"] = cdf.get("CP_PROVIDER_SOURCE_UPDATED_AT", "")
-    taxonomy = str(cdf.get("CP_PROVIDER_TAXONOMY_CODE", ""))
-    _set_primary_taxonomy(record, taxonomy)
-    addresses = cdf.get("CP_PROVIDER_ADDRESSES")
-    if isinstance(addresses, list) and addresses and isinstance(addresses[0], Mapping):
-        address = addresses[0]
-        record["PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS"] = address.get(
-            "CP_PROVIDER_ADDRESS_01", ""
-        )
-        record["PROVIDER_SECOND_LINE_BUSINESS_MAILING_ADDRESS"] = address.get(
-            "CP_PROVIDER_ADDRESS_02", ""
-        )
-        record["PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME"] = address.get("CP_PROVIDER_CITY", "")
-        record["PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME"] = address.get(
-            "CP_PROVIDER_STATE", ""
-        )
-        record["PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE"] = (
-            f"{address.get('CP_PROVIDER_ZIP', '')}{address.get('CP_PROVIDER_ZIP_PLUS_FOUR', '')}"
-        )
-        record["PROVIDER_BUSINESS_MAILING_ADDRESS_TELEPHONE_NUMBER"] = address.get(
-            "CP_PROVIDER_PHONE", ""
-        )
-        record["PROVIDER_BUSINESS_MAILING_ADDRESS_FAX_NUMBER"] = address.get("CP_PROVIDER_FAX", "")
-    record["ROWID"] = deterministic_uuid4(seed + index, "provider-nppes")
-    return record
-
-
-def _randomize_nppes_values(record: dict[str, object], randomizer: Random, faker: Faker) -> None:
-    """Refresh non-structural sample values without changing its shape."""
-    for key, value in list(record.items()):
-        if isinstance(value, dict):
-            _randomize_nppes_values(value, randomizer, faker)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    _randomize_nppes_values(item, randomizer, faker)
-        elif (
-            isinstance(value, str)
-            and value
-            and key
-            not in {
-                "PAYER_PLATFORM",
-                "PAYER",
-                "CLIENT_DATA_PLATFORM",
-                "PUBLISHER_NAME",
-                "PRIMARY_TAXONOMY_SWITCH",
-            }
-        ):
-            upper = key.upper()
-            if upper == "CERTIFICATION_DATE":
-                record[key] = faker.date_between(start_date="-10y", end_date="today").strftime(
-                    "%m/%d/%Y"
-                )
-            elif "DATE" in upper:
-                record[key] = faker.date_between(start_date="-10y", end_date="today").strftime(
-                    "%Y%m%d"
-                )
-            elif "PHONE" in upper or "FAX" in upper or "TELEPHONE" in upper:
-                record[key] = "".join(str(randomizer.randrange(10)) for _ in range(len(value)))
-            elif "POSTAL_CODE" in upper:
-                record[key] = "".join(str(randomizer.randrange(10)) for _ in range(len(value)))
-            elif "NAME" in upper and "CODE" not in upper:
-                record[key] = faker.word().upper()
-
-
-def _set_primary_taxonomy(record: dict[str, object], taxonomy: str) -> None:
-    values = record.get("HEALTHCARE_PROVIDER")
-    if isinstance(values, list):
-        for value in values:
-            if isinstance(value, dict) and value.get("PRIMARY_TAXONOMY_SWITCH") == "Y":
-                value["TAXONOMY_CODE"] = taxonomy
-                return
-
-
-def _generate_nppes_records(
-    templates: list[dict[str, object]], count: int, seed: int
-) -> list[dict[str, object]]:
-    if not templates:
-        raise ValueError("NPPES sample contains no records")
-    return [_nppes_record(templates[index % len(templates)], index, seed) for index in range(count)]
 
 
 def _cdf_record(
@@ -259,6 +95,27 @@ def _cdf_record(
     if projected.get("CP_PRESCRIBING_PROVIDER_NPI") == record.get("CP_PROVIDER_NPI"):
         projected["CP_PRESCRIBING_PROVIDER_NPI"] = npi
     return projected
+
+
+def _set_linked_record_type(record: dict[str, object], index: int) -> dict[str, object]:
+    """Ensure linked fixtures exercise both individual and organizational paths."""
+    individual = index % 2 == 0
+    record["CP_PROVIDER_RECORD_TYPE"] = "I" if individual else "P"
+    if individual:
+        first = str(record.get("CP_PROVIDER_FIRST_NAME", "")).strip() or f"TEST{index}"
+        last = str(record.get("CP_PROVIDER_LAST_NAME", "")).strip() or f"PROVIDER{index}"
+        middle = str(record.get("CP_PROVIDER_MIDDLE_NAME", "")).strip()
+        record["CP_PROVIDER_FIRST_NAME"] = first
+        record["CP_PROVIDER_MIDDLE_NAME"] = middle
+        record["CP_PROVIDER_LAST_NAME"] = last
+        record["CP_PROVIDER_FULL_NAME"] = " ".join(part for part in (first, middle, last) if part)
+    else:
+        organization = str(record.get("CP_PROVIDER_LAST_NAME", "")).strip() or f"TEST GROUP {index}"
+        record["CP_PROVIDER_FIRST_NAME"] = ""
+        record["CP_PROVIDER_MIDDLE_NAME"] = ""
+        record["CP_PROVIDER_LAST_NAME"] = organization
+        record["CP_PROVIDER_FULL_NAME"] = organization
+    return record
 
 
 def _apply_nppes_update(

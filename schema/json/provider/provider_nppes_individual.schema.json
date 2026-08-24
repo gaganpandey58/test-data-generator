@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Individual NPPES provider record",
-  "description": "The checked-in individual NPPES sample is authoritative for the complete field shape.",
+  "description": "Code-defined individual NPPES provider entity.",
   "type": "object",
   "required": ["NPI", "ENTITY_TYPE_CODE"],
   "properties": {

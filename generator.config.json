@@ -14,8 +14,7 @@
   },
   "provider": {
     "nppes": {
-      "count": 10,
-      "sample": "src/test_data_generator/samples/reference/provider_nppes_sample.jsonl"
+        "count": 10
     },
     "cdf": {
       "additional_count": 90
