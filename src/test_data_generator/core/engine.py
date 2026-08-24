@@ -3,7 +3,7 @@
 import importlib
 import json
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -28,10 +28,22 @@ def run_entity(
     engine does not inspect signatures or plan variations because current
     generation is happy-path only.
     """
+    generate_record = _load_generator(entity.module)
+    records = (
+        _build_record(entity, seed, index, counts, generate_record) for index in range(entity.count)
+    )
+    return run_records(entity, records, output_directory)
+
+
+def run_records(
+    entity: EntityConfig,
+    records: Iterable[Mapping[str, object]],
+    output_directory: Path,
+) -> Path:
+    """Validate and atomically publish already-derived records for one entity."""
     final_path = resolve_output_path(output_directory, entity.filename)
     temporary_path: Path | None = None
     try:
-        generate_record = _load_generator(entity.module)
         validator = _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
@@ -42,13 +54,13 @@ def run_entity(
             delete=False,
         ) as output_file:
             temporary_path = Path(output_file.name)
-            for index in range(entity.count):
-                record = _build_record(entity, seed, index, counts, generate_record)
+            for record in records:
+                normalized = dict(record)
                 try:
-                    validator.validate(record)
+                    validator.validate(normalized)
                 except ValidationError as error:
                     raise GenerationError(_validation_detail(error)) from error
-                output_file.write(orjson.dumps(record))
+                output_file.write(orjson.dumps(normalized))
                 output_file.write(b"\n")
         return temporary_path.replace(final_path)
     except Exception:
@@ -66,11 +78,26 @@ def run_update_entity(
     rules: EntityRules,
 ) -> Path:
     """Generate update JSONL atomically without sidecar metadata files."""
+    generate_record = _load_generator(entity.module)
+    records = (
+        _build_record(entity, seed, index, counts, generate_record) for index in range(entity.count)
+    )
+    return run_update_records(entity, records, seed, output_directory, request, rules)
+
+
+def run_update_records(
+    entity: EntityConfig,
+    records: Iterable[Mapping[str, object]],
+    seed: int,
+    output_directory: Path,
+    request: UpdateRequest,
+    rules: EntityRules,
+) -> Path:
+    """Apply the shared update engine to already-derived base records."""
     update_filename = entity.filename.removesuffix(".jsonl") + ".update.jsonl"
     final_path = resolve_output_path(output_directory, update_filename)
     temporary_path: Path | None = None
     try:
-        generate_record = _load_generator(entity.module)
         validator = _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
@@ -81,11 +108,11 @@ def run_update_entity(
             delete=False,
         ) as output_file:
             temporary_path = Path(output_file.name)
-            for index in range(entity.count):
-                base = _build_record(entity, seed, index, counts, generate_record)
-                resolved = resolve_update(base, request, rules, seed, index)
+            for index, base in enumerate(records):
+                base_record = dict(base)
+                resolved = resolve_update(base_record, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
-                validate_update_contract(base, updated, request, resolved, rules)
+                validate_update_contract(base_record, updated, request, resolved, rules)
                 if request.operation not in {OperationType.MISSING, OperationType.INVALID}:
                     try:
                         validator.validate(updated)

@@ -83,6 +83,11 @@
       "max_length": 255
     },
     {
+      "name": "CLP02",
+      "type": "text",
+      "max_length": 255
+    },
+    {
       "name": "CH_NUMBER_OF_ADJUSTMENTS",
       "type": "integer",
       "max_length": 255
@@ -4035,10 +4040,15 @@
         "type": "text",
         "max_length": 255
       },
-      {
-        "name": "CD_LINE_PAID_DATE",
-        "type": "text",
-        "max_length": 255
+    {
+      "name": "CD_LINE_PAID_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INDEX",
+      "type": "integer",
+      "max_length": 255
       },
       {
         "name": "CD_PAYMENT_STATUS",

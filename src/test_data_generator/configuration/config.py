@@ -8,7 +8,7 @@ and relationships before generation can begin.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path, PureWindowsPath
 from typing import Any, Mapping, cast
@@ -52,6 +52,8 @@ class EntityConfig:
     filename: str
     update: Mapping[str, object]
     header_order: str = "source"
+    source_claims: Path | None = None
+    scenarios: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -158,6 +160,8 @@ def load_config(path: Path) -> RunConfig:
                 filename=filename,
                 update=raw_entity.get("updates", {}),
                 header_order=str(raw_entity.get("header_order", "source")),
+                source_claims=_source_claim_path(name, raw_entity, config_path.parent),
+                scenarios=_scenario_counts(name, raw_entity),
             )
         )
     _validate_unique_filenames(entities)
@@ -315,12 +319,61 @@ def _selected_entity(
     if isinstance(selection.get("updates"), dict):
         updates = cast(dict[str, object], selection["updates"])
         result["updates"] = {str(key): value for key, value in updates.items()}
+    if "source_claims" in selection:
+        result["source_claims"] = selection["source_claims"]
+    if "scenarios" in selection:
+        result["scenarios"] = selection["scenarios"]
     if "layout" in selection:
         result["profile"] = selection["layout"]
     output_order = selection.get("output_order")
     if isinstance(output_order, dict) and "headers" in output_order:
         result["header_order"] = output_order["headers"]
     return result
+
+
+_PAYMENT_SCENARIOS = frozenset({"MATCHED", "REVERSAL", "REPLACEMENT", "STALE", "ORPHAN"})
+
+
+def _source_claim_path(
+    entity: str, raw_entity: Mapping[str, object], config_directory: Path
+) -> Path | None:
+    """Resolve and validate a source Claim JSONL path for a Payment stream."""
+    value = raw_entity.get("source_claims")
+    if value is None:
+        return None
+    if entity not in {"payment_professional", "payment_institutional"}:
+        raise ConfigurationError("source_claims is supported only for Payment streams")
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigurationError(f"Source Claims path for {entity!r} must be a non-empty string")
+    path = _resolve_path(value, config_directory)
+    if raw_entity.get("enabled") and not path.is_file():
+        raise ConfigurationError(f"Source Claims file does not exist: {path}")
+    return path
+
+
+def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[str, int]:
+    """Normalize configured Payment source scenarios into immutable counts."""
+    value = raw_entity.get("scenarios", {})
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"Scenarios for {entity!r} must be an object")
+    scenarios: dict[str, int] = {}
+    for name, count in value.items():
+        scenario = str(name).upper()
+        if scenario not in _PAYMENT_SCENARIOS:
+            raise ConfigurationError(f"Unknown Payment source scenario {name!r}")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ConfigurationError(f"Scenario count for {scenario!r} must be non-negative")
+        scenarios[scenario] = count
+    configured_count = raw_entity.get("count", 0)
+    if not isinstance(configured_count, int):
+        raise ConfigurationError(f"Payment count for {entity!r} must be an integer")
+    if scenarios and sum(scenarios.values()) != configured_count:
+        raise ConfigurationError(
+            f"Payment scenario counts for {entity!r} must add up to the configured count"
+        )
+    return scenarios
 
 
 def _entity_defaults() -> dict[str, dict[str, object]]:

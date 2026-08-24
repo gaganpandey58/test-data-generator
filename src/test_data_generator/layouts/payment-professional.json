@@ -228,6 +228,16 @@
       "max_length": 255
     },
     {
+      "name": "CH_CLIENT_CLAIM_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CH_CLIENT_ORIGINAL_CLAIM_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
       "name": "CH_OTHER_INSURANCE_INDICATOR",
       "type": "text",
       "max_length": 255
@@ -486,6 +496,11 @@
       "name": "CH_CLAIM_PAID_DATE",
       "type": "text",
       "max_length": 255
+    },
+    {
+      "name": "CLP02",
+      "type": "text",
+      "max_length": 255
     }
   ],
   "groups": {
@@ -600,10 +615,15 @@
         "type": "text",
         "max_length": 255
       },
-      {
-        "name": "CD_LINE_PAID_DATE",
-        "type": "text",
-        "max_length": 255
+    {
+      "name": "CD_LINE_PAID_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INDEX",
+      "type": "integer",
+      "max_length": 255
       }
     ]
   },

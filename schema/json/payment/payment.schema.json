@@ -488,6 +488,9 @@
               },
               "CD_LINE_PAID_DATE": {
                 "type": "string"
+              },
+              "INDEX": {
+                "type": "integer"
               }
             }
           }
@@ -496,6 +499,15 @@
           "type": "string"
         },
         "CH_CLAIM_PAID_DATE": {
+          "type": "string"
+        },
+        "CH_CLIENT_CLAIM_ID": {
+          "type": "string"
+        },
+        "CH_CLIENT_ORIGINAL_CLAIM_ID": {
+          "type": "string"
+        },
+        "CLP02": {
           "type": "string"
         }
       }
@@ -2186,6 +2198,9 @@
         "CH_CLAIM_PAID_DATE": {
           "type": "string"
         },
+        "CLP02": {
+          "type": "string"
+        },
         "CH_CHECK_DATE": {
           "type": "string"
         },
@@ -2560,6 +2575,9 @@
             "additionalProperties": false,
             "properties": {
               "CD_CLAIM_LINE_NUMBER": {
+                "type": "integer"
+              },
+              "INDEX": {
                 "type": "integer"
               },
               "CD_NUMBER_OF_ADJUSTMENTS": {

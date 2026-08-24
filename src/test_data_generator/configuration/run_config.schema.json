@@ -158,6 +158,11 @@
             "threshold": {"type": "number"},
             "operation": {"$ref": "#/$defs/operation"}
           }
+        },
+        "source_claims": {"type": "string", "minLength": 1},
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
         }
       }
     }

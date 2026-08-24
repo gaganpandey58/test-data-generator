@@ -13,8 +13,14 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from test_data_generator.configuration.config import RunConfig, load_config
-from test_data_generator.core.engine import run_entity, run_update_entity
+from test_data_generator.core.engine import (
+    run_entity,
+    run_records,
+    run_update_entity,
+    run_update_records,
+)
 from test_data_generator.core.errors import ConfigurationError, GenerationError
+from test_data_generator.entities.payment_from_claims import derive_payments_from_claims
 from test_data_generator.entities.provider_cdf import (
     generate_linked_provider_fixtures,
     generate_nppes_file,
@@ -73,6 +79,22 @@ def generate(config: Path, mode: str = "all") -> None:
     entity_counts = {entity.name: entity.count for entity in run_config.entities}
     if mode in {"all", "creation"}:
         for entity in run_config.entities:
+            if entity.source_claims is not None:
+                try:
+                    records = derive_payments_from_claims(
+                        entity.source_claims,
+                        entity.profile,
+                        entity.scenarios,
+                        run_config.seed,
+                        entity.count,
+                    )
+                    output_path = run_records(entity, records, run_config.creation_directory)
+                except (GenerationError, OSError, ValueError) as error:
+                    raise CommandError(
+                        f"Payment generation from Claims failed for entity {entity.name!r}: {error}"
+                    ) from error
+                print(f"{entity.name}: {entity.count} records -> {output_path}")
+                continue
             if (
                 entity.name == "provider"
                 and run_config.provider_linked
@@ -129,14 +151,31 @@ def generate(config: Path, mode: str = "all") -> None:
                 raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
             request = _update_request(run_config, entity)
             try:
-                output_path = run_update_entity(
-                    entity,
-                    run_config.seed,
-                    run_config.update_directory,
-                    entity_counts,
-                    request,
-                    entity_rules,
-                )
+                if entity.source_claims is not None:
+                    records = derive_payments_from_claims(
+                        entity.source_claims,
+                        entity.profile,
+                        entity.scenarios,
+                        run_config.seed,
+                        entity.count,
+                    )
+                    output_path = run_update_records(
+                        entity,
+                        records,
+                        run_config.seed,
+                        run_config.update_directory,
+                        request,
+                        entity_rules,
+                    )
+                else:
+                    output_path = run_update_entity(
+                        entity,
+                        run_config.seed,
+                        run_config.update_directory,
+                        entity_counts,
+                        request,
+                        entity_rules,
+                    )
             except (GenerationError, ValueError) as error:
                 raise CommandError(
                     f"Update generation failed for entity {entity.name!r}: {error}"
