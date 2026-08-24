@@ -36,7 +36,27 @@
     }
   },
   "payments": {
-    "professional": {"count": 0},
-    "institutional": {"count": 0}
+    "professional": {
+      "count": 0,
+      "source_claims": "./output/new-test-data/claims_professional.jsonl",
+      "scenarios": {
+        "MATCHED": 0,
+        "REVERSAL": 0,
+        "REPLACEMENT": 0,
+        "STALE": 0,
+        "ORPHAN": 0
+      }
+    },
+    "institutional": {
+      "count": 0,
+      "source_claims": "./output/new-test-data/claims_institutional.jsonl",
+      "scenarios": {
+        "MATCHED": 0,
+        "REVERSAL": 0,
+        "REPLACEMENT": 0,
+        "STALE": 0,
+        "ORPHAN": 0
+      }
+    }
   }
 }

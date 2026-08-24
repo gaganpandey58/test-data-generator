@@ -20,7 +20,7 @@ from test_data_generator.core.engine import (
     run_update_records,
 )
 from test_data_generator.core.errors import ConfigurationError, GenerationError
-from test_data_generator.entities.payment_from_claims import derive_payments_from_claims
+from test_data_generator.entities.payment import derive_payments_from_claims
 from test_data_generator.entities.provider_cdf import (
     generate_linked_provider_fixtures,
     generate_nppes_file,
