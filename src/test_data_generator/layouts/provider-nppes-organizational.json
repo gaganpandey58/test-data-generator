@@ -1,0 +1,450 @@
+{
+  "profile": "provider-nppes-organizational",
+  "headers": [
+    {
+      "name": "PAYER_PLATFORM",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PAYER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CLIENT_DATA_PLATFORM",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INGESTION_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "INGESTION_EPOCH",
+      "type": "integer",
+      "max_length": 255
+    },
+    {
+      "name": "ROWID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PUBLISHER_NAME",
+      "type": "text",
+      "max_length": 255
+    }
+  ],
+  "root": [
+    {
+      "name": "NPI",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "ENTITY_TYPE_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "ENTITY_TYPE_DESCRIPTION",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "REPLACEMENT_NPI",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "EMPLOYER_IDENTIFICATION_NUMBER_EIN",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_LAST_NAME_LEGAL_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_FIRST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_MIDDLE_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_NAME_PREFIX_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_NAME_SUFFIX_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_CREDENTIAL_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_ORGANIZATION_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_ORGANIZATION_NAME_TYPE_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_LAST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_FIRST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_MIDDLE_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_NAME_PREFIX_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_NAME_SUFFIX_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_CREDENTIAL_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_OTHER_LAST_NAME_TYPE_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_SECOND_LINE_BUSINESS_MAILING_ADDRESS",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_MAILING_ADDRESS_COUNTRY_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_MAILING_ADDRESS_TELEPHONE_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_MAILING_ADDRESS_FAX_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_FIRST_LINE_BUSINESS_PRACTICE_LOCATION_ADDRESS",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_SECOND_LINE_BUSINESS_PRACTICE_LOCATION_ADDRESS",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_CITY_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_STATE_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_COUNTRY_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_TELEPHONE_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_FAX_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_ENUMERATION_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "LAST_UPDATE_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "NPI_DEACTIVATION_REASON_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "NPI_DEACTIVATION_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "NPI_REACTIVATION_DATE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PROVIDER_GENDER_CODE",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_LAST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_FIRST_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_MIDDLE_NAME",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_TITLE_OR_POSITION",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_TELEPHONE_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "IS_SOLE_PROPRIETOR",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "IS_ORGANIZATION_SUBPART",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PARENT_ORGANIZATION_LBN",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "PARENT_ORGANIZATION_TIN",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_NAME_PREFIX_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_NAME_SUFFIX_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "AUTHORIZED_OFFICIAL_CREDENTIAL_TEXT",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CERTIFICATION_DATE",
+      "type": "text",
+      "max_length": 255
+    }
+  ],
+  "groups": {
+    "HEALTHCARE_PROVIDER": [
+      {
+        "name": "INDEX",
+        "type": "integer",
+        "max_length": 255
+      },
+      {
+        "name": "TAXONOMY_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "LICENSE_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "LICENSE_NUMBER_STATE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PRIMARY_TAXONOMY_SWITCH",
+        "type": "text",
+        "max_length": 255
+      }
+    ],
+    "OTHER_PROVIDER_IDENTIFIER": [
+      {
+        "name": "INDEX",
+        "type": "integer",
+        "max_length": 255
+      },
+      {
+        "name": "IDENTIFIER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "TYPE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "TYPE_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "STATE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "ISSUER",
+        "type": "text",
+        "max_length": 255
+      }
+    ],
+    "HEALTHCARE_PROVIDER_TAXONOMY_GROUP": [],
+    "ENDPOINT": [],
+    "OTHER_NAME": [
+      {
+        "name": "PROVIDER_OTHER_ORGANIZATION_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_OTHER_ORGANIZATION_NAME_TYPE_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_OTHER_ORGANIZATION_NAME_TYPE_DESCRIPTION",
+        "type": "text",
+        "max_length": 255
+      }
+    ],
+    "PRACTICE_LOCATION": [
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_ADDRESS_LINE_1",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_ADDRESS_LINE_2",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_CITY_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_STATE_NAME",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_POSTAL_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_COUNTRY_CODE",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_TELEPHONE_NUMBER",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_SECONDARY_PRACTICE_LOCATION_ADDRESS_TELEPHONE_EXTENSION",
+        "type": "text",
+        "max_length": 255
+      },
+      {
+        "name": "PROVIDER_PRACTICE_LOCATION_ADDRESS_FAX_NUMBER",
+        "type": "text",
+        "max_length": 255
+      }
+    ]
+  },
+  "required_parent_fields": {}
+}

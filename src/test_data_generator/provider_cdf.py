@@ -16,6 +16,7 @@ from faker import Faker
 from test_data_generator.configuration.profiles import load_client_headers, load_client_values
 from test_data_generator.core.identifiers import deterministic_uuid4
 from test_data_generator.entities.provider import generate_record
+from test_data_generator.entities.provider_nppes import split_templates, template_for
 from test_data_generator.layouts import project_record
 
 
@@ -26,11 +27,12 @@ def generate_provider_cdf(
     unmatched_count: int = 2,
     seed: int = 20260805,
 ) -> dict[str, Path]:
-    """Generate ``provider_nppes``, ``provider_cdf``, and updated CDF files.
+    """Generate linked ``provider_nppes`` and ``provider_cdf`` files.
 
     ``count`` NPPES records become matching CDF records. ``unmatched_count``
-    additional CDF records receive unique NPIs absent from NPPES and remain
-    byte-for-byte equal in the updated logical records.
+    additional CDF records receive unique NPIs absent from NPPES.  CDF updates
+    are produced by the normal update-directory workflow, so this helper does
+    not create a duplicate ``provider_cdf_updated`` file.
     """
     return generate_linked_provider_fixtures(
         sample_path, output_directory, count, unmatched_count, seed
@@ -54,6 +56,7 @@ def generate_linked_provider_fixtures(
     templates = _read_nppes_objects(sample_path)
     if not templates:
         raise ValueError(f"NPPES sample {sample_path} contains no records")
+    templates_by_profile = split_templates(templates)
     resolved_headers = client_headers or load_client_headers("chc", "provider")
     resolved_values = client_values or load_client_values("chc", "provider")
     cdf_records = [
@@ -61,10 +64,18 @@ def generate_linked_provider_fixtures(
         for index in range(nppes_count)
     ]
     nppes_records = [
-        _nppes_record_from_cdf(templates[index % len(templates)], cdf, index, seed)
+        _nppes_record_from_cdf(
+            template_for(
+                templates_by_profile,
+                "1" if cdf.get("CP_PROVIDER_RECORD_TYPE") == "I" else "2",
+                index,
+            ),
+            cdf,
+            index,
+            seed,
+        )
         for index, cdf in enumerate(cdf_records)
     ]
-    nppes_by_npi = {str(record["NPI"]): record for record in nppes_records}
     cdf_records.extend(
         _cdf_record(
             _unmatched_npi(index),
@@ -75,19 +86,13 @@ def generate_linked_provider_fixtures(
         )
         for index in range(additional_cdf_count)
     )
-    updated_records = [
-        _apply_nppes_update(record, nppes_by_npi.get(str(record.get("CP_PROVIDER_NPI"))))
-        for record in cdf_records
-    ]
     output_directory.mkdir(parents=True, exist_ok=True)
     paths = {
         "provider_nppes": output_directory / "provider_nppes.jsonl",
         "provider_cdf": output_directory / "provider_cdf.jsonl",
-        "provider_cdf_updated": output_directory / "provider_cdf_updated.jsonl",
     }
     _write_jsonl(paths["provider_nppes"], nppes_records)
     _write_jsonl(paths["provider_cdf"], cdf_records)
-    _write_jsonl(paths["provider_cdf_updated"], updated_records)
     return paths
 
 

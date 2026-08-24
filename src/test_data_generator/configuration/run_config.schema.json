@@ -61,10 +61,16 @@
     "provider_nppes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["count"],
+      "anyOf": [
+        {"required": ["count"]},
+        {"required": ["individual"]},
+        {"required": ["organizational"]}
+      ],
       "properties": {
         "count": {"type": "integer", "minimum": 0},
-        "sample": {"type": "string", "minLength": 1}
+        "sample": {"type": "string", "minLength": 1},
+        "individual": {"type": "integer", "minimum": 0},
+        "organizational": {"type": "integer", "minimum": 0}
       }
     },
     "member": {"$ref": "#/$defs/counted_entity"},
@@ -96,10 +102,16 @@
         "nppes": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["count"],
+          "anyOf": [
+            {"required": ["count"]},
+            {"required": ["individual"]},
+            {"required": ["organizational"]}
+          ],
           "properties": {
             "count": {"type": "integer", "minimum": 0},
-            "sample": {"type": "string", "minLength": 1}
+            "sample": {"type": "string", "minLength": 1},
+            "individual": {"type": "integer", "minimum": 0},
+            "organizational": {"type": "integer", "minimum": 0}
           }
         },
         "cdf": {

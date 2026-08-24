@@ -225,7 +225,7 @@ def _network(
             "CP_PROVIDER_CLIENT_MASTER_ID": master_id,
             "CP_PROVIDER_NETWORK_CLIENT_ID": f"{network_id_prefix}-{_digits(randomizer, 5)}",
             "CP_PROVIDER_NETWORK_NAME": network_name,
-            "CP_PROVIDER_NETWORK_INDICATOR": "I",
+            "CP_PROVIDER_NETWORK_INDICATOR": randomizer.choice(("Y", "N")),
             "CP_PROVIDER_NETWORK_EFFECTIVE_DATE": start,
             "CP_PROVIDER_NETWORK_TERMINATION_DATE": "",
         }

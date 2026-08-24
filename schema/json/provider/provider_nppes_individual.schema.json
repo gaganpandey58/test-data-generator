@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Individual NPPES provider record",
+  "description": "The checked-in individual NPPES sample is authoritative for the complete field shape.",
+  "type": "object",
+  "required": ["NPI", "ENTITY_TYPE_CODE"],
+  "properties": {
+    "NPI": {"type": "string", "pattern": "^[0-9]{10}$"},
+    "ENTITY_TYPE_CODE": {"const": "1"},
+    "ENTITY_TYPE_DESCRIPTION": {"const": "Individual"}
+  },
+  "additionalProperties": true
+}

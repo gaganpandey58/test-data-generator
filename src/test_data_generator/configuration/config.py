@@ -117,9 +117,17 @@ def load_config(path: Path) -> RunConfig:
 
     disabled_filenames: list[str] = []
     # Remove filenames emitted before the provider CDF naming contract changed.
-    disabled_filenames.extend(("providers.jsonl", "provider.jsonl"))
+    disabled_filenames.extend(
+        (
+            "providers.jsonl",
+            "provider.jsonl",
+            "provider_cdf_updated.jsonl",
+            "professional-claims.jsonl",
+            "institutional-claims.jsonl",
+        )
+    )
     nppes_config = raw_config.get("provider_nppes", {})
-    nppes_count = int(nppes_config.get("count", 0)) if isinstance(nppes_config, dict) else 0
+    nppes_count = _nppes_total(nppes_config)
     default_sample = (
         Path(__file__).resolve().parents[1] / "samples/reference/provider_nppes_sample.jsonl"
     )
@@ -217,7 +225,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
             ):
                 nppes = value.get("nppes", {})
                 cdf = value.get("cdf", {})
-                nppes_count = nppes.get("count", 0) if isinstance(nppes, dict) else 0
+                nppes_count = _nppes_total(nppes)
                 additional_count = cdf.get("additional_count", 0) if isinstance(cdf, dict) else 0
                 selection = {
                     key: item for key, item in value.items() if key not in {"nppes", "cdf"}
@@ -261,6 +269,15 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         "provider_nppes": raw_config.get("provider_nppes", {}),
         "entities": entities,
     }
+
+
+def _nppes_total(value: object) -> int:
+    """Resolve legacy total or explicit individual/organizational counts."""
+    if not isinstance(value, dict):
+        return 0
+    if "count" in value:
+        return int(value.get("count", 0))
+    return int(value.get("individual", 0)) + int(value.get("organizational", 0))
 
 
 def _selected_entity(
@@ -334,7 +351,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "profile": "claim-professional",
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "test_data_generator.entities.claim",
-            "filename": "professional-claims.jsonl",
+            "filename": "claims_professional.jsonl",
             "updates": {},
             "header_order": None,
         },
@@ -344,7 +361,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "profile": "claim-institutional",
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "test_data_generator.entities.claim",
-            "filename": "institutional-claims.jsonl",
+            "filename": "claims_institutional.jsonl",
             "updates": {},
             "header_order": None,
         },

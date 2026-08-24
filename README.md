@@ -11,8 +11,8 @@ The generator creates deterministic new records and can now derive update fixtur
 | Provider CDF | `provider_cdf.jsonl` | Provider identity, address, and network data. |
 | Provider NPPES | `provider_nppes.jsonl` | NPPES provider reference data using the checked-in sample shape. |
 | Member | `members.jsonl` | Member, address, enrollment, and coordination-of-benefits data. |
-| Professional claim | `professional-claims.jsonl` | Professional claim headers, details, and embedded payment fields. |
-| Institutional claim | `institutional-claims.jsonl` | Institutional claim headers, details, and embedded payment fields. |
+| Professional claim | `claims_professional.jsonl` | Professional claim headers, details, and embedded payment fields. |
+| Institutional claim | `claims_institutional.jsonl` | Institutional claim headers, details, and embedded payment fields. |
 
 Professional and institutional claims are distinct streams and are always written to separate files. Payment data remains part of each claim object; the generator does not create a separate payment file.
 
@@ -166,14 +166,18 @@ uv run python -m test_data_generator provider-cdf \
   --unmatched-count 2
 ```
 
-This writes `provider_nppes.jsonl`, `provider_cdf.jsonl`, and
-`provider_cdf_updated.jsonl`. The first `count` CDF NPIs match the generated
-NPPES NPIs; the additional CDF records use unique NPIs absent from NPPES and
-are preserved unchanged in the updated file. NPPES objects are read using the
-sample's exact field names, nested structures, and value types. Matched CDF
-records reuse the existing provider generator and update provider names,
-credentials, taxonomy, license, enumeration, and mailing-address fields from
-the corresponding NPPES record.
+This writes `provider_nppes.jsonl` and `provider_cdf.jsonl`. The first `count`
+CDF NPIs match the generated NPPES NPIs; additional CDF records use unique
+NPIs absent from NPPES. The duplicate `provider_cdf_updated.jsonl` output is
+not created: configured updates are written by the normal workflow to
+`update-test-data/provider_cdf.update.jsonl`.
+
+NPPES entity type `1` (`Individual`) and `2` (`Organization`) use separate
+sample profiles (`provider-nppes-individual` and
+`provider-nppes-organizational`). The corresponding CDF record maps them to
+`CP_PROVIDER_RECORD_TYPE` values `I` and `P`, and network indicators are only
+`Y` or `N`. Their layouts and schemas are stored separately under
+`src/test_data_generator/layouts/` and `schema/json/provider/`.
 
 The normal configuration-driven generation supports the two provider streams
 independently. `provider` writes `provider_cdf.jsonl`, while `provider_nppes`
@@ -313,8 +317,8 @@ output/
 │   ├── provider_cdf.jsonl
 │   ├── provider_nppes.jsonl
 │   ├── members.jsonl
-│   ├── professional-claims.jsonl
-│   └── institutional-claims.jsonl
+│   ├── claims_professional.jsonl
+│   └── claims_institutional.jsonl
 └── update-test-data/
     ├── provider_cdf.update.jsonl
     └── ...
