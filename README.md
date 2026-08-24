@@ -146,6 +146,14 @@ line dates, procedure/revenue identifiers, modifiers, and line charge amount.
 The paid-date fields `CH_CLAIM_PAID_DATE` and `CD_LINE_PAID_DATE` are retained
 for payment-date matching.
 
+Payment generation also derives the institutional reconciliation fields from
+the generated claim amounts: patient responsibility follows patient liability,
+contract amount follows allowed amount, and disallowed/discount amounts are
+the charge-minus-allowed difference. These values are generated only when the
+selected Payment layout declares the field. Each Payment record validates its
+file type, claim type, required envelope fields, and configured relationship
+fields before it is written.
+
 ## Generate data
 
 Install Python 3.12+ and [uv](https://docs.astral.sh/uv/), then install the project dependencies:
