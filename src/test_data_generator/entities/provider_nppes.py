@@ -140,7 +140,7 @@ def generate_record(
 
 def generate_record_from_cdf(cdf: Mapping[str, object], index: int, seed: int) -> dict[str, object]:
     """Generate a type-specific NPPES record linked to one CDF provider."""
-    code = "1" if cdf.get("CP_PROVIDER_RECORD_TYPE") == "I" else "2"
+    code = "1" if str(cdf.get("CP_PROVIDER_RECORD_TYPE")) in {"1", "I"} else "2"
     record = generate_record(seed, index, code)
     record["NPI"] = str(cdf.get("CP_PROVIDER_NPI", _npi(index)))
     record["PROVIDER_FIRST_NAME"] = cdf.get("CP_PROVIDER_FIRST_NAME", "") if code == "1" else ""

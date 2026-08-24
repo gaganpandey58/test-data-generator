@@ -12,18 +12,9 @@ from test_data_generator.layouts import project_record
 
 
 def generate_provider_cdf(
-    output_directory: Path,
-    count: int = 10,
-    unmatched_count: int = 2,
-    seed: int = 20260805,
+    output_directory: Path, count: int = 10, unmatched_count: int = 2, seed: int = 20260805
 ) -> dict[str, Path]:
-    """Generate linked ``provider_nppes`` and ``provider_cdf`` files.
-
-    ``count`` NPPES records become matching CDF records. ``unmatched_count``
-    additional CDF records receive unique NPIs absent from NPPES.  CDF updates
-    are produced by the normal update-directory workflow, so this helper does
-    not create a duplicate ``provider_cdf_updated`` file.
-    """
+    """Generate linked ``provider_nppes`` and ``provider_cdf`` files."""
     return generate_linked_provider_fixtures(output_directory, count, unmatched_count, seed)
 
 
@@ -44,8 +35,7 @@ def generate_linked_provider_fixtures(
     resolved_values = client_values or load_client_values("chc", "provider")
     cdf_records = [
         _set_linked_record_type(
-            _cdf_record(_nppes_npi(index), seed, index, resolved_headers, resolved_values),
-            index,
+            _cdf_record(_nppes_npi(index), seed, index, resolved_headers, resolved_values), index
         )
         for index in range(nppes_count)
     ]
@@ -54,11 +44,7 @@ def generate_linked_provider_fixtures(
     ]
     cdf_records.extend(
         _cdf_record(
-            _unmatched_npi(index),
-            seed,
-            nppes_count + index,
-            resolved_headers,
-            resolved_values,
+            _unmatched_npi(index), seed, nppes_count + index, resolved_headers, resolved_values
         )
         for index in range(additional_cdf_count)
     )
@@ -100,7 +86,7 @@ def _cdf_record(
 def _set_linked_record_type(record: dict[str, object], index: int) -> dict[str, object]:
     """Ensure linked fixtures exercise both individual and organizational paths."""
     individual = index % 2 == 0
-    record["CP_PROVIDER_RECORD_TYPE"] = "I" if individual else "P"
+    record["CP_PROVIDER_RECORD_TYPE"] = "1" if individual else "2"
     if individual:
         first = str(record.get("CP_PROVIDER_FIRST_NAME", "")).strip() or f"TEST{index}"
         last = str(record.get("CP_PROVIDER_LAST_NAME", "")).strip() or f"PROVIDER{index}"
@@ -121,6 +107,7 @@ def _set_linked_record_type(record: dict[str, object], index: int) -> dict[str, 
 def _apply_nppes_update(
     record: dict[str, object], nppes: dict[str, object] | None
 ) -> dict[str, object]:
+    """Apply populated NPPES values only to fields already present in the CDF row."""
     updated = deepcopy(record)
     if nppes is None:
         return updated
@@ -134,8 +121,7 @@ def _apply_nppes_update(
     }
     for source, target in root_mapping.items():
         _set_existing(updated, target, nppes.get(source, ""))
-    full_name = _nppes_full_name(nppes)
-    _set_existing(updated, "CP_PROVIDER_FULL_NAME", full_name)
+    _set_existing(updated, "CP_PROVIDER_FULL_NAME", _nppes_full_name(nppes))
     taxonomy = _primary_taxonomy(nppes)
     _set_existing(updated, "CP_PROVIDER_PRIMARY_SPECIALTY_CODE", taxonomy)
     _set_existing(updated, "CP_PROVIDER_TAXONOMY_CODE", taxonomy)

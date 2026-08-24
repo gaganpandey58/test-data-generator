@@ -15,7 +15,7 @@ from pathlib import Path
 from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import run_entity, run_update_entity
 from test_data_generator.core.errors import ConfigurationError, GenerationError
-from test_data_generator.provider_cdf import (
+from test_data_generator.entities.provider_cdf import (
     generate_linked_provider_fixtures,
     generate_nppes_file,
     generate_provider_cdf,

@@ -174,7 +174,8 @@ not created: configured updates are written by the normal workflow to
 NPPES entity type `1` (`Individual`) and `2` (`Organization`) use separate
 code-defined profiles (`provider-nppes-individual` and
 `provider-nppes-organizational`). The corresponding CDF record maps them to
-`CP_PROVIDER_RECORD_TYPE` values `I` and `P`, and network indicators are only
+`CP_PROVIDER_RECORD_TYPE` values `1` and `2` (`1` is an individual provider and
+`2` is a facility/organizational provider), and network indicators are only
 `Y` or `N`. Their layouts and schemas are stored separately under
 `src/test_data_generator/layouts/` and `schema/json/provider/`.
 

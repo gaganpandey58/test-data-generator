@@ -143,7 +143,7 @@ def resolve_update(
     selected = resolve_fields(request, rules, seed, index)
     operation = request.operation
     if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
-        selection_threshold = request.threshold or rules.methods[0].needed_weight
+        selection_threshold = _weight_threshold(request, rules)
         condition = request.condition
         if condition is None:
             raise ValueError("WEIGHT_CHANGE requires BELOW_LIMIT, AT_LIMIT, or ABOVE_LIMIT")
@@ -187,13 +187,7 @@ def resolve_update(
                     changed.append(field)
     synchronized = synchronize_record(original, result, tuple(changed + removed))
     total = sum((rules.fields[field].weight for field in changed), Decimal("0"))
-    threshold = request.threshold
-    if threshold is None:
-        method = next(
-            (method for method in rules.methods if method.name == request.matching_method),
-            rules.methods[0],
-        )
-        threshold = method.needed_weight
+    threshold = _weight_threshold(request, rules)
     relation = _relation(total, threshold)
     condition = request.condition
     if (
@@ -320,6 +314,25 @@ def _relation(total: Decimal, threshold: Decimal) -> str:
     if total == threshold:
         return "equal"
     return "above"
+
+
+def _weight_threshold(request: UpdateRequest, rules: EntityRules) -> Decimal:
+    """Resolve a usable threshold, including a default below-limit boundary."""
+    if request.threshold is not None:
+        return request.threshold
+    method = next(
+        (method for method in rules.methods if method.name == request.matching_method),
+        rules.methods[0],
+    )
+    if request.operation == OperationType.WEIGHT_CHANGE and request.condition == "BELOW_LIMIT":
+        weights = [
+            rule.weight
+            for name, rule in rules.fields.items()
+            if name not in rules.keys and rule.weight > 0
+        ]
+        if weights:
+            return method.needed_weight + min(weights)
+    return method.needed_weight
 
 
 def _select_weight_fields(
