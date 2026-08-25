@@ -139,6 +139,16 @@
       "max_length": 255
     },
     {
+      "name": "CH_CLIENT_CLAIM_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CH_CLIENT_ORIGINAL_CLAIM_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
       "name": "CH_CLAIM_FREQUENCY_CODE",
       "type": "text",
       "max_length": 255

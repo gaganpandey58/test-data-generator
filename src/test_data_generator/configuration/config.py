@@ -117,6 +117,10 @@ def load_config(path: Path) -> RunConfig:
     if client not in available_clients():
         raise ConfigurationError(f"Invalid configuration: unknown client profile {client!r}")
 
+    generation_config = generation if isinstance(generation, dict) else {}
+    creation_config = generation_config.get("creation", {})
+    creation_directory = output_directory / str(creation_config.get("directory", "new-test-data"))
+
     disabled_filenames: list[str] = []
     # Remove filenames emitted before the provider CDF naming contract changed.
     disabled_filenames.extend(
@@ -160,15 +164,18 @@ def load_config(path: Path) -> RunConfig:
                 filename=filename,
                 update=raw_entity.get("updates", {}),
                 header_order=str(raw_entity.get("header_order", "source")),
-                source_claims=_source_claim_path(name, raw_entity, config_path.parent),
+                source_claims=_payment_source_path(
+                    name,
+                    raw_entity,
+                    raw_entities,
+                    config_path.parent,
+                    creation_directory,
+                ),
                 scenarios=_scenario_counts(name, raw_entity),
             )
         )
     _validate_unique_filenames(entities)
-    generation_config = generation if isinstance(generation, dict) else {}
-    creation_config = generation_config.get("creation", {})
     update_config = generation_config.get("updates", {})
-    creation_directory = output_directory / str(creation_config.get("directory", "new-test-data"))
     update_directory = output_directory / str(update_config.get("directory", "update-test-data"))
     rule_catalog_value = update_config.get("rule_catalog")
     rule_catalog = (
@@ -345,10 +352,33 @@ def _source_claim_path(
         raise ConfigurationError("source_claims is supported only for Payment streams")
     if not isinstance(value, str) or not value.strip():
         raise ConfigurationError(f"Source Claims path for {entity!r} must be a non-empty string")
-    path = _resolve_path(value, config_directory)
-    if raw_entity.get("enabled") and not path.is_file():
-        raise ConfigurationError(f"Source Claims file does not exist: {path}")
-    return path
+    return _resolve_path(value, config_directory)
+
+
+def _payment_source_path(
+    entity: str,
+    raw_entity: Mapping[str, object],
+    raw_entities: Mapping[str, object],
+    config_directory: Path,
+    creation_directory: Path,
+) -> Path | None:
+    """Resolve explicit or same-run Claim input for an enabled Payment stream."""
+    explicit = _source_claim_path(entity, raw_entity, config_directory)
+    if explicit is not None:
+        return explicit
+    if entity not in {"payment_professional", "payment_institutional"}:
+        return None
+    claim_entity_name = {
+        "payment_professional": "claim_professional",
+        "payment_institutional": "claim_institutional",
+    }[entity]
+    claim_entity = raw_entities.get(claim_entity_name)
+    if not isinstance(claim_entity, dict) or not claim_entity.get("enabled"):
+        return None
+    filename = claim_entity.get("filename")
+    if not isinstance(filename, str) or not filename:
+        return None
+    return creation_directory / filename
 
 
 def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[str, int]:
@@ -369,9 +399,14 @@ def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[s
     configured_count = raw_entity.get("count", 0)
     if not isinstance(configured_count, int):
         raise ConfigurationError(f"Payment count for {entity!r} must be an integer")
-    if scenarios and sum(scenarios.values()) != configured_count:
+    configured_scenarios = sum(scenarios.values())
+    if configured_scenarios > configured_count:
         raise ConfigurationError(
-            f"Payment scenario counts for {entity!r} must add up to the configured count"
+            f"Payment scenario counts for {entity!r} cannot exceed the configured count"
+        )
+    if scenarios and configured_scenarios < configured_count:
+        scenarios["MATCHED"] = scenarios.get("MATCHED", 0) + (
+            configured_count - configured_scenarios
         )
     return scenarios
 

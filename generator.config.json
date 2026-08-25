@@ -27,35 +27,35 @@
   },
   "claims": {
     "professional": {
-      "count": 1,
+      "count": 7,
       "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
     },
     "institutional": {
-      "count": 1,
+      "count": 7,
       "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
     }
   },
   "payments": {
     "professional": {
-      "count": 0,
+      "count": 7,
       "source_claims": "./output/new-test-data/claims_professional.jsonl",
       "scenarios": {
-        "MATCHED": 0,
-        "REVERSAL": 0,
+        "MATCHED": 4,
+        "REVERSAL": 1,
         "REPLACEMENT": 0,
-        "STALE": 0,
-        "ORPHAN": 0
+        "STALE": 1,
+        "ORPHAN": 1
       }
     },
     "institutional": {
-      "count": 0,
+      "count": 7,
       "source_claims": "./output/new-test-data/claims_institutional.jsonl",
       "scenarios": {
-        "MATCHED": 0,
-        "REVERSAL": 0,
+        "MATCHED": 4,
+        "REVERSAL": 1,
         "REPLACEMENT": 0,
-        "STALE": 0,
-        "ORPHAN": 0
+        "STALE": 1,
+        "ORPHAN": 1
       }
     }
   }
