@@ -67,6 +67,7 @@ _PATIENT_RELATIONSHIP_FIELDS = (
     "CH_SUBSCRIBER_CLIENT_MASTER_ID",
     "CH_SUBSCRIBER_SSN",
 )
+_ORPHAN_SOURCE_INDEX_OFFSET = 10_000_000
 
 
 def generate_record(
@@ -255,7 +256,6 @@ def derive_payments_from_claims(
     limit: int | None = None,
 ) -> list[dict[str, object]]:
     """Derive Payments from existing Claims in configured scenario order."""
-    claims = load_claim_records(path)
     count = limit if limit is not None else sum(scenario_counts.values())
     if count < 1:
         return []
@@ -264,10 +264,16 @@ def derive_payments_from_claims(
     }
     if not requested:
         requested = {"MATCHED": count}
+    claim_backed = {
+        scenario: scenario_count
+        for scenario, scenario_count in requested.items()
+        if scenario != "ORPHAN"
+    }
+    claims = load_claim_records(path) if claim_backed else []
     records: list[dict[str, object]] = []
     prior_payment_claims: list[Mapping[str, object]] = []
     source_index = 0
-    for scenario in ("MATCHED", "REPLACEMENT", "STALE", "ORPHAN"):
+    for scenario in ("MATCHED", "REPLACEMENT", "STALE"):
         scenario_count = requested.get(scenario, 0)
         if not scenario_count:
             continue
@@ -282,9 +288,11 @@ def derive_payments_from_claims(
         for _ in range(scenario_count):
             claim = candidates[source_index % len(candidates)]
             records.append(derive_payment_from_claim(claim, profile, seed, len(records), scenario))
-            if scenario != "ORPHAN":
-                prior_payment_claims.append(claim)
+            prior_payment_claims.append(claim)
             source_index += 1
+    records.extend(
+        generate_orphan_payments(profile, requested.get("ORPHAN", 0), seed, len(records))
+    )
     reversal_count = requested.get("REVERSAL", 0)
     if reversal_count and not prior_payment_claims:
         raise ValueError(
@@ -300,6 +308,39 @@ def derive_payments_from_claims(
             f"Payment source scenario counts produced {len(records)} records; expected {count}"
         )
     return records
+
+
+def generate_orphan_payments(
+    profile: str, count: int, seed: int, start_index: int = 0
+) -> list[dict[str, object]]:
+    """Create standalone orphan Payments without writing or referencing Claim records.
+
+    A source-shaped temporary value is used only to populate the normal 835
+    structure.  Its identifiers are allocated outside the configured Claim
+    stream and it is never returned, persisted, or configured as a Claim.
+    """
+    if count < 0:
+        raise ValueError("Orphan Payment count cannot be negative")
+    claim_profile = (
+        "claim-professional" if profile == "payment-professional" else "claim-institutional"
+    )
+    return [
+        derive_payment_from_claim(
+            generate_claim(
+                seed,
+                _ORPHAN_SOURCE_INDEX_OFFSET + start_index + index,
+                {},
+                {},
+                {},
+                claim_profile,
+            ),
+            profile,
+            seed,
+            start_index + index,
+            "ORPHAN",
+        )
+        for index in range(count)
+    ]
 
 
 def _copy_claim_lineage(payment: dict[str, object], claim: Mapping[str, object]) -> None:
@@ -433,39 +474,42 @@ def _apply_scenario(
 
 
 def _make_orphan(payment: dict[str, object], profile: str, seed: int, index: int) -> None:
-    """Break populated declared matching keys while preserving their types."""
-    token = f"ORPHAN-{seed}-{index:06d}"
-    payment["CH_CLIENT_CLAIM_ID"] = token
-    for field, suffix in {
-        "CH_CLIENT_ORIGINAL_CLAIM_ID": "ORIGINAL",
-        "CH_CLIENT_ROOT_CLAIM_ID": "ROOT",
-        "CH_CLIENT_CLAIM_UNIQUE_ID": "UNIQUE",
-    }.items():
-        if field in payment:
-            payment[field] = f"{token}-{suffix}"
-    if "CH_CLIENT_CLAIM_VERSION_NUMBER" in payment:
-        payment["CH_CLIENT_CLAIM_VERSION_NUMBER"] = "0"
-    changed = False
-    for field in PAYMENT_MATCHING_RULES[profile]["header"]:
-        if field in _PATIENT_RELATIONSHIP_FIELDS:
-            continue
-        if field not in payment or not _present(payment[field]):
-            continue
-        payment[field] = _orphan_value(payment[field], token)
-        changed = True
-    if not changed:
+    """Ensure a standalone Payment cannot match its transient source shape."""
+    del seed, index
+    preferred = "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+    candidates = (preferred,) + tuple(
+        field
+        for field in PAYMENT_MATCHING_RULES[profile]["header"]
+        if field not in _PATIENT_RELATIONSHIP_FIELDS and field != preferred
+    )
+    for field in candidates:
+        if field in payment and _present(payment[field]):
+            payment[field] = _nonmatching_value(payment[field])
+            return
+    else:
         raise ValueError(f"Could not create an orphan Payment for layout {profile!r}")
 
 
-def _orphan_value(value: object, token: str) -> object:
-    """Return a deterministic non-matching value with the source JSON type."""
+def _nonmatching_value(value: object) -> object:
+    """Return a normal-looking value distinct from the supplied source value."""
     if isinstance(value, bool):
         return not value
     if isinstance(value, int):
         return value + 1
     if isinstance(value, float):
         return value + 1.0
-    return f"{value}-{token}"
+    if not isinstance(value, str):
+        return value
+    if not value:
+        return "1"
+    final = value[-1]
+    if final.isdigit():
+        return value[:-1] + str((int(final) + 1) % 10)
+    if final.isupper():
+        return value[:-1] + chr((ord(final) - ord("A") + 1) % 26 + ord("A"))
+    if final.islower():
+        return value[:-1] + chr((ord(final) - ord("a") + 1) % 26 + ord("a"))
+    return value + "1"
 
 
 def _is_replacement(claim: Mapping[str, object]) -> bool:

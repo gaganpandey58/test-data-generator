@@ -9,6 +9,7 @@ details of parsing, validation, and atomic file publication.
 import argparse
 import subprocess
 import sys
+from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -20,7 +21,10 @@ from test_data_generator.core.engine import (
     run_update_records,
 )
 from test_data_generator.core.errors import ConfigurationError, GenerationError
-from test_data_generator.entities.payment import derive_payments_from_claims
+from test_data_generator.entities.payment import (
+    derive_payments_from_claims,
+    generate_orphan_payments,
+)
 from test_data_generator.entities.provider_cdf import (
     generate_linked_provider_fixtures,
     generate_nppes_file,
@@ -92,6 +96,19 @@ def generate(config: Path, mode: str = "all") -> None:
                 except (GenerationError, OSError, ValueError) as error:
                     raise CommandError(
                         f"Payment generation from Claims failed for entity {entity.name!r}: {error}"
+                    ) from error
+                print(f"{entity.name}: {entity.count} records -> {output_path}")
+                continue
+            if _is_orphan_only_payment(entity.name, entity.scenarios):
+                try:
+                    records = generate_orphan_payments(
+                        entity.profile, entity.count, run_config.seed
+                    )
+                    output_path = run_records(entity, records, run_config.creation_directory)
+                except (GenerationError, ValueError) as error:
+                    raise CommandError(
+                        "Standalone orphan Payment generation failed for entity "
+                        f"{entity.name!r}: {error}"
                     ) from error
                 print(f"{entity.name}: {entity.count} records -> {output_path}")
                 continue
@@ -175,6 +192,18 @@ def generate(config: Path, mode: str = "all") -> None:
                         request,
                         entity_rules,
                     )
+                elif _is_orphan_only_payment(entity.name, entity.scenarios):
+                    records = generate_orphan_payments(
+                        entity.profile, entity.count, run_config.seed
+                    )
+                    output_path = run_update_records(
+                        entity,
+                        records,
+                        run_config.seed,
+                        run_config.update_directory,
+                        request,
+                        entity_rules,
+                    )
                 else:
                     output_path = run_update_entity(
                         entity,
@@ -191,6 +220,15 @@ def generate(config: Path, mode: str = "all") -> None:
             print(f"{entity.name}: {entity.count} updates -> {output_path}")
         _remove_unrequested_payment_updates(run_config)
     _remove_disabled_outputs(run_config)
+
+
+def _is_orphan_only_payment(name: str, scenarios: Mapping[str, int]) -> bool:
+    """Return whether a Payment stream needs no Claim-backed source records."""
+    return (
+        name in {"payment_professional", "payment_institutional"}
+        and scenarios.get("ORPHAN", 0) > 0
+        and all(scenario == "ORPHAN" or count == 0 for scenario, count in scenarios.items())
+    )
 
 
 def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:

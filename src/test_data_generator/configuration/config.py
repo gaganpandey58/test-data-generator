@@ -385,7 +385,7 @@ def _payment_source_path(
     }[entity]
     claim_entity = raw_entities.get(claim_entity_name)
     if not isinstance(claim_entity, dict) or not claim_entity.get("enabled"):
-        if raw_entity.get("enabled"):
+        if raw_entity.get("enabled") and _payment_requires_claim_source(entity, raw_entity):
             raise ConfigurationError(
                 f"Payment stream {entity!r} requires source_claims or an enabled "
                 f"{claim_entity_name!r} stream"
@@ -425,6 +425,15 @@ def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[s
             configured_count - configured_scenarios
         )
     return scenarios
+
+
+def _payment_requires_claim_source(entity: str, raw_entity: Mapping[str, object]) -> bool:
+    """Return whether the configured Payment scenarios need an existing Claim."""
+    scenarios = _scenario_counts(entity, raw_entity)
+    if not scenarios:
+        count = raw_entity.get("count", 0)
+        return isinstance(count, int) and not isinstance(count, bool) and count > 0
+    return any(scenario != "ORPHAN" and count > 0 for scenario, count in scenarios.items())
 
 
 _CLAIM_FREQUENCY_CODES = frozenset({"1", "7", "8"})
