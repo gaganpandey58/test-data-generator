@@ -47,10 +47,13 @@ def generate_record(
     """
     del client_values
     randomizer = Random(_record_seed(seed, index))
-    member = _linked_member(seed, index, entity_counts)
-    provider = _linked_provider(seed, index, entity_counts)
     claim_type = _claim_type(profile)
     frequency, original_index = _lifecycle(lifecycle, index)
+    patient_index = original_index if frequency in {"7", "8"} else index
+    assert patient_index is not None
+    patient_identity_index = patient_index + (1_000_000 if claim_type == "I" else 0)
+    member = _linked_member(seed, patient_identity_index, entity_counts)
+    provider = _linked_provider(seed, index, entity_counts)
     profile_code = "P" if claim_type == "P" else "I"
     service_from_date = date(2025, 1, 1) + timedelta(days=randomizer.randrange(500))
     service_from = _compact_date(service_from_date)
@@ -541,22 +544,21 @@ def _entity_count(entity_counts: Mapping[str, int], entity_name: str) -> int:
 
 def _linked_member(
     seed: int,
-    claim_index: int,
+    patient_index: int,
     entity_counts: Mapping[str, int],
 ) -> dict[str, object]:
-    """Generate the exact member row selected from the configured output set.
+    """Generate the Claim-owned patient identity for a Claim lifecycle.
 
     Args:
         seed: Shared deterministic generation seed.
-        claim_index: Stable zero-based claim position.
+        patient_index: Stable zero-based identity index. Replacements and voids
+            reuse the original Claim's patient index.
         entity_counts: Enabled entity output counts.
 
     Returns:
-        The emitted member record selected for this claim, or a deterministic
-        source-shaped fallback record when members are not part of the run.
+        Deterministic source-shaped patient/member data owned by the Claim.
     """
-    member_index = claim_index % _entity_count(entity_counts, "member")
-    return generate_member(seed, member_index, entity_counts, {}, {}, "member")
+    return generate_member(seed, patient_index, entity_counts, {}, {}, "member")
 
 
 def _linked_provider(

@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path, PureWindowsPath
+from random import Random
 from typing import Any, Mapping, cast
 
 from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
@@ -153,10 +154,11 @@ def load_config(path: Path) -> RunConfig:
             )
         filename = raw_entity["filename"]
         _validate_filename(name, filename, output_directory)
+        record_count = _effective_record_count(name, raw_entity, raw_entities)
         entities.append(
             EntityConfig(
                 name=name,
-                count=raw_entity["count"],
+                count=record_count,
                 client_headers=load_client_headers(client, name),
                 client_values=load_client_values(client, name),
                 profile=profile,
@@ -173,7 +175,9 @@ def load_config(path: Path) -> RunConfig:
                     creation_directory,
                 ),
                 scenarios=_scenario_counts(name, raw_entity),
-                claim_lifecycles=_claim_lifecycles(name, raw_entity),
+                claim_lifecycles=_claim_lifecycles(
+                    name, raw_entity, record_count, seed, raw_entities
+                ),
             )
         )
     _validate_unique_filenames(entities)
@@ -423,43 +427,64 @@ def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[s
 _CLAIM_FREQUENCY_CODES = frozenset({"1", "7", "8"})
 
 
+def _effective_record_count(
+    entity: str, raw_entity: Mapping[str, object], raw_entities: Mapping[str, object]
+) -> int:
+    """Expand one Claim only when a Replacement Payment requires its original."""
+    count = raw_entity.get("count", 0)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        raise ConfigurationError(f"Count for {entity!r} must be a non-negative integer")
+    if (
+        entity in {"claim_professional", "claim_institutional"}
+        and count == 1
+        and raw_entity.get("frequencies") is None
+        and _replacement_requested(entity, raw_entities)
+    ):
+        return 2
+    return count
+
+
 def _claim_lifecycles(
-    entity: str, raw_entity: Mapping[str, object]
+    entity: str,
+    raw_entity: Mapping[str, object],
+    count: int,
+    seed: int,
+    raw_entities: Mapping[str, object],
 ) -> tuple[tuple[str, int | None], ...]:
-    """Resolve configured Claim frequencies into deterministic source lineage."""
+    """Resolve Claim lifecycles with deterministic random default frequencies."""
     value = raw_entity.get("frequencies")
     if entity not in {"claim_professional", "claim_institutional"}:
         if value is not None:
             raise ConfigurationError("frequencies is supported only for Claim streams")
         return ()
-    count = raw_entity.get("count", 0)
     if not isinstance(count, int) or isinstance(count, bool) or count < 0:
         raise ConfigurationError(f"Claim count for {entity!r} must be a non-negative integer")
     if value is None:
-        return tuple(("1", index) for index in range(count))
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"Frequencies for {entity!r} must be an object")
-    frequencies: dict[str, int] = {}
-    for code, configured_count in value.items():
-        frequency = str(code)
-        if frequency not in _CLAIM_FREQUENCY_CODES:
+        codes = _random_claim_frequencies(entity, count, seed, raw_entities)
+    else:
+        if not isinstance(value, dict):
+            raise ConfigurationError(f"Frequencies for {entity!r} must be an object")
+        frequencies: dict[str, int] = {}
+        for code, configured_count in value.items():
+            frequency = str(code)
+            if frequency not in _CLAIM_FREQUENCY_CODES:
+                raise ConfigurationError(
+                    f"Unsupported Claim frequency {code!r}; supported values are 1, 7, and 8"
+                )
+            if (
+                not isinstance(configured_count, int)
+                or isinstance(configured_count, bool)
+                or configured_count < 0
+            ):
+                raise ConfigurationError(f"Frequency count for {frequency!r} must be non-negative")
+            frequencies[frequency] = configured_count
+        if sum(frequencies.values()) != count:
             raise ConfigurationError(
-                f"Unsupported Claim frequency {code!r}; supported values are 1, 7, and 8"
+                f"Claim frequency counts for {entity!r} must add up to the configured count"
             )
-        if (
-            not isinstance(configured_count, int)
-            or isinstance(configured_count, bool)
-            or configured_count < 0
-        ):
-            raise ConfigurationError(f"Frequency count for {frequency!r} must be non-negative")
-        frequencies[frequency] = configured_count
-    if sum(frequencies.values()) != count:
-        raise ConfigurationError(
-            f"Claim frequency counts for {entity!r} must add up to the configured count"
-        )
-    codes = [
-        frequency for frequency in ("1", "7", "8") for _ in range(frequencies.get(frequency, 0))
-    ]
+        codes = [
+            frequency for frequency in ("1", "7", "8") for _ in range(frequencies.get(frequency, 0))
+        ]
     original_indexes = [index for index, frequency in enumerate(codes) if frequency == "1"]
     if any(frequency in {"7", "8"} for frequency in codes) and not original_indexes:
         raise ConfigurationError(
@@ -474,6 +499,47 @@ def _claim_lifecycles(
         lifecycles.append((frequency, original_indexes[original_cursor % len(original_indexes)]))
         original_cursor += 1
     return tuple(lifecycles)
+
+
+def _random_claim_frequencies(
+    entity: str,
+    count: int,
+    seed: int,
+    raw_entities: Mapping[str, object],
+) -> list[str]:
+    """Choose valid lifecycles without requiring a configured distribution."""
+    if count == 0:
+        return []
+    randomizer = Random(seed + (0 if entity == "claim_professional" else 1))
+    replacement_requested = _replacement_requested(entity, raw_entities)
+    original_count = min(2, count)
+    codes = ["1"] * original_count
+    if replacement_requested and count == 2:
+        return ["1", "7"]
+    if count >= 3:
+        codes.append("7")
+    if count >= 4:
+        codes.append("8")
+    while len(codes) < count:
+        codes.append(randomizer.choice(tuple(_CLAIM_FREQUENCY_CODES)))
+    return codes
+
+
+def _replacement_requested(entity: str, raw_entities: Mapping[str, object]) -> bool:
+    """Return whether the corresponding enabled Payment stream requests a replacement."""
+    payment_entity = {
+        "claim_professional": "payment_professional",
+        "claim_institutional": "payment_institutional",
+    }[entity]
+    payment_config = raw_entities.get(payment_entity, {})
+    if not isinstance(payment_config, dict) or not payment_config.get("enabled"):
+        return False
+    scenarios = payment_config.get("scenarios", {})
+    return (
+        isinstance(scenarios, dict)
+        and isinstance(scenarios.get("REPLACEMENT", 0), int)
+        and scenarios.get("REPLACEMENT", 0) > 0
+    )
 
 
 def _entity_defaults() -> dict[str, dict[str, object]]:

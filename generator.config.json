@@ -28,19 +28,16 @@
   "claims": {
     "professional": {
       "count": 7,
-      "frequencies": {"1": 5, "7": 1, "8": 1},
       "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
     },
     "institutional": {
       "count": 7,
-      "frequencies": {"1": 5, "7": 1, "8": 1},
       "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
     }
   },
   "payments": {
     "professional": {
       "count": 7,
-      "source_claims": "./output/new-test-data/claims_professional.jsonl",
       "scenarios": {
         "MATCHED": 3,
         "REVERSAL": 1,
@@ -51,7 +48,6 @@
     },
     "institutional": {
       "count": 7,
-      "source_claims": "./output/new-test-data/claims_institutional.jsonl",
       "scenarios": {
         "MATCHED": 3,
         "REVERSAL": 1,

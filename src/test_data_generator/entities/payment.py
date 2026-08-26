@@ -48,6 +48,25 @@ _ORIGINAL_CLAIM_IDS = (
     "ORIGINAL_CLAIM_ID",
     "CH_ORIGINAL_CLAIM_ID",
 )
+_CLAIM_LINEAGE_FIELDS = (
+    "CH_CLIENT_CLAIM_ID",
+    "CH_CLIENT_ORIGINAL_CLAIM_ID",
+    "CH_CLIENT_ROOT_CLAIM_ID",
+    "CH_CLIENT_CLAIM_UNIQUE_ID",
+    "CH_CLIENT_CLAIM_VERSION_NUMBER",
+)
+_PATIENT_RELATIONSHIP_FIELDS = (
+    "CH_PATIENT_CLIENT_ID",
+    "CH_PATIENT_CLIENT_MASTER_ID",
+    "CH_PATIENT_FIRST_NAME",
+    "CH_PATIENT_MIDDLE_NAME",
+    "CH_PATIENT_LAST_NAME",
+    "CH_PATIENT_BIRTH_DATE",
+    "CH_PATIENT_GENDER",
+    "CH_SUBSCRIBER_CLIENT_ID",
+    "CH_SUBSCRIBER_CLIENT_MASTER_ID",
+    "CH_SUBSCRIBER_SSN",
+)
 
 
 def generate_record(
@@ -246,8 +265,12 @@ def derive_payments_from_claims(
     if not requested:
         requested = {"MATCHED": count}
     records: list[dict[str, object]] = []
+    prior_payment_claims: list[Mapping[str, object]] = []
     source_index = 0
-    for scenario, scenario_count in requested.items():
+    for scenario in ("MATCHED", "REPLACEMENT", "STALE", "ORPHAN"):
+        scenario_count = requested.get(scenario, 0)
+        if not scenario_count:
+            continue
         candidates = claims
         if scenario == "REPLACEMENT":
             candidates = [claim for claim in claims if _is_replacement(claim)]
@@ -259,7 +282,19 @@ def derive_payments_from_claims(
         for _ in range(scenario_count):
             claim = candidates[source_index % len(candidates)]
             records.append(derive_payment_from_claim(claim, profile, seed, len(records), scenario))
+            if scenario != "ORPHAN":
+                prior_payment_claims.append(claim)
             source_index += 1
+    reversal_count = requested.get("REVERSAL", 0)
+    if reversal_count and not prior_payment_claims:
+        raise ValueError(
+            "REVERSAL Payment scenario requires an earlier MATCHED, REPLACEMENT, or STALE Payment"
+        )
+    for reversal_index in range(reversal_count):
+        reversal_claim = prior_payment_claims[reversal_index % len(prior_payment_claims)]
+        records.append(
+            derive_payment_from_claim(reversal_claim, profile, seed, len(records), "REVERSAL")
+        )
     if len(records) != count:
         raise ValueError(
             f"Payment source scenario counts produced {len(records)} records; expected {count}"
@@ -269,12 +304,9 @@ def derive_payments_from_claims(
 
 def _copy_claim_lineage(payment: dict[str, object], claim: Mapping[str, object]) -> None:
     """Copy Claim and Original Claim identifiers into declared Payment fields."""
-    claim_id = _first_value(claim, _CLAIM_IDS)
-    original_id = _first_value(claim, _ORIGINAL_CLAIM_IDS)
-    if claim_id is not None:
-        payment["CH_CLIENT_CLAIM_ID"] = claim_id
-    if original_id is not None:
-        payment["CH_CLIENT_ORIGINAL_CLAIM_ID"] = original_id
+    for field in _CLAIM_LINEAGE_FIELDS:
+        if field in claim:
+            payment[field] = claim[field]
 
 
 def _copy_line_indexes(payment: dict[str, object], profile: str) -> None:
@@ -404,10 +436,19 @@ def _make_orphan(payment: dict[str, object], profile: str, seed: int, index: int
     """Break populated declared matching keys while preserving their types."""
     token = f"ORPHAN-{seed}-{index:06d}"
     payment["CH_CLIENT_CLAIM_ID"] = token
-    if "CH_CLIENT_ORIGINAL_CLAIM_ID" in payment:
-        payment["CH_CLIENT_ORIGINAL_CLAIM_ID"] = f"{token}-ORIGINAL"
+    for field, suffix in {
+        "CH_CLIENT_ORIGINAL_CLAIM_ID": "ORIGINAL",
+        "CH_CLIENT_ROOT_CLAIM_ID": "ROOT",
+        "CH_CLIENT_CLAIM_UNIQUE_ID": "UNIQUE",
+    }.items():
+        if field in payment:
+            payment[field] = f"{token}-{suffix}"
+    if "CH_CLIENT_CLAIM_VERSION_NUMBER" in payment:
+        payment["CH_CLIENT_CLAIM_VERSION_NUMBER"] = "0"
     changed = False
     for field in PAYMENT_MATCHING_RULES[profile]["header"]:
+        if field in _PATIENT_RELATIONSHIP_FIELDS:
+            continue
         if field not in payment or not _present(payment[field]):
             continue
         payment[field] = _orphan_value(payment[field], token)
@@ -478,6 +519,9 @@ def _validate_source_relationship(
         and payment.get("CH_CLIENT_ORIGINAL_CLAIM_ID") != expected_original_id
     ):
         raise ValueError("Payment Original Claim ID does not match the source Claim")
+    for field in (*_CLAIM_LINEAGE_FIELDS, *_PATIENT_RELATIONSHIP_FIELDS):
+        if field in claim and field in payment and claim[field] != payment[field]:
+            raise ValueError(f"Payment relationship field {field!r} differs from the source Claim")
     rules = PAYMENT_MATCHING_RULES[profile]
     for field in rules["header"]:
         if field in claim and field in payment and claim[field] != payment[field]:

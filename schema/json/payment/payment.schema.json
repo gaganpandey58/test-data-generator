@@ -501,6 +501,15 @@
         "CH_CLAIM_PAID_DATE": {
           "type": "string"
         },
+        "CH_CLIENT_ROOT_CLAIM_ID": {
+          "type": "string"
+        },
+        "CH_CLIENT_CLAIM_VERSION_NUMBER": {
+          "type": "string"
+        },
+        "CH_CLIENT_CLAIM_UNIQUE_ID": {
+          "type": "string"
+        },
         "CH_CLIENT_CLAIM_ID": {
           "type": "string"
         },

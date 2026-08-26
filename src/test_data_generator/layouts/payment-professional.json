@@ -228,6 +228,21 @@
       "max_length": 255
     },
     {
+      "name": "CH_CLIENT_ROOT_CLAIM_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CH_CLIENT_CLAIM_VERSION_NUMBER",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CH_CLIENT_CLAIM_UNIQUE_ID",
+      "type": "text",
+      "max_length": 255
+    },
+    {
       "name": "CH_CLIENT_CLAIM_ID",
       "type": "text",
       "max_length": 255

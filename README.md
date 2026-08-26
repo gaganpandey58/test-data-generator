@@ -124,7 +124,7 @@ can use only `"claim-professional"` today.
 }
 ```
 
-`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file; Payments are never emitted independently.
+`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file; Payments are never emitted independently.
 
 An entity with `count: 0` is treated as disabled. It is accepted by the
 configuration schema, skipped by both creation and update generation, and its
@@ -166,20 +166,14 @@ Payment `count`; the remaining records are automatically generated as
   "client": "chc",
   "seed": 20260805,
   "output_directory": "./output",
-  "claims": {
-    "professional": {
-      "count": 7,
-      "frequencies": {"1": 5, "7": 1, "8": 1}
-    }
-  },
+  "claims": {"professional": {"count": 7}},
   "payments": {
     "professional": {
       "count": 7,
-      "source_claims": "./output/new-test-data/claims_professional.jsonl",
       "scenarios": {
-        "MATCHED": 4,
+        "MATCHED": 3,
         "REVERSAL": 1,
-        "REPLACEMENT": 0,
+        "REPLACEMENT": 1,
         "STALE": 1,
         "ORPHAN": 1
       }
@@ -188,12 +182,14 @@ Payment `count`; the remaining records are automatically generated as
 }
 ```
 
-Claims support `frequencies` `1`, `7`, and `8`, whose counts must total the
-Claim `count`. `1` creates an original/admit-through-discharge Claim; `7`
+Claims select valid frequency values `1`, `7`, and `8` deterministically at
+random from the run seed, so no frequency distribution is required in the
+configuration. `1` creates an original/admit-through-discharge Claim; `7`
 creates a replacement linked to an original Claim and sets the adjustment type
 to `2`; `8` creates a void/cancel linked to an original Claim, sets adjustment
-type `1`, and emits a zero-paid `VOID` Claim. Frequencies `7` and `8` require
-at least one `1` in the same stream.
+type `1`, and emits a zero-paid `VOID` Claim. The generator always creates the
+needed original Claim lineage before a replacement or void. A `frequencies`
+map remains available only for an intentionally targeted lifecycle fixture.
 
 Supported Payment scenarios are `MATCHED`, `REVERSAL`, `REPLACEMENT`, `STALE`,
 and `ORPHAN`. `REPLACEMENT` selects only source Claims whose
@@ -204,11 +200,11 @@ use the same mechanism; their declared layouts and schemas determine which
 fields are emitted.
 
 When a Claim stream and its corresponding Payment stream are both enabled in
-one invocation, omitting `source_claims` automatically links the Payment to
-the Claim file that will be written under the creation directory. Explicit
-`source_claims` paths are also supported and are resolved before generation;
-their files may be created earlier in the same run. Claims are generated
-before Payments, so one `uv run generate-data` invocation is sufficient.
+one invocation, the runtime automatically links the Payment stream to the
+Claims just generated in that run; no generated-file path is required.
+Claims are generated before Payments, so one `uv run generate-data` invocation
+is sufficient. `source_claims` remains available only when deliberately
+deriving Payments from an external, pre-existing Claim JSONL file.
 
 Payment update files are deliberately event-driven. A global Claim update does
 not create a Payment update file. To generate an updated 835 fixture, set an
