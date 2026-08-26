@@ -411,7 +411,7 @@
           "type": "string"
         },
         "FILE_TYPE": {
-          "const": "837P"
+          "const": "835P"
         },
         "CLAIM_DETAIL": {
           "type": "array",
@@ -606,7 +606,7 @@
           "type": "string"
         },
         "CH_CLAIM_TYPE": {
-          "const": "O"
+          "const": "I"
         },
         "CH_NCH_CLAIM_TYPE": {
           "type": "string"
@@ -2508,7 +2508,7 @@
           "type": "string"
         },
         "FILE_TYPE": {
-          "const": "837I"
+          "const": "835I"
         },
         "DATA_CATEGORY": {
           "type": "string"

@@ -54,6 +54,7 @@ class EntityConfig:
     header_order: str = "source"
     source_claims: Path | None = None
     scenarios: Mapping[str, int] = field(default_factory=dict)
+    claim_lifecycles: tuple[tuple[str, int | None], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -172,6 +173,7 @@ def load_config(path: Path) -> RunConfig:
                     creation_directory,
                 ),
                 scenarios=_scenario_counts(name, raw_entity),
+                claim_lifecycles=_claim_lifecycles(name, raw_entity),
             )
         )
     _validate_unique_filenames(entities)
@@ -330,6 +332,8 @@ def _selected_entity(
         result["source_claims"] = selection["source_claims"]
     if "scenarios" in selection:
         result["scenarios"] = selection["scenarios"]
+    if "frequencies" in selection:
+        result["frequencies"] = selection["frequencies"]
     if "layout" in selection:
         result["profile"] = selection["layout"]
     output_order = selection.get("output_order")
@@ -374,6 +378,11 @@ def _payment_source_path(
     }[entity]
     claim_entity = raw_entities.get(claim_entity_name)
     if not isinstance(claim_entity, dict) or not claim_entity.get("enabled"):
+        if raw_entity.get("enabled"):
+            raise ConfigurationError(
+                f"Payment stream {entity!r} requires source_claims or an enabled "
+                f"{claim_entity_name!r} stream"
+            )
         return None
     filename = claim_entity.get("filename")
     if not isinstance(filename, str) or not filename:
@@ -409,6 +418,62 @@ def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[s
             configured_count - configured_scenarios
         )
     return scenarios
+
+
+_CLAIM_FREQUENCY_CODES = frozenset({"1", "7", "8"})
+
+
+def _claim_lifecycles(
+    entity: str, raw_entity: Mapping[str, object]
+) -> tuple[tuple[str, int | None], ...]:
+    """Resolve configured Claim frequencies into deterministic source lineage."""
+    value = raw_entity.get("frequencies")
+    if entity not in {"claim_professional", "claim_institutional"}:
+        if value is not None:
+            raise ConfigurationError("frequencies is supported only for Claim streams")
+        return ()
+    count = raw_entity.get("count", 0)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        raise ConfigurationError(f"Claim count for {entity!r} must be a non-negative integer")
+    if value is None:
+        return tuple(("1", index) for index in range(count))
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"Frequencies for {entity!r} must be an object")
+    frequencies: dict[str, int] = {}
+    for code, configured_count in value.items():
+        frequency = str(code)
+        if frequency not in _CLAIM_FREQUENCY_CODES:
+            raise ConfigurationError(
+                f"Unsupported Claim frequency {code!r}; supported values are 1, 7, and 8"
+            )
+        if (
+            not isinstance(configured_count, int)
+            or isinstance(configured_count, bool)
+            or configured_count < 0
+        ):
+            raise ConfigurationError(f"Frequency count for {frequency!r} must be non-negative")
+        frequencies[frequency] = configured_count
+    if sum(frequencies.values()) != count:
+        raise ConfigurationError(
+            f"Claim frequency counts for {entity!r} must add up to the configured count"
+        )
+    codes = [
+        frequency for frequency in ("1", "7", "8") for _ in range(frequencies.get(frequency, 0))
+    ]
+    original_indexes = [index for index, frequency in enumerate(codes) if frequency == "1"]
+    if any(frequency in {"7", "8"} for frequency in codes) and not original_indexes:
+        raise ConfigurationError(
+            f"Claim frequencies 7 and 8 for {entity!r} require at least one frequency 1 Claim"
+        )
+    original_cursor = 0
+    lifecycles: list[tuple[str, int | None]] = []
+    for index, frequency in enumerate(codes):
+        if frequency == "1":
+            lifecycles.append((frequency, index))
+            continue
+        lifecycles.append((frequency, original_indexes[original_cursor % len(original_indexes)]))
+        original_cursor += 1
+    return tuple(lifecycles)
 
 
 def _entity_defaults() -> dict[str, dict[str, object]]:

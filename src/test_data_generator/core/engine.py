@@ -135,9 +135,18 @@ def _build_record(
     generate_record: Callable[..., dict[str, object]],
 ) -> dict[str, object]:
     """Build and project one creation record for reuse by update generation."""
-    record = generate_record(
-        seed, index, counts, entity.client_headers, entity.client_values, entity.profile
+    arguments: tuple[object, ...] = (
+        seed,
+        index,
+        counts,
+        entity.client_headers,
+        entity.client_values,
+        entity.profile,
     )
+    if entity.claim_lifecycles:
+        record = generate_record(*(arguments + (entity.claim_lifecycles[index],)))
+    else:
+        record = generate_record(*arguments)
     return _order_headers(project_record(record, entity.profile), entity)
 
 

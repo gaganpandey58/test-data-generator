@@ -80,8 +80,8 @@
       "minProperties": 1,
       "additionalProperties": false,
       "properties": {
-        "professional": {"$ref": "#/$defs/counted_entity"},
-        "institutional": {"$ref": "#/$defs/counted_entity"}
+        "professional": {"$ref": "#/$defs/claim_entity"},
+        "institutional": {"$ref": "#/$defs/claim_entity"}
       }
     },
     "payments": {
@@ -112,6 +112,9 @@
       ]
     },
     "counted_entity": {
+      "allOf": [{"$ref": "#/$defs/entity"}, {"required": ["count"]}]
+    },
+    "claim_entity": {
       "allOf": [{"$ref": "#/$defs/entity"}, {"required": ["count"]}]
     },
     "entity": {
@@ -163,6 +166,15 @@
         "scenarios": {
           "type": "object",
           "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "frequencies": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "1": {"type": "integer", "minimum": 0},
+            "7": {"type": "integer", "minimum": 0},
+            "8": {"type": "integer", "minimum": 0}
+          }
         }
       }
     }

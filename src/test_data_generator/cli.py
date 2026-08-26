@@ -146,6 +146,14 @@ def generate(config: Path, mode: str = "all") -> None:
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
         for entity in run_config.entities:
+            # Payment creation is derived from Claims, but a Payment update is an
+            # adjudication event.  Do not turn a global Claim update into a
+            # duplicate Payment update; require an explicit local operation.
+            if (
+                entity.name in {"payment_professional", "payment_institutional"}
+                and "operation" not in entity.update
+            ):
+                continue
             entity_rules = rules.get(entity.name)
             if entity_rules is None:
                 raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
@@ -181,6 +189,7 @@ def generate(config: Path, mode: str = "all") -> None:
                     f"Update generation failed for entity {entity.name!r}: {error}"
                 ) from error
             print(f"{entity.name}: {entity.count} updates -> {output_path}")
+        _remove_unrequested_payment_updates(run_config)
     _remove_disabled_outputs(run_config)
 
 
@@ -237,6 +246,19 @@ def _string_tuple(values: dict[str, object], key: str) -> tuple[str, ...]:
     return tuple(
         item.strip() for value_item in value for item in value_item.split(",") if item.strip()
     )
+
+
+def _remove_unrequested_payment_updates(run_config: RunConfig) -> None:
+    """Remove stale 835 update fixtures unless their stream requests one."""
+    for entity in run_config.entities:
+        if entity.name not in {"payment_professional", "payment_institutional"}:
+            continue
+        if "operation" in entity.update:
+            continue
+        path = run_config.update_directory / entity.filename.removesuffix(".jsonl")
+        path = path.with_suffix(".update.jsonl")
+        if path.is_file() or path.is_symlink():
+            path.unlink()
 
 
 def _remove_disabled_outputs(run_config: RunConfig) -> None:

@@ -20,11 +20,11 @@ from test_data_generator.update.payment_relationships import PAYMENT_MATCHING_RU
 
 _PAYMENT_TYPES = {
     "payment-professional": "P",
-    "payment-institutional": "O",
+    "payment-institutional": "I",
 }
 _PAYMENT_FILE_TYPES = {
-    "payment-professional": "837P",
-    "payment-institutional": "837I",
+    "payment-professional": "835P",
+    "payment-institutional": "835I",
 }
 _REQUIRED_FIELDS = (
     "FILE_TYPE",
@@ -68,9 +68,6 @@ def generate_record(
     claim_profile = (
         "claim-professional" if profile == "payment-professional" else "claim-institutional"
     )
-    source = (
-        "payment_professional" if profile == "payment-professional" else "payment_institutional"
-    )
     claim = generate_claim(
         seed,
         index,
@@ -79,12 +76,7 @@ def generate_record(
         client_values,
         claim_profile,
     )
-    payment = complete_record(claim, source)
-    _apply_payment_values(payment, profile)
-    projected = project_record(payment, profile)
-    _set_payment_dates(projected)
-    _validate_payment_record(projected, profile)
-    return projected
+    return derive_payment_from_claim(claim, profile, seed, index)
 
 
 def _apply_payment_values(record: dict[str, object], profile: str) -> None:
@@ -213,14 +205,27 @@ def derive_payment_from_claim(
     except KeyError as error:
         raise ValueError(f"Unsupported Payment profile {profile!r}") from error
     payment = complete_record(deepcopy(claim), source)
+    _set_payment_transport(payment, profile)
     _copy_line_indexes(payment, profile)
     _copy_claim_lineage(payment, claim)
     _set_source_payment_defaults(payment, claim, profile)
+    _apply_payment_values(payment, profile)
     _apply_scenario(payment, claim, profile, scenario, seed, index)
     projected = project_record(payment, profile)
     _validate_payment_record(projected, profile)
     _validate_source_relationship(projected, claim, profile, scenario)
     return projected
+
+
+def _set_payment_transport(payment: dict[str, object], profile: str) -> None:
+    """Convert Claim transport metadata to the derived Payment 835 stream."""
+    file_type = "835P" if profile == "payment-professional" else "835I"
+    payment["FILE_TYPE"] = file_type
+    payment["cotiviti.source_format"] = f"edi_x12_{file_type}"
+    payment["x-connector-name"] = "test-eip-835"
+    raw_reference = payment.get("cotiviti.source.raw_file_ref")
+    if isinstance(raw_reference, str) and raw_reference:
+        payment["cotiviti.source.raw_file_ref"] = raw_reference.removesuffix(".x12") + ".835.x12"
 
 
 def derive_payments_from_claims(
@@ -370,6 +375,8 @@ def _apply_scenario(
         if "CLP02" not in payment:
             raise ValueError(f"Payment layout {profile!r} does not declare CLP02")
         payment["CLP02"] = "22"
+        if "CH_PAYMENT_STATUS" in payment:
+            payment["CH_PAYMENT_STATUS"] = "REVERSED"
         return
     if normalized == "STALE":
         paid_date = _first_value(

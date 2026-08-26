@@ -39,7 +39,7 @@
         },
         "CH_CLIENT_CLAIM_ID": {
           "type": "string",
-          "pattern": "^PCLM[0-9]{9}(?:-R2)?$"
+          "pattern": "^PCLM[0-9]{9}(?:-(?:R2|V8))?$"
         },
         "CH_CLIENT_ROOT_CLAIM_ID": {
           "type": "string",
@@ -134,11 +134,11 @@
           "const": "837I"
         },
         "CH_CLAIM_TYPE": {
-          "const": "O"
+          "const": "I"
         },
         "CH_CLIENT_CLAIM_ID": {
           "type": "string",
-          "pattern": "^ICLM[0-9]{9}(?:-R2)?$"
+          "pattern": "^ICLM[0-9]{9}(?:-(?:R2|V8))?$"
         },
         "CH_CLIENT_ROOT_CLAIM_ID": {
           "type": "string",

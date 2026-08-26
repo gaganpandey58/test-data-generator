@@ -28,6 +28,7 @@ def generate_record(
     client_headers: Mapping[str, object],
     client_values: Mapping[str, object],
     profile: str,
+    lifecycle: tuple[str, int | None] | None = None,
 ) -> dict[str, object]:
     """Generate one GDF claim/payment happy-path envelope.
 
@@ -38,6 +39,8 @@ def generate_record(
         client_headers: Client-specific envelope header values.
         client_values: Reserved client-owned claim values.
         profile: ``claim-professional`` or ``claim-institutional``.
+        lifecycle: Claim frequency and source original-Claim index, when the
+            configured Claim stream includes replacement or void fixtures.
 
     Returns:
         Medical claim linked to deterministic member and provider source records.
@@ -47,6 +50,7 @@ def generate_record(
     member = _linked_member(seed, index, entity_counts)
     provider = _linked_provider(seed, index, entity_counts)
     claim_type = _claim_type(profile)
+    frequency, original_index = _lifecycle(lifecycle, index)
     profile_code = "P" if claim_type == "P" else "I"
     service_from_date = date(2025, 1, 1) + timedelta(days=randomizer.randrange(500))
     service_from = _compact_date(service_from_date)
@@ -58,7 +62,20 @@ def generate_record(
     coinsurance = round((allowed - copay - deductible) * 0.2, 2)
     liability = round(copay + deductible + coinsurance, 2)
     paid = round(allowed - liability, 2)
-    claim_id = f"{profile_code}CLM{index + 1:09d}"
+    if frequency == "8":
+        allowed = 0.0
+        copay = 0.0
+        deductible = 0.0
+        coinsurance = 0.0
+        liability = 0.0
+        paid = 0.0
+    claim_id = _claim_id(profile_code, index, frequency)
+    original_claim_id = ""
+    root_index = index
+    if frequency in {"7", "8"}:
+        assert original_index is not None
+        original_claim_id = _claim_id(profile_code, original_index, "1")
+        root_index = original_index
     entity_name = "claim_professional" if claim_type == "P" else "claim_institutional"
     member_addresses = member["CM_MEMBER_ADDRESSES"]
     address = member_addresses[0] if isinstance(member_addresses, list) else {}
@@ -67,13 +84,13 @@ def generate_record(
         {
             "CH_CLIENT_CLAIM_UNIQUE_ID": f"{profile_code}CLU{index + 1:011d}",
             "CH_CLIENT_CLAIM_ID": claim_id,
-            "CH_CLIENT_ROOT_CLAIM_ID": f"{profile_code}ROOT{index + 1:08d}",
-            "CH_CLIENT_CLAIM_VERSION_NUMBER": "1",
-            "CH_CLIENT_ORIGINAL_CLAIM_ID": "",
-            "CH_NUMBER_OF_ADJUSTMENTS": 0,
+            "CH_CLIENT_ROOT_CLAIM_ID": f"{profile_code}ROOT{root_index + 1:08d}",
+            "CH_CLIENT_CLAIM_VERSION_NUMBER": "1" if frequency == "1" else "2",
+            "CH_CLIENT_ORIGINAL_CLAIM_ID": original_claim_id,
+            "CH_NUMBER_OF_ADJUSTMENTS": 0 if frequency == "1" else 1,
             "CH_BILLING_PROVIDER_CLAIM_ID": f"BPC{index + 1:010d}",
             "CH_CLAIM_TYPE": claim_type,
-            "CH_CLAIM_FREQUENCY_CODE": "1",
+            "CH_CLAIM_FREQUENCY_CODE": frequency,
             "CH_PATIENT_CLIENT_ID": member["CM_MEMBER_CLIENT_ID"],
             "CH_PATIENT_CLIENT_MASTER_ID": member["CM_MEMBER_CLIENT_MASTER_ID"],
             "CH_PATIENT_FIRST_NAME": member["CM_MEMBER_FIRST_NAME"],
@@ -118,9 +135,11 @@ def generate_record(
             "CH_CHECK_DATE": service_to,
             "CH_CHECK_NUMBER": f"CHK{index + 1:010d}",
             "CH_PAYMENT_CHECK_NUMBER": f"CHK{index + 1:010d}",
-            "CH_PAYMENT_STATUS": "PAID",
+            "CH_PAYMENT_STATUS": "VOID" if frequency == "8" else "PAID",
             "CH_PAYMENT_STATUS_CODE": "1",
             "CH_PAYMENT_METHOD": "CHK",
+            "CH_CMS_CLAIM_ADJUSTMENT_TYPE_CODE": _adjustment_type(frequency),
+            "CH_CMS_CLAIM_QUERY_CODE": _query_code(frequency),
             "CH_RECORD_TAG": "CH Verified" if index % 2 else "837 Provisional",
             "CH_RECORD_STATUS": "Active" if index % 2 else "New",
             "CH_SOURCE_UPDATED_AT": "20260805",
@@ -139,6 +158,7 @@ def generate_record(
                     liability,
                     paid,
                     provider,
+                    frequency,
                 )
             ],
         }
@@ -167,6 +187,7 @@ def _line(
     liability: float,
     paid: float,
     provider: Mapping[str, object],
+    frequency: str,
 ) -> dict[str, object]:
     """Build one EIP/GDF claim-detail row whose payment amounts reconcile.
 
@@ -183,6 +204,7 @@ def _line(
         liability: Total member liability amount.
         paid: Payer payment amount.
         provider: Linked provider source record.
+        frequency: Parent Claim lifecycle frequency code.
 
     Returns:
         One source-shaped claim-detail mapping.
@@ -230,10 +252,38 @@ def _line(
                 "CD_ALLOWED_REVENUE_CODE": "0510",
                 "CD_NUMBER_OF_ADJUSTMENTS": 0,
                 "CD_PAYMENT_METHOD": "CHK",
-                "CD_PAYMENT_STATUS": "PAID",
+                "CD_PAYMENT_STATUS": "VOID" if frequency == "8" else "PAID",
             }
         )
     return line
+
+
+def _lifecycle(lifecycle: tuple[str, int | None] | None, index: int) -> tuple[str, int | None]:
+    """Return a validated Claim lifecycle, defaulting to an original Claim."""
+    if lifecycle is None:
+        return "1", index
+    frequency, original_index = lifecycle
+    if frequency not in {"1", "7", "8"}:
+        raise ValueError(f"Unsupported Claim frequency {frequency!r}")
+    if frequency in {"7", "8"} and original_index is None:
+        raise ValueError(f"Claim frequency {frequency} requires an original Claim index")
+    return frequency, original_index
+
+
+def _claim_id(profile_code: str, index: int, frequency: str) -> str:
+    """Create a unique Claim ID while making replacement and void fixtures visible."""
+    suffix = {"1": "", "7": "-R2", "8": "-V8"}[frequency]
+    return f"{profile_code}CLM{index + 1:09d}{suffix}"
+
+
+def _adjustment_type(frequency: str) -> str:
+    """Map GDF Claim frequency values to their adjustment lifecycle code."""
+    return {"1": "0", "7": "2", "8": "1"}[frequency]
+
+
+def _query_code(frequency: str) -> str:
+    """Emit a deterministic GDF payment-processing query code per lifecycle."""
+    return {"1": "3", "7": "5", "8": "0"}[frequency]
 
 
 def _remove_profile_exclusions(record: dict[str, object], claim_type: str) -> None:
@@ -454,13 +504,12 @@ def _claim_type(profile: str) -> str:
         profile: Explicit claim layout profile.
 
     Returns:
-        ``P`` or ``O`` for the selected profile.  Cotiviti's institutional
-        sample uses ``O`` even though its transport file type is ``837I``.
+        ``P`` or ``I`` for the selected professional/institutional stream.
     """
     if profile == "claim-professional":
         return "P"
     if profile == "claim-institutional":
-        return "O"
+        return "I"
     raise ValueError(f"Unsupported claim layout {profile!r}")
 
 
