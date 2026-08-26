@@ -12,7 +12,12 @@ from random import Random
 from faker import Faker
 
 from test_data_generator.configuration.profiles import record_header_values
-from test_data_generator.core.identifiers import deterministic_uuid4
+from test_data_generator.core.identifiers import (
+    deterministic_uuid4,
+    run_token,
+    valid_phone_number,
+    valid_ssn,
+)
 from test_data_generator.entities.provider import generate_record as generate_provider
 from test_data_generator.layouts import load_layout
 from test_data_generator.samples.shapes import complete_record
@@ -55,32 +60,37 @@ def generate_record(
     state, city, zip_code, county = randomizer.choice(_LOCATIONS)
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     birth = _date(date(1940, 1, 1) + timedelta(days=randomizer.randrange(28000)))
-    member_id = f"MBR{index + 1:010d}"
+    token = run_token(seed)
+    member_id = f"MBR{token}{index + 1:07d}"
     client_platform = str(client_headers.get("CM_CLIENT_DATA_PLATFORM", ""))
     values = dict(client_values)
+    first_name = faker.first_name().upper()
+    middle_name = faker.first_name()[0].upper()
+    last_name = faker.last_name().upper()
+    email = f"{faker.user_name()}.{index + 1}@example.test"
     record = _profile_blanks("member")
     record.update(
         {
             "CM_MEMBER_CLIENT_ID": member_id,
             "CM_PAYER_SHORT": str(client_headers.get("CM_PAYER_SHORT", "")),
-            "CM_MEMBER_CLIENT_MASTER_ID": f"MM{1500000000 + index:010d}",
+            "CM_MEMBER_CLIENT_MASTER_ID": f"MM{token}{index + 1:08d}",
             "CM_MEMBER_DEPENDENT_NUMBER": 1 if dependent else 0,
-            "CM_SUBSCRIBER_CLIENT_ID": f"SUB{subscriber_index + 1:010d}",
-            "CM_SUBSCRIBER_CLIENT_MASTER_ID": f"SM{1500000000 + subscriber_index:010d}",
-            "CM_SUBSCRIBER_SSN": _digits(randomizer, 9),
-            "CM_MEMBER_ALTERNATE_ID": f"ALT{index + 1:010d}",
-            "CM_MEMBER_SSN": _digits(randomizer, 9),
+            "CM_SUBSCRIBER_CLIENT_ID": f"SUB{token}{subscriber_index + 1:07d}",
+            "CM_SUBSCRIBER_CLIENT_MASTER_ID": f"SM{token}{subscriber_index + 1:08d}",
+            "CM_SUBSCRIBER_SSN": valid_ssn(randomizer),
+            "CM_MEMBER_ALTERNATE_ID": f"ALT{token}{index + 1:07d}",
+            "CM_MEMBER_SSN": valid_ssn(randomizer),
             "CM_MEMBER_MEDICARE_HICN_ID": f"H{_digits(randomizer, 10)}A",
             "CM_MEMBER_MEDICARE_BENEFICIARY_ID": (
                 f"{randomizer.randrange(1, 10)}{faker.bothify('??#####??##')}"
             ),
-            "CM_MEMBER_MEDICAID_ID": f"MCD{index + 1:010d}",
-            "CM_MEMBER_MEDICAL_RECORD_NUMBER": f"MRN{index + 1:010d}",
-            "CM_MEMBER_FIRST_NAME": faker.first_name().upper(),
-            "CM_MEMBER_MIDDLE_NAME": faker.first_name()[0].upper(),
-            "CM_MEMBER_LAST_NAME": faker.last_name().upper(),
+            "CM_MEMBER_MEDICAID_ID": f"MCD{token}{index + 1:07d}",
+            "CM_MEMBER_MEDICAL_RECORD_NUMBER": f"MRN{token}{index + 1:07d}",
+            "CM_MEMBER_FIRST_NAME": first_name,
+            "CM_MEMBER_MIDDLE_NAME": middle_name,
+            "CM_MEMBER_LAST_NAME": last_name,
             "CM_MEMBER_BIRTH_DATE": birth,
-            "CM_MEMBER_GENDER": randomizer.choice(("F", "M", "X")),
+            "CM_MEMBER_GENDER": randomizer.choice(("F", "M")),
             "CM_MEMBER_RELATIONSHIP_TO_SUBSCRIBER": "19" if dependent else "18",
             "CM_MEMBER_RELATIONSHIP_CODE": "19" if dependent else "18",
             "CM_MEMBER_RECORD_START_DATE": start,
@@ -100,11 +110,13 @@ def generate_record(
                     faker,
                     randomizer,
                     client_platform,
+                    email,
+                    token,
                 )
             ],
             "CM_MEMBER_ENROLLMENTS": [
                 {
-                    "CM_MEMBER_ENROLLMENT_CLIENT_ID": f"ENR{index + 1:010d}",
+                    "CM_MEMBER_ENROLLMENT_CLIENT_ID": f"ENR{run_token(seed)}{index + 1:07d}",
                     "CM_MEMBER_ENROLLMENT_EFFECTIVE_DATE": start,
                     "CM_MEMBER_ENROLLMENT_TERMINATION_DATE": "",
                     "CM_LINE_OF_BUSINESS_CODE": "MED",
@@ -189,6 +201,8 @@ def _address(
     faker: Faker,
     randomizer: Random,
     client_platform: str,
+    email: str,
+    token: str,
 ) -> dict[str, object]:
     """Build one source-shaped member address group.
 
@@ -203,6 +217,8 @@ def _address(
         faker: Seeded name and address data generator.
         randomizer: Seeded numeric data generator.
         client_platform: Client-selected source platform value.
+        email: Format-valid test email address for the member.
+        token: Seed-derived token shared by synthetic member identifiers.
 
     Returns:
         A layout-compatible member address record.
@@ -214,8 +230,8 @@ def _address(
         {
             "CM_CLIENT_DATA_PLATFORM": client_platform,
             "CM_MEMBER_CLIENT_ID": member_id,
-            "CM_MEMBER_CLIENT_MASTER_ID": f"MM{1500000000 + index:010d}",
-            "CM_MEMBER_ADDRESS_CLIENT_ID": f"MADDR{index + 1:08d}",
+            "CM_MEMBER_CLIENT_MASTER_ID": f"MM{token}{index + 1:08d}",
+            "CM_MEMBER_ADDRESS_CLIENT_ID": f"MADDR{token}{index + 1:05d}",
             "CM_MEMBER_ADDRESS_TYPE": "HOME",
             "CM_MEMBER_ADDRESS_TYPE_CODE": "HOME",
             "CM_MEMBER_ADDRESS_PRIMARY_INDICATOR": "Y",
@@ -225,8 +241,8 @@ def _address(
             "CM_MEMBER_ZIP": zip_code,
             "CM_MEMBER_ZIP_PLUS_FOUR": _digits(randomizer, 4),
             "CM_MEMBER_COUNTY": county.upper(),
-            "CM_MEMBER_EMAIL": f"member{index + 1}@example.test",
-            "CM_MEMBER_PHONE": _digits(randomizer, 10),
+            "CM_MEMBER_EMAIL": email,
+            "CM_MEMBER_PHONE": valid_phone_number(randomizer),
             "CM_MEMBER_ADDRESS_START_DATE": start,
             "CM_MEMBER_ADDRESS_TERMINATION_DATE": "",
             "CM_MEMBER_ADDRESS_END_DATE": "",

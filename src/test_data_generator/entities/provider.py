@@ -11,7 +11,13 @@ from random import Random
 from faker import Faker
 
 from test_data_generator.configuration.profiles import record_header_values
-from test_data_generator.core.identifiers import deterministic_uuid4
+from test_data_generator.core.identifiers import (
+    deterministic_uuid4,
+    run_token,
+    valid_ein,
+    valid_npi,
+    valid_phone_number,
+)
 from test_data_generator.layouts import load_layout
 from test_data_generator.samples.shapes import complete_record
 
@@ -61,11 +67,12 @@ def generate_record(
     middle = faker.first_name()[0].upper() if individual else ""
     last = faker.last_name().upper() if individual else f"{faker.company().upper()} MEDICAL GROUP"
     full = " ".join(part for part in (first, middle, last) if part)
-    npi = _npi(randomizer)
+    npi = valid_npi(randomizer)
     client_platform = str(client_headers.get("CP_CLIENT_DATA_PLATFORM", ""))
     values = dict(client_values)
-    provider_id = f"PPRV{index + 1:010d}{state}"
-    master_id = f"{1500000000 + index:010d}"
+    token = run_token(seed)
+    provider_id = f"PPRV{token}{index + 1:07d}{state}"
+    master_id = f"{1_000_000_000 + ((abs(seed) + index) % 9_000_000_000):010d}"
     taxonomy, specialty = randomizer.choice(_SPECIALTIES)
     record: dict[str, object] = {field.name: "" for field in load_layout("provider").root}
     record.update({f"CP_CUSTOM_FIELD_{number:02d}": "" for number in range(1, 21)})
@@ -74,7 +81,7 @@ def generate_record(
         {
             "CP_PROVIDER_CLIENT_ID": provider_id,
             "CP_PROVIDER_CLIENT_MASTER_ID": master_id,
-            "CP_PROVIDER_FEDERAL_TAX_ID": _digits(randomizer, 9),
+            "CP_PROVIDER_FEDERAL_TAX_ID": valid_ein(randomizer),
             "CP_PROVIDER_NPI": npi,
             "CP_PROVIDER_DEA_NUMBER": f"{randomizer.choice('ABCDEFGH')}{_digits(randomizer, 8)}",
             "CP_PROVIDER_STATE_LICENSE_STATE_CODE": state,
@@ -183,8 +190,10 @@ def _address(
             "CP_PROVIDER_ZIP_PLUS_FOUR": _digits(randomizer, 4),
             "CP_PROVIDER_COUNTY": county,
             "CP_PROVIDER_REGION": region,
-            "CP_PROVIDER_PHONE": _digits(randomizer, 10),
-            "CP_PROVIDER_EMAIL": f"provider{_digits(randomizer, 5)}@example.test",
+            "CP_PROVIDER_PHONE": valid_phone_number(randomizer),
+            "CP_PROVIDER_EMAIL": (
+                f"{faker.user_name()}.{randomizer.randrange(1000, 10000)}@example.test"
+            ),
             "CP_PROVIDER_ADDRESS_START_DATE": start,
             "CP_PROVIDER_ADDRESS_TERMINATION_DATE": "",
         }
@@ -297,41 +306,3 @@ def _digits(randomizer: Random, width: int) -> str:
         Numeric string of exactly ``width`` characters.
     """
     return f"{randomizer.randrange(10 ** (width - 1), 10**width):0{width}d}"
-
-
-def _npi(randomizer: Random) -> str:
-    """Generate a valid ten-digit National Provider Identifier.
-
-    Args:
-        randomizer: Seeded pseudo-random value source.
-
-    Returns:
-        Luhn-valid ten-digit NPI.
-
-    Raises:
-        AssertionError: If no check digit produces a valid NPI.
-    """
-    body = f"{randomizer.randrange(100000000, 1000000000):09d}"
-    for check in range(10):
-        candidate = body + str(check)
-        if _is_luhn_valid("80840" + candidate):
-            return candidate
-    raise AssertionError("could not generate NPI")
-
-
-def _is_luhn_valid(number: str) -> bool:
-    """Check a decimal string with the Luhn checksum algorithm.
-
-    Args:
-        number: Digits to validate.
-
-    Returns:
-        ``True`` when the sequence passes the Luhn checksum.
-    """
-    total = 0
-    for position, character in enumerate(reversed(number)):
-        digit = int(character)
-        if position % 2:
-            digit = digit * 2 - 9 if digit > 4 else digit * 2
-        total += digit
-    return total % 10 == 0

@@ -8,6 +8,7 @@ and relationships before generation can begin.
 """
 
 import json
+import secrets
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path, PureWindowsPath
@@ -64,7 +65,9 @@ class RunConfig:
 
     Attributes:
         client: Selected checked-in client header profile.
-        seed: Deterministic seed shared by every enabled entity generator.
+        seed: Per-run seed shared by every enabled entity generator. An explicit
+            public seed makes a run reproducible; an omitted seed receives fresh
+            entropy so independent runs vary naturally.
         output_directory: Absolute directory used for generated JSONL files.
         entities: Ordered, enabled entity requests ready for the engine.
         disabled_filenames: Known generated filenames to remove after success.
@@ -291,7 +294,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
             entity["header_order"] = global_header_order
     return {
         "client": raw_config.get("client", "chc"),
-        "seed": raw_config.get("seed", 20260805),
+        "seed": raw_config["seed"] if "seed" in raw_config else secrets.randbits(63),
         "output_directory": raw_config.get("output_directory", "./output"),
         "generation": raw_config.get("generation", {}),
         "provider_nppes": raw_config.get("provider_nppes", {}),

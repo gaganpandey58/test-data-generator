@@ -93,7 +93,7 @@ To support a new client, add a complete top-level client entry with `headers` an
 [generator.config.json](generator.config.json) is the only run-time file you normally edit. It has four concepts:
 
 - `client` — the checked-in client profile to use;
-- `seed` — integer used to reproduce a deterministic run; and
+- optional `seed` — integer used to reproduce a deterministic run; and
 - entity `count` values — the exact number of objects to write; and
 - optional entity `layout` — a compatible checked-in output layout (the current
   layout is used when omitted).
@@ -131,7 +131,11 @@ configuration schema, skipped by both creation and update generation, and its
 stale known output files are removed after a successful run. This allows a
 configuration to generate only the entities with positive counts.
 
-`seed` is not a business date or source-layout version. Reusing the same configuration and seed produces the same test records; changing the seed produces a different deterministic set.
+`seed` is not a business date or source-layout version. Reusing the same
+configuration and explicit seed produces the same test records; changing it
+produces a different deterministic set. When omitted, the generator creates a
+fresh per-run seed so independently generated datasets have varied names,
+addresses, identifiers, and other Faker-backed values.
 
 ### Claim and payment relationships
 
@@ -309,6 +313,12 @@ in `CP+Provider_npi` is normalized to `_`, and `Provider_npi` is an alias for
 changing them would prevent the update from matching the existing entity. An
 `INVALID` fixture is intentionally allowed to violate the JSON Schema; its
 value must be present in the invalid-value catalog.
+
+The default catalog covers format and domain violations for member, provider,
+claim, claim-detail, and payment fields (identifiers, demographic values,
+dates, addresses, contact data, amounts, codes, and statuses). It is a test
+fixture catalog: its values are deliberately malformed and are not used by
+normal creation or valid-update generation.
 
 Update selection is layout-aware. The survivorship catalog may describe fields
 for multiple Payment or Claim profiles, but an update can only target a field

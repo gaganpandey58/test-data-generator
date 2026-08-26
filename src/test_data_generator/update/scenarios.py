@@ -13,6 +13,7 @@ from typing import Mapping
 
 from faker import Faker
 
+from test_data_generator.core.identifiers import valid_ein, valid_npi, valid_phone_number, valid_ssn
 from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.synchronization import synchronize_record
 
@@ -252,14 +253,26 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
         faker.seed_instance(randomizer.randrange(1, 2**31 - 1))
         upper_field = field.upper()
         candidate: object
-        if "FIRST_NAME" in upper_field:
+        if "NPI" in upper_field:
+            candidate = valid_npi(randomizer)
+        elif "SSN" in upper_field:
+            candidate = valid_ssn(randomizer)
+        elif "FEDERAL_TAX_ID" in upper_field or upper_field.endswith("_EIN"):
+            candidate = valid_ein(randomizer)
+        elif "PHONE" in upper_field or "FAX" in upper_field:
+            candidate = valid_phone_number(randomizer)
+        elif "EMAIL" in upper_field:
+            candidate = faker.email()
+        elif "FIRST_NAME" in upper_field:
             candidate = faker.first_name().upper()
         elif "LAST_NAME" in upper_field:
             candidate = faker.last_name().upper()
         elif "MIDDLE_NAME" in upper_field:
             candidate = faker.first_name()[0].upper()
+        elif "FULL_NAME" in upper_field:
+            candidate = faker.name().upper()
         elif "GENDER" in upper_field:
-            candidate = randomizer.choice(("F", "M", "X"))
+            candidate = randomizer.choice(("F", "M"))
         elif "CITY" in upper_field:
             candidate = faker.city().upper()
         elif "STATE" in upper_field:
@@ -268,18 +281,36 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.postcode()[:5]
         elif "DATE" in upper_field and len(value) == 8 and value.isdigit():
             candidate = faker.date_between(start_date="-10y", end_date="today").strftime("%Y%m%d")
-        elif "SSN" in upper_field:
-            candidate = faker.ssn().replace("-", "")
         elif "ID" in upper_field or "NUMBER" in upper_field:
-            candidate = faker.bothify("??????????").upper()
+            candidate = _same_shape_identifier(value, randomizer)
         else:
             candidate = faker.word().upper()
         if candidate == value and "GENDER" in upper_field:
-            candidate = next(option for option in ("F", "M", "X") if option != value)
+            candidate = next(option for option in ("F", "M") if option != value)
         elif candidate == value:
             candidate = f"{faker.word().upper()}X"
         return candidate
     return randomizer.randrange(1000, 9999)
+
+
+def _same_shape_identifier(value: str, randomizer: Random) -> str:
+    """Return a changed identifier while retaining its observed source format."""
+    result: list[str] = []
+    for character in value:
+        if character.isdigit():
+            result.append(str(randomizer.randrange(10)))
+        elif character.isupper():
+            result.append(chr(randomizer.randrange(ord("A"), ord("Z") + 1)))
+        elif character.islower():
+            result.append(chr(randomizer.randrange(ord("a"), ord("z") + 1)))
+        else:
+            result.append(character)
+    candidate = "".join(result)
+    if candidate == value and value:
+        last = value[-1]
+        replacement = "1" if last != "1" and last.isdigit() else "A" if last != "A" else "B"
+        candidate = value[:-1] + replacement
+    return candidate
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:

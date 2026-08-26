@@ -170,7 +170,55 @@ def generate_record(
         _transport_headers(seed, index, claim_type, claim_id, entity_name, client_headers)
     )
     if isinstance(address, Mapping):
-        record["CH_PATIENT_ZIP"] = address.get("CM_MEMBER_ZIP", "")
+        _set_existing_fields(
+            record,
+            {
+                "CH_PATIENT_MIDDLE_NAME": member.get("CM_MEMBER_MIDDLE_NAME", ""),
+                "CH_PATIENT_ADDRESS_01": address.get("CM_MEMBER_ADDRESS_01", ""),
+                "CH_PATIENT_CITY": address.get("CM_MEMBER_CITY", ""),
+                "CH_PATIENT_STATE": address.get("CM_MEMBER_STATE", ""),
+                "CH_PATIENT_ZIP": address.get("CM_MEMBER_ZIP", ""),
+                "CH_PATIENT_ZIP_PLUS_FOUR": address.get("CM_MEMBER_ZIP_PLUS_FOUR", ""),
+                "CH_PATIENT_PHONE": address.get("CM_MEMBER_PHONE", ""),
+            },
+        )
+    provider_addresses = provider.get("CP_PROVIDER_ADDRESSES")
+    provider_address = (
+        provider_addresses[0]
+        if isinstance(provider_addresses, list)
+        and provider_addresses
+        and isinstance(provider_addresses[0], Mapping)
+        else {}
+    )
+    _set_existing_fields(
+        record,
+        {
+            "CH_BILLING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
+            "CH_BILLING_PROVIDER_MIDDLE_NAME": provider.get("CP_PROVIDER_MIDDLE_NAME", ""),
+            "CH_BILLING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
+            "CH_BILLING_PROVIDER_FULL_NAME": provider.get("CP_PROVIDER_FULL_NAME", ""),
+            "CH_BILLING_PROVIDER_ADDRESS_01": provider_address.get("CP_PROVIDER_ADDRESS_01", ""),
+            "CH_BILLING_PROVIDER_ADDRESS_02": provider_address.get("CP_PROVIDER_ADDRESS_02", ""),
+            "CH_BILLING_PROVIDER_CITY": provider_address.get("CP_PROVIDER_CITY", ""),
+            "CH_BILLING_PROVIDER_STATE": provider_address.get("CP_PROVIDER_STATE", ""),
+            "CH_BILLING_PROVIDER_ZIP": provider_address.get("CP_PROVIDER_ZIP", ""),
+            "CH_BILLING_PROVIDER_ZIP_PLUS_FOUR": provider_address.get(
+                "CP_PROVIDER_ZIP_PLUS_FOUR", ""
+            ),
+            "CH_BILLING_PROVIDER_PHONE": provider_address.get("CP_PROVIDER_PHONE", ""),
+            "CH_RENDERING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
+            "CH_RENDERING_PROVIDER_MIDDLE_NAME": provider.get("CP_PROVIDER_MIDDLE_NAME", ""),
+            "CH_RENDERING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
+            "CH_RENDERING_PROVIDER_ADDRESS_01": provider_address.get("CP_PROVIDER_ADDRESS_01", ""),
+            "CH_RENDERING_PROVIDER_CITY": provider_address.get("CP_PROVIDER_CITY", ""),
+            "CH_RENDERING_PROVIDER_STATE": provider_address.get("CP_PROVIDER_STATE", ""),
+            "CH_RENDERING_PROVIDER_ZIP": provider_address.get("CP_PROVIDER_ZIP", ""),
+            "CH_RENDERING_PROVIDER_ZIP_PLUS_FOUR": provider_address.get(
+                "CP_PROVIDER_ZIP_PLUS_FOUR", ""
+            ),
+            "CH_RENDERING_PROVIDER_PHONE": provider_address.get("CP_PROVIDER_PHONE", ""),
+        },
+    )
     _remove_profile_exclusions(record, claim_type)
     completed = _complete_source_shape(record, claim_type)
     completed.setdefault("CH_CLIENT_CLAIM_ID", claim_id)
@@ -241,10 +289,14 @@ def _line(
                 "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": "HCPCS",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "",
-                "CD_RENDERING_PROVIDER_ENTITY_TYPE": "P",
-                "CD_RENDERING_PROVIDER_FIRST_NAME": "Test",
-                "CD_RENDERING_PROVIDER_LAST_NAME": "PROVIDER",
-                "CD_RENDERING_PROVIDER_TAXONOMY_CODE": "207Q00000X",
+                "CD_RENDERING_PROVIDER_ENTITY_TYPE": (
+                    "P" if provider.get("CP_PROVIDER_RECORD_TYPE") == "1" else "O"
+                ),
+                "CD_RENDERING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
+                "CD_RENDERING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
+                "CD_RENDERING_PROVIDER_TAXONOMY_CODE": provider.get(
+                    "CP_PROVIDER_TAXONOMY_CODE", ""
+                ),
                 "CH_CLAIM_FILING_INDICATOR_CODE": "CI",
             }
         )
@@ -259,6 +311,13 @@ def _line(
             }
         )
     return line
+
+
+def _set_existing_fields(record: dict[str, object], values: Mapping[str, object]) -> None:
+    """Copy a related entity value only where the active Claim layout defines it."""
+    for field, value in values.items():
+        if field in record:
+            record[field] = value
 
 
 def _lifecycle(lifecycle: tuple[str, int | None] | None, index: int) -> tuple[str, int | None]:

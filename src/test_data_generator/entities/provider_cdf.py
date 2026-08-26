@@ -3,9 +3,11 @@
 import json
 from copy import deepcopy
 from pathlib import Path
+from random import Random
 from typing import Mapping
 
 from test_data_generator.configuration.profiles import load_client_headers, load_client_values
+from test_data_generator.core.identifiers import valid_npi
 from test_data_generator.entities.provider import generate_record
 from test_data_generator.entities.provider_nppes import generate_record_from_cdf, generate_records
 from test_data_generator.layouts import project_record
@@ -35,7 +37,8 @@ def generate_linked_provider_fixtures(
     resolved_values = client_values or load_client_values("chc", "provider")
     cdf_records = [
         _set_linked_record_type(
-            _cdf_record(_nppes_npi(index), seed, index, resolved_headers, resolved_values), index
+            _cdf_record(_linked_npi(seed, index), seed, index, resolved_headers, resolved_values),
+            index,
         )
         for index in range(nppes_count)
     ]
@@ -44,7 +47,11 @@ def generate_linked_provider_fixtures(
     ]
     cdf_records.extend(
         _cdf_record(
-            _unmatched_npi(index), seed, nppes_count + index, resolved_headers, resolved_values
+            _unmatched_npi(seed, index),
+            seed,
+            nppes_count + index,
+            resolved_headers,
+            resolved_values,
         )
         for index in range(additional_cdf_count)
     )
@@ -191,9 +198,11 @@ def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
     )
 
 
-def _nppes_npi(index: int) -> str:
-    return f"9{index + 1:09d}"
+def _linked_npi(seed: int, index: int) -> str:
+    """Generate a valid NPI shared by one linked NPPES/CDF fixture pair."""
+    return valid_npi(Random(seed * 1_000_003 + index))
 
 
-def _unmatched_npi(index: int) -> str:
-    return f"8{index + 1:09d}"
+def _unmatched_npi(seed: int, index: int) -> str:
+    """Generate a valid NPI deliberately outside the linked NPPES sequence."""
+    return valid_npi(Random(seed * 1_000_003 + 10_000_000 + index))

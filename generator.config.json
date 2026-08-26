@@ -1,6 +1,5 @@
 {
   "client": "chc",
-  "seed": 20260805,
   "output_directory": "./output",
   "generation": {
     "output_order": {"headers": "last"},

@@ -12,7 +12,12 @@ from random import Random
 
 from faker import Faker
 
-from test_data_generator.core.identifiers import deterministic_uuid4
+from test_data_generator.core.identifiers import (
+    deterministic_uuid4,
+    valid_ein,
+    valid_npi,
+    valid_phone_number,
+)
 
 INDIVIDUAL = "individual"
 ORGANIZATIONAL = "organizational"
@@ -51,7 +56,7 @@ def generate_record(
     last = faker.last_name().upper() if code == "1" else f"{faker.company().upper()} MEDICAL GROUP"
     taxonomy = randomizer.choice(_TAXONOMIES)
     record: dict[str, object] = {
-        "NPI": _npi(index),
+        "NPI": valid_npi(randomizer),
         "ENTITY_TYPE_CODE": code,
         "ENTITY_TYPE_DESCRIPTION": "Individual" if code == "1" else "Organization",
         "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME": last if code == "2" else "",
@@ -67,16 +72,16 @@ def generate_record(
             date(2018, 1, 1) + timedelta(days=randomizer.randrange(2500))
         ),
         "LAST_UPDATE_DATE": _date(date(2023, 1, 1) + timedelta(days=randomizer.randrange(900))),
-        "CERTIFICATION_DATE": faker.date_between(start_date="-10y", end_date="today").strftime(
-            "%m/%d/%Y"
-        ),
+        "CERTIFICATION_DATE": (
+            date(2015, 1, 1) + timedelta(days=randomizer.randrange(3_650))
+        ).strftime("%m/%d/%Y"),
         "NPI_DEACTIVATION_DATE": "",
         "NPI_DEACTIVATION_REASON_CODE": "",
         "NPI_REACTIVATION_DATE": "",
         "REPLACEMENT_NPI": "",
         "IS_SOLE_PROPRIETOR": "Y" if code == "1" and randomizer.choice((True, False)) else "N",
         "IS_ORGANIZATION_SUBPART": "Y" if code == "2" and randomizer.choice((True, False)) else "N",
-        "EMPLOYER_IDENTIFICATION_NUMBER_EIN": _digits(randomizer, 9) if code == "2" else "",
+        "EMPLOYER_IDENTIFICATION_NUMBER_EIN": valid_ein(randomizer) if code == "2" else "",
         "PARENT_ORGANIZATION_LBN": "",
         "PARENT_ORGANIZATION_TIN": "",
         "AUTHORIZED_OFFICIAL_FIRST_NAME": faker.first_name().upper() if code == "2" else "",
@@ -86,17 +91,17 @@ def generate_record(
         "AUTHORIZED_OFFICIAL_NAME_PREFIX_TEXT": "",
         "AUTHORIZED_OFFICIAL_NAME_SUFFIX_TEXT": "",
         "AUTHORIZED_OFFICIAL_CREDENTIAL_TEXT": "",
-        "AUTHORIZED_OFFICIAL_TELEPHONE_NUMBER": _digits(randomizer, 10) if code == "2" else "",
-        "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS": (
-            f"{randomizer.randrange(100, 9999)} Main St"
-        ),
+        "AUTHORIZED_OFFICIAL_TELEPHONE_NUMBER": valid_phone_number(randomizer)
+        if code == "2"
+        else "",
+        "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS": faker.street_address().replace("\n", " "),
         "PROVIDER_SECOND_LINE_BUSINESS_MAILING_ADDRESS": "",
         "PROVIDER_BUSINESS_MAILING_ADDRESS_CITY_NAME": city,
         "PROVIDER_BUSINESS_MAILING_ADDRESS_STATE_NAME": state,
         "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE": postal,
         "PROVIDER_BUSINESS_MAILING_ADDRESS_COUNTRY_CODE": "US",
-        "PROVIDER_BUSINESS_MAILING_ADDRESS_TELEPHONE_NUMBER": _digits(randomizer, 10),
-        "PROVIDER_BUSINESS_MAILING_ADDRESS_FAX_NUMBER": _digits(randomizer, 10),
+        "PROVIDER_BUSINESS_MAILING_ADDRESS_TELEPHONE_NUMBER": valid_phone_number(randomizer),
+        "PROVIDER_BUSINESS_MAILING_ADDRESS_FAX_NUMBER": valid_phone_number(randomizer),
         "PROVIDER_FIRST_LINE_BUSINESS_PRACTICE_LOCATION_ADDRESS": "",
         "PROVIDER_SECOND_LINE_BUSINESS_PRACTICE_LOCATION_ADDRESS": "",
         "PROVIDER_BUSINESS_PRACTICE_LOCATION_ADDRESS_CITY_NAME": "",
@@ -142,7 +147,7 @@ def generate_record_from_cdf(cdf: Mapping[str, object], index: int, seed: int) -
     """Generate a type-specific NPPES record linked to one CDF provider."""
     code = "1" if str(cdf.get("CP_PROVIDER_RECORD_TYPE")) in {"1", "I"} else "2"
     record = generate_record(seed, index, code)
-    record["NPI"] = str(cdf.get("CP_PROVIDER_NPI", _npi(index)))
+    record["NPI"] = str(cdf.get("CP_PROVIDER_NPI", valid_npi(Random(seed + index))))
     record["PROVIDER_FIRST_NAME"] = cdf.get("CP_PROVIDER_FIRST_NAME", "") if code == "1" else ""
     record["PROVIDER_MIDDLE_NAME"] = cdf.get("CP_PROVIDER_MIDDLE_NAME", "") if code == "1" else ""
     record["PROVIDER_LAST_NAME_LEGAL_NAME"] = (
@@ -186,10 +191,6 @@ def generate_records(count: int, seed: int) -> list[dict[str, object]]:
     if count < 1:
         raise ValueError("NPPES count must be at least 1")
     return [generate_record(seed, index) for index in range(count)]
-
-
-def _npi(index: int) -> str:
-    return f"9{index + 1:09d}"
 
 
 def _digits(randomizer: Random, length: int) -> str:
