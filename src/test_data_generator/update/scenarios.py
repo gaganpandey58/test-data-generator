@@ -168,7 +168,13 @@ def resolve_update(
         condition = request.condition
         if condition is None:
             raise ValueError("WEIGHT_CHANGE requires BELOW_LIMIT, AT_LIMIT, or ABOVE_LIMIT")
-        selected = _select_weight_fields(rules, selection_threshold, condition, _field_names(base))
+        selected = _select_weight_fields(
+            rules,
+            selection_threshold,
+            condition,
+            _field_names(base),
+            request.matching_method,
+        )
     original = deepcopy(dict(base))
     result = deepcopy(original)
     changed: list[str] = []
@@ -273,6 +279,8 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.name().upper()
         elif "GENDER" in upper_field:
             candidate = randomizer.choice(("F", "M"))
+        elif upper_field.endswith("CLAIM_FREQUENCY_CODE"):
+            candidate = randomizer.choice(tuple(code for code in ("1", "7", "8") if code != value))
         elif "CITY" in upper_field:
             candidate = faker.city().upper()
         elif "STATE" in upper_field:
@@ -394,9 +402,9 @@ def _weight_threshold(request: UpdateRequest, rules: EntityRules) -> Decimal:
     )
     if request.operation == OperationType.WEIGHT_CHANGE and request.condition == "BELOW_LIMIT":
         weights = [
-            rule.weight
-            for name, rule in rules.fields.items()
-            if name not in rules.keys and rule.weight > 0
+            rules.fields[name].weight
+            for name in method.fields
+            if name not in rules.keys and rules.fields[name].weight > 0
         ]
         if weights:
             return method.needed_weight + min(weights)
@@ -408,19 +416,53 @@ def _select_weight_fields(
     threshold: Decimal,
     condition: str,
     available_fields: set[str] | None = None,
+    matching_method: str | None = None,
 ) -> tuple[str, ...]:
     """Choose the smallest deterministic field combination for a weight boundary."""
-    candidates = tuple(
+    method = next(
+        (method for method in rules.methods if method.name == matching_method),
+        rules.methods[0],
+    )
+    preferred_candidates = tuple(
         name
-        for name in rules.fields
+        for name in method.fields
         if name not in rules.keys and (available_fields is None or name in available_fields)
     )
     wanted = {"BELOW_LIMIT": "below", "AT_LIMIT": "equal", "ABOVE_LIMIT": "above"}.get(condition)
     if wanted is None:
         raise ValueError(f"Unknown WEIGHT_CHANGE condition {condition!r}")
+
+    preferred = _weight_combination(rules, preferred_candidates, threshold, wanted)
+    if preferred is not None:
+        return preferred
+
+    # The matching method determines the applicable threshold, but some source
+    # methods contain only matching keys or too few non-key fields to reach all
+    # boundaries. Fall back to other weighted survivorship fields while still
+    # protecting every matching key so the fixture remains post-match.
+    candidates = tuple(
+        name
+        for name in rules.fields
+        if name not in rules.keys and (available_fields is None or name in available_fields)
+    )
+    fallback = _weight_combination(rules, candidates, threshold, wanted)
+    if fallback is not None:
+        return fallback
+    raise ValueError(f"No field combination can produce a {wanted}-threshold update")
+
+
+def _weight_combination(
+    rules: EntityRules,
+    candidates: tuple[str, ...],
+    threshold: Decimal,
+    wanted: str,
+) -> tuple[str, ...] | None:
+    """Return the smallest candidate combination for one threshold relation."""
+    if _relation(Decimal("0"), threshold) == wanted:
+        return ()
     for size in range(1, len(candidates) + 1):
         for combination in combinations(candidates, size):
             total = sum((rules.fields[name].weight for name in combination), Decimal("0"))
             if _relation(total, threshold) == wanted:
                 return combination
-    raise ValueError(f"No field combination can produce a {wanted}-threshold update")
+    return None

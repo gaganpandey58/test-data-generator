@@ -64,8 +64,9 @@
           "maximum": 9999999999
         },
         "CH_PLACE_OF_SERVICE_CODE": {
-          "type": "string",
-          "pattern": "^[0-9]{2}$"
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
         },
         "CH_CLAIM_SERVICE_FROM_DATE": {
           "type": "string",
@@ -84,7 +85,7 @@
           "format": "uuid"
         },
         "otherAttributes": {
-          "type": "object"
+          "type": "null"
         },
         "CLAIM_DETAIL": {
           "type": "array",
@@ -417,7 +418,8 @@
       "type": "string"
     },
     "CH_CLAIM_FREQUENCY_CODE": {
-      "type": "string"
+      "type": "string",
+      "enum": ["1", "7", "8"]
     },
     "CH_COVERED_DAYS": {
       "type": "integer"

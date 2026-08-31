@@ -25,6 +25,8 @@ from test_data_generator.configuration.profiles import (
 from test_data_generator.core.errors import ConfigurationError
 from test_data_generator.layouts import available_profiles, load_layout
 
+MAX_RECORD_COUNT = 1_000_000
+
 
 @dataclass(frozen=True)
 class EntityConfig:
@@ -84,8 +86,11 @@ class RunConfig:
     rule_catalog: Path | None
     updates_enabled: bool
     update_defaults: Mapping[str, object]
+    creation_enabled: bool = True
     invalid_values_catalog: Path | None = None
     nppes_count: int = 0
+    nppes_individual_count: int = 0
+    nppes_organizational_count: int = 0
     nppes_filename: str = "provider_nppes.jsonl"
     provider_linked: bool = False
 
@@ -125,7 +130,11 @@ def load_config(path: Path) -> RunConfig:
 
     generation_config = generation if isinstance(generation, dict) else {}
     creation_config = generation_config.get("creation", {})
-    creation_directory = output_directory / str(creation_config.get("directory", "new-test-data"))
+    creation_directory = _output_subdirectory(
+        output_directory,
+        creation_config.get("directory", "new-test-data"),
+        "creation",
+    )
 
     disabled_filenames: list[str] = []
     # Remove filenames emitted before the provider CDF naming contract changed.
@@ -140,6 +149,14 @@ def load_config(path: Path) -> RunConfig:
     )
     nppes_config = raw_config.get("provider_nppes", {})
     nppes_count = _nppes_total(nppes_config)
+    if isinstance(nppes_config, dict) and (
+        "individual" in nppes_config or "organizational" in nppes_config
+    ):
+        nppes_individual_count = int(nppes_config.get("individual", 0))
+        nppes_organizational_count = int(nppes_config.get("organizational", 0))
+    else:
+        nppes_individual_count = (nppes_count + 1) // 2
+        nppes_organizational_count = nppes_count // 2
     if nppes_count == 0:
         disabled_filenames.append("provider_nppes.jsonl")
 
@@ -186,7 +203,11 @@ def load_config(path: Path) -> RunConfig:
         )
     _validate_unique_filenames(entities)
     update_config = generation_config.get("updates", {})
-    update_directory = output_directory / str(update_config.get("directory", "update-test-data"))
+    update_directory = _output_subdirectory(
+        output_directory,
+        update_config.get("directory", "update-test-data"),
+        "updates",
+    )
     rule_catalog_value = update_config.get("rule_catalog")
     rule_catalog = (
         _resolve_path(str(rule_catalog_value), config_path.parent)
@@ -212,8 +233,11 @@ def load_config(path: Path) -> RunConfig:
         rule_catalog=rule_catalog,
         updates_enabled=bool(update_config.get("enabled", False)),
         update_defaults=update_config,
+        creation_enabled=bool(creation_config.get("enabled", True)),
         invalid_values_catalog=invalid_values_catalog,
         nppes_count=nppes_count,
+        nppes_individual_count=nppes_individual_count,
+        nppes_organizational_count=nppes_organizational_count,
         provider_linked=provider_linked,
     )
 
@@ -428,6 +452,13 @@ def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[s
         scenarios["MATCHED"] = scenarios.get("MATCHED", 0) + (
             configured_count - configured_scenarios
         )
+    if scenarios.get("REVERSAL", 0) > 0 and not any(
+        scenarios.get(name, 0) > 0 for name in ("MATCHED", "REPLACEMENT", "STALE")
+    ):
+        raise ConfigurationError(
+            f"REVERSAL scenario for {entity!r} requires an earlier MATCHED, "
+            "REPLACEMENT, or STALE Payment"
+        )
     return scenarios
 
 
@@ -440,7 +471,7 @@ def _payment_requires_claim_source(entity: str, raw_entity: Mapping[str, object]
     return any(scenario != "ORPHAN" and count > 0 for scenario, count in scenarios.items())
 
 
-_CLAIM_FREQUENCY_CODES = frozenset({"1", "7", "8"})
+_CLAIM_FREQUENCY_CODES = ("1", "7", "8")
 
 
 def _effective_record_count(
@@ -448,8 +479,13 @@ def _effective_record_count(
 ) -> int:
     """Expand one Claim only when a Replacement Payment requires its original."""
     count = raw_entity.get("count", 0)
-    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-        raise ConfigurationError(f"Count for {entity!r} must be a non-negative integer")
+    if (
+        not isinstance(count, int)
+        or isinstance(count, bool)
+        or count < 0
+        or count > MAX_RECORD_COUNT
+    ):
+        raise ConfigurationError(f"Count for {entity!r} must be between 0 and {MAX_RECORD_COUNT:,}")
     if entity in {"claim_history_professional", "claim_history_institutional"}:
         paired_entity = {
             "claim_history_professional": "claim_professional",
@@ -539,16 +575,18 @@ def _random_claim_frequencies(
         return []
     randomizer = Random(seed + (0 if entity == "claim_professional" else 1))
     replacement_requested = _replacement_requested(entity, raw_entities)
-    original_count = min(2, count)
-    codes = ["1"] * original_count
     if replacement_requested and count == 2:
         return ["1", "7"]
-    if count >= 3:
-        codes.append("7")
-    if count >= 4:
-        codes.append("8")
-    while len(codes) < count:
-        codes.append(randomizer.choice(tuple(_CLAIM_FREQUENCY_CODES)))
+    codes = [randomizer.choice(_CLAIM_FREQUENCY_CODES) for _ in range(count)]
+    required_originals = min(2, count)
+    original_positions = set(randomizer.sample(range(count), required_originals))
+    for position in original_positions:
+        codes[position] = "1"
+    if replacement_requested and "7" not in codes:
+        replacement_positions = [
+            position for position in range(count) if position not in original_positions
+        ]
+        codes[randomizer.choice(replacement_positions)] = "7"
     return codes
 
 
@@ -580,7 +618,12 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
     Returns:
         Per-entity internal defaults used while normalizing public config.
     """
-    schema_root = Path(__file__).resolve().parents[3] / "schema" / "json"
+    packaged_schema_root = Path(str(files("test_data_generator").joinpath("schema", "json")))
+    schema_root = (
+        packaged_schema_root
+        if packaged_schema_root.is_dir()
+        else Path(__file__).resolve().parents[3] / "schema" / "json"
+    )
     return {
         "provider": {
             "enabled": False,
@@ -817,6 +860,15 @@ def resolve_output_path(output_directory: Path, filename: str) -> Path:
     if not destination.is_relative_to(output_root):
         raise ValueError("resolves outside the output directory")
     return destination
+
+
+def _output_subdirectory(output_directory: Path, value: object, label: str) -> Path:
+    """Resolve one configured generation directory inside the output root."""
+    directory = str(value)
+    try:
+        return resolve_output_path(output_directory, directory)
+    except ValueError as error:
+        raise ConfigurationError(f"Invalid {label} output directory: {error}") from error
 
 
 def _safe_validation_detail(error: Any) -> str:

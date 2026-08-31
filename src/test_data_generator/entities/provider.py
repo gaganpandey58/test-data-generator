@@ -62,7 +62,8 @@ def generate_record(
     state, city, zip_code, county, region = randomizer.choice(_LOCATIONS)
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     individual = randomizer.choice((True, False))
-    record_type = "1" if individual else "2"
+    # CDF/GDF uses P/F provider codes. NPPES alone uses entity type 1/2.
+    record_type = "P" if individual else "F"
     first = faker.first_name().upper() if individual else ""
     middle = faker.first_name()[0].upper() if individual else ""
     last = faker.last_name().upper() if individual else f"{faker.company().upper()} MEDICAL GROUP"

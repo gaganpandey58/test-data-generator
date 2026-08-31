@@ -8,11 +8,13 @@ Payments from immutable existing Claim JSONL files for configured scenarios.
 """
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from test_data_generator.core.identifiers import deterministic_uuid4
 from test_data_generator.entities.claim import generate_record as generate_claim
 from test_data_generator.layouts import load_layout, project_record
 from test_data_generator.samples.shapes import complete_record
@@ -226,7 +228,7 @@ def derive_payment_from_claim(
     except KeyError as error:
         raise ValueError(f"Unsupported Payment profile {profile!r}") from error
     payment = complete_record(deepcopy(claim), source)
-    _set_payment_transport(payment, profile)
+    _set_payment_transport(payment, profile, seed, index)
     _copy_line_indexes(payment, profile)
     _copy_claim_lineage(payment, claim)
     _set_source_payment_defaults(payment, claim, profile)
@@ -238,11 +240,15 @@ def derive_payment_from_claim(
     return projected
 
 
-def _set_payment_transport(payment: dict[str, object], profile: str) -> None:
+def _set_payment_transport(payment: dict[str, object], profile: str, seed: int, index: int) -> None:
     """Convert Claim transport metadata to the derived Payment 835 stream."""
     file_type = "835P" if profile == "payment-professional" else "835I"
     payment["FILE_TYPE"] = file_type
     payment["cotiviti.source_format"] = f"edi_x12_{file_type}"
+    payment["cotiviti.message_id"] = deterministic_uuid4(seed, f"{profile}:message:{index + 1}")
+    payment["cotiviti.message_seq"] = index + 1
+    produced_at = datetime(2026, 8, 5) + timedelta(seconds=index)
+    payment["cotiviti.produced_at"] = produced_at.strftime("%Y-%m-%dT%H:%M:%SZ")
     payment["x-connector-name"] = "test-eip-835"
     raw_reference = payment.get("cotiviti.source.raw_file_ref")
     if isinstance(raw_reference, str) and raw_reference:
@@ -257,6 +263,21 @@ def derive_payments_from_claims(
     limit: int | None = None,
 ) -> list[dict[str, object]]:
     """Derive Payments from existing Claims in configured scenario order."""
+    claim_backed = any(
+        str(name).upper() != "ORPHAN" and int(value) > 0 for name, value in scenario_counts.items()
+    )
+    claims = load_claim_records(path) if claim_backed else []
+    return derive_payments_from_records(claims, profile, scenario_counts, seed, limit)
+
+
+def derive_payments_from_records(
+    claims: Sequence[Mapping[str, object]],
+    profile: str,
+    scenario_counts: Mapping[str, int],
+    seed: int,
+    limit: int | None = None,
+) -> list[dict[str, object]]:
+    """Derive Payments from already-materialized Claims in scenario order."""
     count = limit if limit is not None else sum(scenario_counts.values())
     if count < 1:
         return []
@@ -270,7 +291,8 @@ def derive_payments_from_claims(
         for scenario, scenario_count in requested.items()
         if scenario != "ORPHAN"
     }
-    claims = load_claim_records(path) if claim_backed else []
+    if claim_backed and not claims:
+        raise ValueError("Claim-backed Payment scenarios require at least one source Claim")
     records: list[dict[str, object]] = []
     prior_payment_claims: list[Mapping[str, object]] = []
     source_index = 0
@@ -556,20 +578,29 @@ def _validate_source_relationship(
             raise ValueError("ORPHAN Payment still matches its source Claim")
         return
     expected_claim_id = _first_value(claim, _CLAIM_IDS)
-    if expected_claim_id is not None and payment.get("CH_CLIENT_CLAIM_ID") != expected_claim_id:
+    if expected_claim_id is not None and not _same_logical_value(
+        payment.get("CH_CLIENT_CLAIM_ID"), expected_claim_id
+    ):
         raise ValueError("Payment Claim ID does not match the source Claim")
     expected_original_id = _first_value(claim, _ORIGINAL_CLAIM_IDS)
-    if (
-        expected_original_id is not None
-        and payment.get("CH_CLIENT_ORIGINAL_CLAIM_ID") != expected_original_id
+    if expected_original_id is not None and not _same_logical_value(
+        payment.get("CH_CLIENT_ORIGINAL_CLAIM_ID"), expected_original_id
     ):
         raise ValueError("Payment Original Claim ID does not match the source Claim")
     for field in (*_CLAIM_LINEAGE_FIELDS, *_PATIENT_RELATIONSHIP_FIELDS):
-        if field in claim and field in payment and claim[field] != payment[field]:
+        if (
+            field in claim
+            and field in payment
+            and not _same_logical_value(claim[field], payment[field])
+        ):
             raise ValueError(f"Payment relationship field {field!r} differs from the source Claim")
     rules = PAYMENT_MATCHING_RULES[profile]
     for field in rules["header"]:
-        if field in claim and field in payment and claim[field] != payment[field]:
+        if (
+            field in claim
+            and field in payment
+            and not _same_logical_value(claim[field], payment[field])
+        ):
             raise ValueError(f"Payment relationship field {field!r} differs from the source Claim")
     claim_details = claim.get("CLAIM_DETAIL")
     payment_details = payment.get("CLAIM_DETAIL")
@@ -582,10 +613,24 @@ def _validate_source_relationship(
             continue
         for field in rules["line"]:
             if field in claim_detail and field in payment_detail:
-                if claim_detail[field] != payment_detail[field]:
+                if not _same_logical_value(claim_detail[field], payment_detail[field]):
                     raise ValueError(
                         f"Payment line relationship field {field!r} differs from the source Claim"
                     )
+
+
+def _same_logical_value(left: object, right: object) -> bool:
+    """Compare relationship values after layout-specific JSON type coercion."""
+    if left is None or right is None:
+        return left is right
+    left_text = str(left)
+    right_text = str(right)
+    if left_text == right_text:
+        return True
+    try:
+        return Decimal(left_text) == Decimal(right_text)
+    except InvalidOperation:
+        return False
 
 
 def _matches_claim(

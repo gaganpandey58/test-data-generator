@@ -86,7 +86,12 @@ def _synchronize_equivalent_pair(
         return set()
     old_left = list(_values(original, left))
     old_right = list(_values(original, right))
-    if not old_left or not old_right or not _populated(old_left[0]) or old_left[0] != old_right[0]:
+    if (
+        not old_left
+        or not old_right
+        or not _populated(old_left[0])
+        or not _equivalent(old_left[0], old_right[0])
+    ):
         return set()
     source = left if left in changed else right
     new_values = list(_values(updated, source))
@@ -99,7 +104,7 @@ def _synchronize_equivalent_pair(
             if position < len(original_locations):
                 old_value = original_locations[position][0][original_locations[position][1]]
                 if _populated(old_value):
-                    parent[key] = new_value
+                    parent[key] = _coerce_like(new_value, old_value)
     return {left, right}
 
 
@@ -142,3 +147,25 @@ def _value_at(record: Mapping[str, object], field: str, position: int) -> object
 
 def _populated(value: Any) -> bool:
     return value is not None and (not isinstance(value, str) or bool(value.strip()))
+
+
+def _equivalent(left: object, right: object) -> bool:
+    """Compare populated logical values across string and numeric representations."""
+    return str(left).strip() == str(right).strip()
+
+
+def _coerce_like(value: object, example: object) -> object:
+    """Keep a synchronized destination's existing JSON representation type."""
+    try:
+        if isinstance(example, str):
+            return str(value)
+        if isinstance(example, int) and not isinstance(example, bool):
+            return int(str(value))
+        if isinstance(example, float):
+            return float(str(value))
+    except (TypeError, ValueError):
+        # INVALID fixtures deliberately violate the destination's normal JSON
+        # representation. Keep the malformed value synchronized instead of
+        # crashing while trying to preserve a type it cannot satisfy.
+        return value
+    return value

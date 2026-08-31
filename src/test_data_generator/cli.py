@@ -7,14 +7,20 @@ details of parsing, validation, and atomic file publication.
 """
 
 import argparse
+import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import (
+    build_claim_pair_records,
+    build_entity_records,
     run_claim_pair,
     run_entity,
     run_records,
@@ -24,9 +30,11 @@ from test_data_generator.core.engine import (
 from test_data_generator.core.errors import ConfigurationError, GenerationError
 from test_data_generator.entities.payment import (
     derive_payments_from_claims,
+    derive_payments_from_records,
     generate_orphan_payments,
 )
 from test_data_generator.entities.provider_cdf import (
+    build_linked_provider_records,
     generate_linked_provider_fixtures,
     generate_nppes_file,
     generate_provider_cdf,
@@ -81,8 +89,11 @@ def generate(config: Path, mode: str = "all") -> None:
         except ConfigurationError as error:
             raise CommandError(f"Update rule catalog failed: {error}") from error
 
+    transaction = _begin_output_transaction(run_config, mode)
+    run_config = transaction.staged_config
     entity_counts = {entity.name: entity.count for entity in run_config.entities}
-    if mode in {"all", "creation"}:
+    generated_records: dict[str, tuple[Mapping[str, object], ...]] = {}
+    if mode in {"all", "creation"} and run_config.creation_enabled:
         histories = {
             entity.name: entity
             for entity in run_config.entities
@@ -106,13 +117,42 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.seed,
                         run_config.creation_directory,
                         entity_counts,
+                        generated_records,
                     )
                 except GenerationError as error:
                     raise CommandError(
                         f"Claim generation failed for entity {entity.name!r}: {error}"
                     ) from error
-                print(f"{entity.name}: {entity.count} records -> {claim_path}")
-                print(f"{history_entity.name}: {history_entity.count} records -> {history_path}")
+                print(
+                    f"{entity.name}: {entity.count} records -> {transaction.final_path(claim_path)}"
+                )
+                print(
+                    f"{history_entity.name}: {history_entity.count} records -> "
+                    f"{transaction.final_path(history_path)}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(claim_path)
+                generated_records[history_entity.name] = _read_jsonl_records(history_path)
+                continue
+            claim_source_name = _payment_claim_history_name(entity.name)
+            if claim_source_name in generated_records:
+                try:
+                    records = derive_payments_from_records(
+                        generated_records[claim_source_name],
+                        entity.profile,
+                        entity.scenarios,
+                        run_config.seed,
+                        entity.count,
+                    )
+                    output_path = run_records(entity, records, run_config.creation_directory)
+                except (GenerationError, ValueError) as error:
+                    raise CommandError(
+                        f"Payment generation from Claims failed for entity {entity.name!r}: {error}"
+                    ) from error
+                print(
+                    f"{entity.name}: {entity.count} records -> "
+                    f"{transaction.final_path(output_path)}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(output_path)
                 continue
             if entity.source_claims is not None:
                 try:
@@ -128,7 +168,11 @@ def generate(config: Path, mode: str = "all") -> None:
                     raise CommandError(
                         f"Payment generation from Claims failed for entity {entity.name!r}: {error}"
                     ) from error
-                print(f"{entity.name}: {entity.count} records -> {output_path}")
+                print(
+                    f"{entity.name}: {entity.count} records -> "
+                    f"{transaction.final_path(output_path)}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(output_path)
                 continue
             if _is_orphan_only_payment(entity.name, entity.scenarios):
                 try:
@@ -141,7 +185,11 @@ def generate(config: Path, mode: str = "all") -> None:
                         "Standalone orphan Payment generation failed for entity "
                         f"{entity.name!r}: {error}"
                     ) from error
-                print(f"{entity.name}: {entity.count} records -> {output_path}")
+                print(
+                    f"{entity.name}: {entity.count} records -> "
+                    f"{transaction.final_path(output_path)}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(output_path)
                 continue
             if (
                 entity.name == "provider"
@@ -156,13 +204,21 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.seed,
                         entity.client_headers,
                         entity.client_values,
+                        run_config.nppes_individual_count,
+                        run_config.nppes_organizational_count,
+                        entity.header_order,
                     )
                 except (OSError, ValueError) as error:
                     raise CommandError(f"Linked provider generation failed: {error}") from error
-                print(f"provider: {entity.count} records -> {paths['provider_cdf']}")
                 print(
-                    f"provider_nppes: {run_config.nppes_count} records -> {paths['provider_nppes']}"
+                    f"provider: {entity.count} records -> "
+                    f"{transaction.final_path(paths['provider_cdf'])}"
                 )
+                print(
+                    f"provider_nppes: {run_config.nppes_count} records -> "
+                    f"{transaction.final_path(paths['provider_nppes'])}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(paths["provider_cdf"])
                 continue
             try:
                 output_path = run_entity(
@@ -170,6 +226,7 @@ def generate(config: Path, mode: str = "all") -> None:
                     run_config.seed,
                     run_config.creation_directory,
                     entity_counts,
+                    generated_records,
                 )
             except GenerationError as error:
                 raise CommandError(
@@ -180,19 +237,26 @@ def generate(config: Path, mode: str = "all") -> None:
                 raise CommandError(
                     f"Generation failed for entity {entity.name!r} using schema {entity.schema}"
                 ) from error
-            print(f"{entity.name}: {entity.count} records -> {output_path}")
+            print(f"{entity.name}: {entity.count} records -> {transaction.final_path(output_path)}")
+            generated_records[entity.name] = _read_jsonl_records(output_path)
         if run_config.nppes_count > 0 and not run_config.provider_linked:
             try:
                 nppes_path = generate_nppes_file(
                     run_config.creation_directory / run_config.nppes_filename,
                     run_config.nppes_count,
                     run_config.seed,
+                    run_config.nppes_individual_count,
+                    run_config.nppes_organizational_count,
                 )
             except (OSError, ValueError) as error:
                 raise CommandError(f"NPPES generation failed: {error}") from error
-            print(f"provider_nppes: {run_config.nppes_count} records -> {nppes_path}")
+            print(
+                f"provider_nppes: {run_config.nppes_count} records -> "
+                f"{transaction.final_path(nppes_path)}"
+            )
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
+        _materialize_update_bases(run_config, entity_counts, generated_records)
         for entity in run_config.entities:
             if entity.name in {"claim_history_professional", "claim_history_institutional"}:
                 continue
@@ -209,7 +273,32 @@ def generate(config: Path, mode: str = "all") -> None:
                 raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
             request = _update_request(run_config, entity)
             try:
-                if entity.source_claims is not None:
+                if entity.name in generated_records:
+                    output_path = run_update_records(
+                        entity,
+                        generated_records[entity.name],
+                        run_config.seed,
+                        run_config.update_directory,
+                        request,
+                        entity_rules,
+                    )
+                elif _payment_claim_history_name(entity.name) in generated_records:
+                    records = derive_payments_from_records(
+                        generated_records[_payment_claim_history_name(entity.name)],
+                        entity.profile,
+                        entity.scenarios,
+                        run_config.seed,
+                        entity.count,
+                    )
+                    output_path = run_update_records(
+                        entity,
+                        records,
+                        run_config.seed,
+                        run_config.update_directory,
+                        request,
+                        entity_rules,
+                    )
+                elif entity.source_claims is not None:
                     records = derive_payments_from_claims(
                         entity.source_claims,
                         entity.profile,
@@ -245,14 +334,95 @@ def generate(config: Path, mode: str = "all") -> None:
                         entity_counts,
                         request,
                         entity_rules,
+                        generated_records,
                     )
             except (GenerationError, ValueError) as error:
                 raise CommandError(
                     f"Update generation failed for entity {entity.name!r}: {error}"
                 ) from error
-            print(f"{entity.name}: {entity.count} updates -> {output_path}")
+            print(f"{entity.name}: {entity.count} updates -> {transaction.final_path(output_path)}")
         _remove_unrequested_payment_updates(run_config)
     _remove_disabled_outputs(run_config)
+    transaction.commit()
+
+
+@dataclass
+class _OutputTransaction:
+    """Stage requested streams and publish their directories as one unit."""
+
+    temporary: tempfile.TemporaryDirectory[str]
+    staged_config: RunConfig
+    directory_pairs: tuple[tuple[Path, Path], ...]
+
+    def __del__(self) -> None:
+        """Clean abandoned staging after a generation exception."""
+        self.temporary.cleanup()
+
+    def final_path(self, staged_path: Path) -> Path:
+        """Translate a staged path to the durable path reported to users."""
+        for staged_directory, final_directory in self.directory_pairs:
+            try:
+                relative = staged_path.resolve().relative_to(staged_directory.resolve())
+            except ValueError:
+                continue
+            return final_directory / relative
+        return staged_path
+
+    def commit(self) -> None:
+        """Swap staged directories into place and roll back a failed swap."""
+        completed: list[tuple[Path, Path | None]] = []
+        temporary_root = Path(self.temporary.name)
+        try:
+            for index, (staged, final) in enumerate(self.directory_pairs):
+                final.parent.mkdir(parents=True, exist_ok=True)
+                backup: Path | None = None
+                if final.exists():
+                    backup = temporary_root / f"backup-{index}"
+                    final.replace(backup)
+                completed.append((final, backup))
+                staged.replace(final)
+        except Exception:
+            for final, backup in reversed(completed):
+                if final.is_dir():
+                    shutil.rmtree(final)
+                elif final.exists() or final.is_symlink():
+                    final.unlink()
+                if backup is not None:
+                    backup.replace(final)
+            raise
+        finally:
+            self.temporary.cleanup()
+
+
+def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransaction:
+    """Copy current output into a same-filesystem run staging area."""
+    run_config.output_directory.parent.mkdir(parents=True, exist_ok=True)
+    temporary: tempfile.TemporaryDirectory[str] = tempfile.TemporaryDirectory(
+        prefix=".test-data-generator-", dir=run_config.output_directory.parent
+    )
+    temporary_root = Path(temporary.name)
+    staged_creation = temporary_root / "creation"
+    staged_updates = temporary_root / "updates"
+    for source, staged in (
+        (run_config.creation_directory, staged_creation),
+        (run_config.update_directory, staged_updates),
+    ):
+        if source.is_dir():
+            shutil.copytree(source, staged)
+        else:
+            staged.mkdir(parents=True)
+    staged_config = replace(
+        run_config,
+        output_directory=temporary_root / "legacy",
+        creation_directory=staged_creation,
+        update_directory=staged_updates,
+    )
+    pairs: list[tuple[Path, Path]] = []
+    if mode in {"all", "creation"} and run_config.creation_enabled:
+        pairs.append((staged_creation, run_config.creation_directory))
+    if mode in {"all", "updates"} and run_config.updates_enabled:
+        pairs.append((staged_updates, run_config.update_directory))
+    return _OutputTransaction(temporary, staged_config, tuple(pairs))
 
 
 def _is_orphan_only_payment(name: str, scenarios: Mapping[str, int]) -> bool:
@@ -262,6 +432,71 @@ def _is_orphan_only_payment(name: str, scenarios: Mapping[str, int]) -> bool:
         and scenarios.get("ORPHAN", 0) > 0
         and all(scenario == "ORPHAN" or count == 0 for scenario, count in scenarios.items())
     )
+
+
+def _read_jsonl_records(path: Path) -> tuple[Mapping[str, object], ...]:
+    """Read validated records back into the run-scoped relationship registry."""
+    records: list[Mapping[str, object]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise CommandError(f"Generated JSONL record in {path} is not an object")
+            records.append(value)
+    return tuple(records)
+
+
+def _payment_claim_history_name(name: str) -> str:
+    """Return the in-run Claims History source for a Payment stream."""
+    return {
+        "payment_professional": "claim_history_professional",
+        "payment_institutional": "claim_history_institutional",
+    }.get(name, "")
+
+
+def _materialize_update_bases(
+    run_config: RunConfig,
+    entity_counts: Mapping[str, int],
+    generated_records: dict[str, tuple[Mapping[str, object], ...]],
+) -> None:
+    """Build exact update bases in memory when creation output is disabled."""
+    histories = {
+        entity.name: entity
+        for entity in run_config.entities
+        if entity.name in {"claim_history_professional", "claim_history_institutional"}
+    }
+    for entity in run_config.entities:
+        if entity.name in generated_records or entity.name in histories:
+            continue
+        if entity.name in {"payment_professional", "payment_institutional"}:
+            continue
+        if entity.name == "provider" and run_config.provider_linked:
+            records = build_linked_provider_records(
+                run_config.nppes_count,
+                entity.count - run_config.nppes_count,
+                run_config.seed,
+                entity.client_headers,
+                entity.client_values,
+                run_config.nppes_individual_count,
+                run_config.nppes_organizational_count,
+                entity.header_order,
+            )
+            generated_records[entity.name] = tuple(records["provider_cdf"])
+            continue
+        history_name = {
+            "claim_professional": "claim_history_professional",
+            "claim_institutional": "claim_history_institutional",
+        }.get(entity.name)
+        if history_name is not None:
+            current, history = build_claim_pair_records(
+                entity, run_config.seed, entity_counts, generated_records
+            )
+            generated_records[entity.name] = tuple(current)
+            generated_records[history_name] = tuple(history)
+            continue
+        generated_records[entity.name] = tuple(
+            build_entity_records(entity, run_config.seed, entity_counts, generated_records)
+        )
 
 
 def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:

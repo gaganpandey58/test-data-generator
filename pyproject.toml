@@ -26,6 +26,9 @@ dev = [
 packages = ["src/test_data_generator"]
 include = ["src/test_data_generator/**/*.json"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"schema/json" = "test_data_generator/schema/json"
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100

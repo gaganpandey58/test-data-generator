@@ -135,30 +135,63 @@ def generate_record(
         "PAYER_PLATFORM": "CHC-QNXT",
         "PAYER": "CHC",
         "CLIENT_DATA_PLATFORM": "QNXT",
-        "INGESTION_DATE": _date(date(2024, 1, 1) + timedelta(days=index)),
+        "INGESTION_DATE": _date(date(2024, 1, 1) + timedelta(days=index % 366)),
         "INGESTION_EPOCH": 1723070801 + index,
         "ROWID": deterministic_uuid4(seed + index, "provider-nppes"),
         "PUBLISHER_NAME": "client_provider_nppes",
     }
-    return record
+    individual_only = {
+        "PROVIDER_LAST_NAME_LEGAL_NAME",
+        "PROVIDER_FIRST_NAME",
+        "PROVIDER_MIDDLE_NAME",
+        "PROVIDER_NAME_PREFIX_TEXT",
+        "PROVIDER_NAME_SUFFIX_TEXT",
+        "PROVIDER_CREDENTIAL_TEXT",
+        "PROVIDER_OTHER_LAST_NAME",
+        "PROVIDER_OTHER_FIRST_NAME",
+        "PROVIDER_OTHER_MIDDLE_NAME",
+        "PROVIDER_OTHER_NAME_PREFIX_TEXT",
+        "PROVIDER_OTHER_NAME_SUFFIX_TEXT",
+        "PROVIDER_OTHER_CREDENTIAL_TEXT",
+        "PROVIDER_OTHER_LAST_NAME_TYPE_CODE",
+        "PROVIDER_GENDER_CODE",
+        "IS_SOLE_PROPRIETOR",
+    }
+    organizational_only = {
+        "EMPLOYER_IDENTIFICATION_NUMBER_EIN",
+        "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+        "PROVIDER_OTHER_ORGANIZATION_NAME",
+        "PROVIDER_OTHER_ORGANIZATION_NAME_TYPE_CODE",
+        "IS_ORGANIZATION_SUBPART",
+        "PARENT_ORGANIZATION_LBN",
+        "PARENT_ORGANIZATION_TIN",
+        "AUTHORIZED_OFFICIAL_FIRST_NAME",
+        "AUTHORIZED_OFFICIAL_MIDDLE_NAME",
+        "AUTHORIZED_OFFICIAL_LAST_NAME",
+        "AUTHORIZED_OFFICIAL_TITLE_OR_POSITION",
+        "AUTHORIZED_OFFICIAL_NAME_PREFIX_TEXT",
+        "AUTHORIZED_OFFICIAL_NAME_SUFFIX_TEXT",
+        "AUTHORIZED_OFFICIAL_CREDENTIAL_TEXT",
+        "AUTHORIZED_OFFICIAL_TELEPHONE_NUMBER",
+    }
+    excluded = organizational_only if code == "1" else individual_only
+    return {name: value for name, value in record.items() if name not in excluded}
 
 
 def generate_record_from_cdf(cdf: Mapping[str, object], index: int, seed: int) -> dict[str, object]:
     """Generate a type-specific NPPES record linked to one CDF provider."""
-    code = "1" if str(cdf.get("CP_PROVIDER_RECORD_TYPE")) in {"1", "I"} else "2"
+    code = "1" if str(cdf.get("CP_PROVIDER_RECORD_TYPE")) in {"1", "I", "P"} else "2"
     record = generate_record(seed, index, code)
     record["NPI"] = str(cdf.get("CP_PROVIDER_NPI", valid_npi(Random(seed + index))))
-    record["PROVIDER_FIRST_NAME"] = cdf.get("CP_PROVIDER_FIRST_NAME", "") if code == "1" else ""
-    record["PROVIDER_MIDDLE_NAME"] = cdf.get("CP_PROVIDER_MIDDLE_NAME", "") if code == "1" else ""
-    record["PROVIDER_LAST_NAME_LEGAL_NAME"] = (
-        cdf.get("CP_PROVIDER_LAST_NAME", "") if code == "1" else ""
-    )
-    record["PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME"] = (
-        cdf.get("CP_PROVIDER_LAST_NAME", cdf.get("CP_PROVIDER_BILLING_GROUP_NAME", ""))
-        if code == "2"
-        else ""
-    )
-    record["PROVIDER_NAME_SUFFIX_TEXT"] = cdf.get("CP_PROVIDER_NAME_SUFFIX", "")
+    if code == "1":
+        record["PROVIDER_FIRST_NAME"] = cdf.get("CP_PROVIDER_FIRST_NAME", "")
+        record["PROVIDER_MIDDLE_NAME"] = cdf.get("CP_PROVIDER_MIDDLE_NAME", "")
+        record["PROVIDER_LAST_NAME_LEGAL_NAME"] = cdf.get("CP_PROVIDER_LAST_NAME", "")
+        record["PROVIDER_NAME_SUFFIX_TEXT"] = cdf.get("CP_PROVIDER_NAME_SUFFIX", "")
+    else:
+        record["PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME"] = cdf.get(
+            "CP_PROVIDER_LAST_NAME", cdf.get("CP_PROVIDER_BILLING_GROUP_NAME", "")
+        )
     record["PROVIDER_ENUMERATION_DATE"] = cdf.get("CP_PROVIDER_RECORD_START_DATE", "")
     addresses = cdf.get("CP_PROVIDER_ADDRESSES")
     if isinstance(addresses, list) and addresses and isinstance(addresses[0], Mapping):
@@ -186,11 +219,36 @@ def generate_record_from_cdf(cdf: Mapping[str, object], index: int, seed: int) -
     return record
 
 
-def generate_records(count: int, seed: int) -> list[dict[str, object]]:
+def generate_records(
+    count: int,
+    seed: int,
+    individual_count: int | None = None,
+    organizational_count: int | None = None,
+) -> list[dict[str, object]]:
     """Generate standalone NPPES records with unique NPIs."""
     if count < 1:
         raise ValueError("NPPES count must be at least 1")
-    return [generate_record(seed, index) for index in range(count)]
+    if individual_count is None and organizational_count is None:
+        individual_count = (count + 1) // 2
+        organizational_count = count // 2
+    individual_count = individual_count or 0
+    organizational_count = organizational_count or 0
+    if individual_count + organizational_count != count:
+        raise ValueError("NPPES type counts must add up to the configured count")
+    codes = ["1"] * individual_count + ["2"] * organizational_count
+    records: list[dict[str, object]] = []
+    used_npis: set[str] = set()
+    for index, code in enumerate(codes):
+        record = generate_record(seed, index, code)
+        npi = str(record["NPI"])
+        collision = 0
+        while npi in used_npis:
+            collision += 1
+            npi = valid_npi(Random(seed * 1_000_003 + index + collision * 1_000_000_007))
+        record["NPI"] = npi
+        used_npis.add(npi)
+        records.append(record)
+    return records
 
 
 def _digits(randomizer: Random, length: int) -> str:

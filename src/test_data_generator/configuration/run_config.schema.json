@@ -69,9 +69,9 @@
         {"required": ["organizational"]}
       ],
       "properties": {
-        "count": {"type": "integer", "minimum": 0},
-        "individual": {"type": "integer", "minimum": 0},
-        "organizational": {"type": "integer", "minimum": 0}
+        "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000}
       }
     },
     "member": {"$ref": "#/$defs/counted_entity"},
@@ -121,7 +121,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "count": {"type": "integer", "minimum": 0},
+        "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "nppes": {
           "type": "object",
           "additionalProperties": false,
@@ -131,16 +131,22 @@
             {"required": ["organizational"]}
           ],
           "properties": {
-            "count": {"type": "integer", "minimum": 0},
-            "individual": {"type": "integer", "minimum": 0},
-            "organizational": {"type": "integer", "minimum": 0}
+            "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+            "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
+            "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000}
           }
         },
         "cdf": {
           "type": "object",
           "additionalProperties": false,
           "required": ["additional_count"],
-          "properties": {"additional_count": {"type": "integer", "minimum": 0}}
+          "properties": {
+            "additional_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          }
         },
         "layout": {"type": "string", "minLength": 1},
         "output_order": {
@@ -165,15 +171,19 @@
         "source_claims": {"type": "string", "minLength": 1},
         "scenarios": {
           "type": "object",
-          "additionalProperties": {"type": "integer", "minimum": 0}
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          }
         },
         "frequencies": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "1": {"type": "integer", "minimum": 0},
-            "7": {"type": "integer", "minimum": 0},
-            "8": {"type": "integer", "minimum": 0}
+            "1": {"type": "integer", "minimum": 0, "maximum": 1000000},
+            "7": {"type": "integer", "minimum": 0, "maximum": 1000000},
+            "8": {"type": "integer", "minimum": 0, "maximum": 1000000}
           }
         }
       }

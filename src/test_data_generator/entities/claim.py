@@ -29,6 +29,7 @@ def generate_record(
     client_values: Mapping[str, object],
     profile: str,
     lifecycle: tuple[str, int | None] | None = None,
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> dict[str, object]:
     """Generate one GDF claim/payment happy-path envelope.
 
@@ -41,6 +42,8 @@ def generate_record(
         profile: ``claim-professional`` or ``claim-institutional``.
         lifecycle: Claim frequency and source original-Claim index, when the
             configured Claim stream includes replacement or void fixtures.
+        related_records: Exact records already materialized for linked entities
+            in the current generator invocation.
 
     Returns:
         Medical claim linked to deterministic member and provider source records.
@@ -53,25 +56,25 @@ def generate_record(
     assert patient_index is not None
     patient_identity_index = patient_index + (1_000_000 if claim_type == "I" else 0)
     member = _linked_member(seed, patient_identity_index, entity_counts)
-    provider = _linked_provider(seed, index, entity_counts)
+    provider = _linked_provider(seed, index, entity_counts, related_records)
     profile_code = "P" if claim_type == "P" else "I"
     service_from_date = date(2025, 1, 1) + timedelta(days=randomizer.randrange(500))
     service_from = _compact_date(service_from_date)
     service_to = _compact_date(service_from_date + timedelta(days=randomizer.randrange(1, 4)))
-    charge = round(randomizer.uniform(120, 1_200), 2)
-    allowed = round(charge * 0.75, 2)
-    copay = min(30.0, allowed)
-    deductible = round((allowed - copay) * 0.1, 2)
-    coinsurance = round((allowed - copay - deductible) * 0.2, 2)
-    liability = round(copay + deductible + coinsurance, 2)
-    paid = round(allowed - liability, 2)
+    charge = randomizer.randrange(120, 1_201)
+    allowed = round(charge * 0.75)
+    copay = min(30, allowed)
+    deductible = round((allowed - copay) * 0.1)
+    coinsurance = round((allowed - copay - deductible) * 0.2)
+    liability = copay + deductible + coinsurance
+    paid = allowed - liability
     if frequency == "8":
-        allowed = 0.0
-        copay = 0.0
-        deductible = 0.0
-        coinsurance = 0.0
-        liability = 0.0
-        paid = 0.0
+        allowed = 0
+        copay = 0
+        deductible = 0
+        coinsurance = 0
+        liability = 0
+        paid = 0
     claim_id = _claim_id(profile_code, index, frequency)
     original_claim_id = claim_id
     root_index = index
@@ -220,8 +223,7 @@ def generate_record(
         },
     )
     completed = _complete_source_shape(record, claim_type)
-    if claim_type == "I":
-        completed["otherAttributes"] = None
+    completed["otherAttributes"] = None
     return completed
 
 
@@ -281,6 +283,11 @@ def _line(
         "CD_RENDERING_PROVIDER_CLIENT_ID": provider["CP_PROVIDER_CLIENT_ID"],
         "CD_RENDERING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
         "CD_LINE_ADJUSTMENTS": [],
+        "CD_RENDERING_PROVIDER_ENTITY_TYPE": "",
+        "CD_RENDERING_PROVIDER_FIRST_NAME": "",
+        "CD_RENDERING_PROVIDER_LAST_NAME": "",
+        "CD_RENDERING_PROVIDER_TAXONOMY_CODE": "",
+        "CH_CLAIM_FILING_INDICATOR_CODE": "",
     }
     if claim_type == "P":
         line.update(
@@ -290,7 +297,7 @@ def _line(
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "",
                 "CD_RENDERING_PROVIDER_ENTITY_TYPE": (
-                    "P" if provider.get("CP_PROVIDER_RECORD_TYPE") == "1" else "O"
+                    "P" if provider.get("CP_PROVIDER_RECORD_TYPE") in {"1", "P"} else "E"
                 ),
                 "CD_RENDERING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
                 "CD_RENDERING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
@@ -362,14 +369,13 @@ def _complete_source_shape(record: dict[str, object], claim_type: str) -> dict[s
     Returns:
         Source-complete, JSON-kind-normalized claim/payment envelope.
     """
-    suffix = "professional" if claim_type == "P" else "institutional"
-    other_suffix = "institutional" if suffix == "professional" else "professional"
+    del claim_type
     return complete_record(
         record,
-        f"claim_{suffix}",
-        f"payment_{suffix}",
-        f"claim_{other_suffix}",
-        f"payment_{other_suffix}",
+        "claim_institutional",
+        "payment_institutional",
+        "claim_professional",
+        "payment_professional",
     )
 
 
@@ -571,6 +577,7 @@ def _linked_provider(
     seed: int,
     claim_index: int,
     entity_counts: Mapping[str, int],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> dict[str, object]:
     """Generate the exact provider row selected from the configured output set.
 
@@ -578,11 +585,15 @@ def _linked_provider(
         seed: Shared deterministic generation seed.
         claim_index: Stable zero-based claim position.
         entity_counts: Enabled entity output counts.
+        related_records: Exact records already materialized earlier in this run.
 
     Returns:
         The emitted provider record selected for this claim, or a deterministic
         source-shaped fallback record when providers are not part of the run.
     """
+    emitted = related_records.get("provider", ()) if related_records else ()
+    if emitted:
+        return dict(emitted[claim_index % len(emitted)])
     provider_index = claim_index % _entity_count(entity_counts, "provider")
     return generate_provider(seed, provider_index, entity_counts, {}, {}, "provider")
 

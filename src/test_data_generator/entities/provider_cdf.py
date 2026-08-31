@@ -10,7 +10,7 @@ from test_data_generator.configuration.profiles import load_client_headers, load
 from test_data_generator.core.identifiers import valid_npi
 from test_data_generator.entities.provider import generate_record
 from test_data_generator.entities.provider_nppes import generate_record_from_cdf, generate_records
-from test_data_generator.layouts import project_record
+from test_data_generator.layouts import load_layout, project_record
 
 
 def generate_provider_cdf(
@@ -27,18 +27,61 @@ def generate_linked_provider_fixtures(
     seed: int = 20260805,
     client_headers: Mapping[str, object] | None = None,
     client_values: Mapping[str, object] | None = None,
+    individual_count: int | None = None,
+    organizational_count: int | None = None,
+    header_order: str = "source",
 ) -> dict[str, Path]:
     """Generate linked NPPES/CDF rows plus configurable CDF-only rows."""
+    records = build_linked_provider_records(
+        nppes_count,
+        additional_cdf_count,
+        seed,
+        client_headers,
+        client_values,
+        individual_count,
+        organizational_count,
+        header_order,
+    )
+    output_directory.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "provider_nppes": output_directory / "provider_nppes.jsonl",
+        "provider_cdf": output_directory / "provider_cdf.jsonl",
+    }
+    _write_jsonl(paths["provider_nppes"], records["provider_nppes"])
+    _write_jsonl(paths["provider_cdf"], records["provider_cdf"])
+    return paths
+
+
+def build_linked_provider_records(
+    nppes_count: int,
+    additional_cdf_count: int = 0,
+    seed: int = 20260805,
+    client_headers: Mapping[str, object] | None = None,
+    client_values: Mapping[str, object] | None = None,
+    individual_count: int | None = None,
+    organizational_count: int | None = None,
+    header_order: str = "source",
+) -> dict[str, list[dict[str, object]]]:
+    """Materialize linked NPPES/CDF records without publishing files."""
     if nppes_count < 1:
         raise ValueError("nppes_count must be at least 1")
     if additional_cdf_count < 0:
         raise ValueError("additional_cdf_count cannot be negative")
     resolved_headers = client_headers or load_client_headers("chc", "provider")
     resolved_values = client_values or load_client_values("chc", "provider")
+    if individual_count is None and organizational_count is None:
+        individual_count = (nppes_count + 1) // 2
+        organizational_count = nppes_count // 2
+    individual_count = individual_count or 0
+    organizational_count = organizational_count or 0
+    if individual_count + organizational_count != nppes_count:
+        raise ValueError("NPPES type counts must add up to nppes_count")
+    entity_type_codes = ["1"] * individual_count + ["2"] * organizational_count
     cdf_records = [
         _set_linked_record_type(
             _cdf_record(_linked_npi(seed, index), seed, index, resolved_headers, resolved_values),
             index,
+            entity_type_codes[index],
         )
         for index in range(nppes_count)
     ]
@@ -55,19 +98,19 @@ def generate_linked_provider_fixtures(
         )
         for index in range(additional_cdf_count)
     )
-    output_directory.mkdir(parents=True, exist_ok=True)
-    paths = {
-        "provider_nppes": output_directory / "provider_nppes.jsonl",
-        "provider_cdf": output_directory / "provider_cdf.jsonl",
-    }
-    _write_jsonl(paths["provider_nppes"], nppes_records)
-    _write_jsonl(paths["provider_cdf"], cdf_records)
-    return paths
+    cdf_records = [_order_headers(record, header_order) for record in cdf_records]
+    return {"provider_nppes": nppes_records, "provider_cdf": cdf_records}
 
 
-def generate_nppes_file(output_path: Path, count: int, seed: int) -> Path:
+def generate_nppes_file(
+    output_path: Path,
+    count: int,
+    seed: int,
+    individual_count: int | None = None,
+    organizational_count: int | None = None,
+) -> Path:
     """Generate one configured NPPES JSONL file from the code-defined entity."""
-    records = generate_records(count, seed)
+    records = generate_records(count, seed, individual_count, organizational_count)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _write_jsonl(output_path, records)
     return output_path
@@ -90,10 +133,12 @@ def _cdf_record(
     return projected
 
 
-def _set_linked_record_type(record: dict[str, object], index: int) -> dict[str, object]:
+def _set_linked_record_type(
+    record: dict[str, object], index: int, entity_type_code: str | None = None
+) -> dict[str, object]:
     """Ensure linked fixtures exercise both individual and organizational paths."""
-    individual = index % 2 == 0
-    record["CP_PROVIDER_RECORD_TYPE"] = "1" if individual else "2"
+    individual = entity_type_code == "1" if entity_type_code is not None else index % 2 == 0
+    record["CP_PROVIDER_RECORD_TYPE"] = "P" if individual else "F"
     if individual:
         first = str(record.get("CP_PROVIDER_FIRST_NAME", "")).strip() or f"TEST{index}"
         last = str(record.get("CP_PROVIDER_LAST_NAME", "")).strip() or f"PROVIDER{index}"
@@ -109,6 +154,16 @@ def _set_linked_record_type(record: dict[str, object], index: int) -> dict[str, 
         record["CP_PROVIDER_LAST_NAME"] = organization
         record["CP_PROVIDER_FULL_NAME"] = organization
     return record
+
+
+def _order_headers(record: dict[str, object], header_order: str) -> dict[str, object]:
+    """Apply the same root header-order contract as the shared engine."""
+    if header_order == "source":
+        return record
+    header_names = {field.name for field in load_layout("provider").headers}
+    headers = {name: value for name, value in record.items() if name in header_names}
+    body = {name: value for name, value in record.items() if name not in header_names}
+    return {**headers, **body} if header_order == "first" else {**body, **headers}
 
 
 def _apply_nppes_update(

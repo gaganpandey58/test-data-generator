@@ -26,7 +26,11 @@ _CLAIM_HISTORY_IDENTIFIER_FIELDS = (
 
 
 def run_entity(
-    entity: EntityConfig, seed: int, output_directory: Path, counts: Mapping[str, int]
+    entity: EntityConfig,
+    seed: int,
+    output_directory: Path,
+    counts: Mapping[str, int],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> Path:
     """Generate one configured JSONL stream and publish it atomically.
 
@@ -35,11 +39,22 @@ def run_entity(
     engine does not inspect signatures or plan variations because current
     generation is happy-path only.
     """
-    generate_record = _load_generator(entity.module)
-    records = (
-        _build_record(entity, seed, index, counts, generate_record) for index in range(entity.count)
-    )
+    records = build_entity_records(entity, seed, counts, related_records)
     return run_records(entity, records, output_directory)
+
+
+def build_entity_records(
+    entity: EntityConfig,
+    seed: int,
+    counts: Mapping[str, int],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
+) -> list[dict[str, object]]:
+    """Materialize one entity stream without publishing files."""
+    generate_record = _load_generator(entity.module)
+    return [
+        _build_record(entity, seed, index, counts, generate_record, related_records)
+        for index in range(entity.count)
+    ]
 
 
 def run_claim_pair(
@@ -48,6 +63,7 @@ def run_claim_pair(
     seed: int,
     output_directory: Path,
     counts: Mapping[str, int],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> tuple[Path, Path]:
     """Publish paired current Claim and Claims History records from one base row.
 
@@ -55,19 +71,34 @@ def run_claim_pair(
     current Claim retains the same complete record but exposes those three
     declared identifiers as empty values.
     """
+    claim_records, history_records = build_claim_pair_records(
+        claim_entity, seed, counts, related_records
+    )
+    claim_path = run_records(claim_entity, claim_records, output_directory)
+    history_path = run_records(history_entity, history_records, output_directory)
+    return claim_path, history_path
+
+
+def build_claim_pair_records(
+    claim_entity: EntityConfig,
+    seed: int,
+    counts: Mapping[str, int],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Materialize current and History Claims from each shared base record."""
     generate_record = _load_generator(claim_entity.module)
     history_records: list[dict[str, object]] = []
     claim_records: list[dict[str, object]] = []
     for index in range(claim_entity.count):
-        history_record = _build_record(claim_entity, seed, index, counts, generate_record)
+        history_record = _build_record(
+            claim_entity, seed, index, counts, generate_record, related_records
+        )
         history_records.append(history_record)
         current_claim = deepcopy(history_record)
         for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
             current_claim[field] = ""
         claim_records.append(current_claim)
-    claim_path = run_records(claim_entity, claim_records, output_directory)
-    history_path = run_records(history_entity, history_records, output_directory)
-    return claim_path, history_path
+    return claim_records, history_records
 
 
 def run_records(
@@ -111,12 +142,10 @@ def run_update_entity(
     counts: Mapping[str, int],
     request: UpdateRequest,
     rules: EntityRules,
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> Path:
     """Generate update JSONL atomically without sidecar metadata files."""
-    generate_record = _load_generator(entity.module)
-    records = (
-        _build_record(entity, seed, index, counts, generate_record) for index in range(entity.count)
-    )
+    records = build_entity_records(entity, seed, counts, related_records)
     return run_update_records(entity, records, seed, output_directory, request, rules)
 
 
@@ -148,7 +177,11 @@ def run_update_records(
                 resolved = resolve_update(base_record, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
                 validate_update_contract(base_record, updated, request, resolved, rules)
-                if request.operation not in {OperationType.MISSING, OperationType.INVALID}:
+                if request.operation not in {
+                    OperationType.MISSING,
+                    OperationType.EMPTY,
+                    OperationType.INVALID,
+                }:
                     try:
                         validator.validate(updated)
                     except ValidationError as error:
@@ -168,6 +201,7 @@ def _build_record(
     index: int,
     counts: Mapping[str, int],
     generate_record: Callable[..., dict[str, object]],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> dict[str, object]:
     """Build and project one creation record for reuse by update generation."""
     arguments: tuple[object, ...] = (
@@ -179,7 +213,9 @@ def _build_record(
         entity.profile,
     )
     if entity.claim_lifecycles:
-        record = generate_record(*(arguments + (entity.claim_lifecycles[index],)))
+        record = generate_record(*(arguments + (entity.claim_lifecycles[index], related_records)))
+    elif entity.name.startswith("claim_"):
+        record = generate_record(*(arguments + (None, related_records)))
     else:
         record = generate_record(*arguments)
     return _order_headers(project_record(record, entity.profile), entity)
