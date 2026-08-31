@@ -81,6 +81,8 @@ def load_layout(profile: str) -> LayoutProfile:
     resource = files(__package__).joinpath(f"{profile}.json")
     try:
         raw = json.loads(resource.read_text(encoding="utf-8"))
+        if profile in {"claim-professional", "claim-institutional"}:
+            raw = _standard_claim_layout(raw)
         headers = tuple(_field(value) for value in raw.get("headers", []))
         root = tuple(_field(value) for value in raw["root"])
         groups = MappingProxyType(
@@ -106,6 +108,58 @@ def load_layout(profile: str) -> LayoutProfile:
         groups=groups,
         required_parent_fields=required_parent_fields,
     )
+
+
+def _standard_claim_layout(selected: dict[str, object]) -> dict[str, object]:
+    """Return the shared Claim I/P output contract without copying a layout.
+
+    The institutional layout supplies the canonical field ordering.  The few
+    professional-only source fields are appended once so both 837 streams
+    emit the same envelope and claim-detail shape while keeping their
+    type-specific values.
+    """
+    institutional = json.loads(
+        files(__package__).joinpath("claim-institutional.json").read_text(encoding="utf-8")
+    )
+    professional = json.loads(
+        files(__package__).joinpath("claim-professional.json").read_text(encoding="utf-8")
+    )
+    if not isinstance(institutional, dict) or not isinstance(professional, dict):
+        raise ValueError("Claim layouts must be JSON objects")
+    return {
+        **institutional,
+        "profile": selected["profile"],
+        "headers": _merge_layout_fields(
+            institutional.get("headers", []), professional.get("headers", [])
+        ),
+        "root": _merge_layout_fields(institutional.get("root", []), professional.get("root", [])),
+        "groups": {
+            "CLAIM_DETAIL": _merge_layout_fields(
+                institutional.get("groups", {}).get("CLAIM_DETAIL", []),
+                professional.get("groups", {}).get("CLAIM_DETAIL", []),
+            )
+        },
+        "required_parent_fields": {
+            **institutional.get("required_parent_fields", {}),
+            **professional.get("required_parent_fields", {}),
+        },
+    }
+
+
+def _merge_layout_fields(*field_lists: object) -> list[object]:
+    """Preserve the first declared field metadata for each shared field."""
+    fields: list[object] = []
+    names: set[str] = set()
+    for field_list in field_lists:
+        if not isinstance(field_list, list):
+            raise ValueError("Claim layout fields must be lists")
+        for field in field_list:
+            if not isinstance(field, dict) or not isinstance(field.get("name"), str):
+                raise ValueError("Claim layout field must have a name")
+            if field["name"] not in names:
+                fields.append(field)
+                names.add(field["name"])
+    return fields
 
 
 def project_record(record: Mapping[str, object], profile: str) -> dict[str, object]:

@@ -16,7 +16,9 @@ _ENTITY_LAYOUTS = {
     "provider": "provider",
     "member": "member",
     "claim_professional": "claim-professional",
+    "claim_history_professional": "claim-professional",
     "claim_institutional": "claim-institutional",
+    "claim_history_institutional": "claim-institutional",
     "payment_professional": "payment-professional",
     "payment_institutional": "payment-institutional",
 }
@@ -104,6 +106,8 @@ def _section(client: str, section: str, entity: str) -> Mapping[str, object]:
         source_entity = {
             "payment_professional": "claim_professional",
             "payment_institutional": "claim_institutional",
+            "claim_history_professional": "claim_professional",
+            "claim_history_institutional": "claim_institutional",
         }.get(entity, entity)
         value = profile[section][source_entity]  # type: ignore[index]
     except (KeyError, TypeError) as error:

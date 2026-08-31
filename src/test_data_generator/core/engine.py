@@ -4,6 +4,7 @@ import importlib
 import json
 import tempfile
 from collections.abc import Callable, Iterable, Mapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,6 +17,12 @@ from test_data_generator.layouts import load_layout, project_record
 from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.scenarios import OperationType, UpdateRequest, resolve_update
 from test_data_generator.update.validation import validate_update_contract
+
+_CLAIM_HISTORY_IDENTIFIER_FIELDS = (
+    "CH_CLIENT_CLAIM_UNIQUE_ID",
+    "CH_CLIENT_CLAIM_ID",
+    "CH_CLIENT_ORIGINAL_CLAIM_ID",
+)
 
 
 def run_entity(
@@ -33,6 +40,34 @@ def run_entity(
         _build_record(entity, seed, index, counts, generate_record) for index in range(entity.count)
     )
     return run_records(entity, records, output_directory)
+
+
+def run_claim_pair(
+    claim_entity: EntityConfig,
+    history_entity: EntityConfig,
+    seed: int,
+    output_directory: Path,
+    counts: Mapping[str, int],
+) -> tuple[Path, Path]:
+    """Publish paired current Claim and Claims History records from one base row.
+
+    History retains the generated client claim identifiers. The corresponding
+    current Claim retains the same complete record but exposes those three
+    declared identifiers as empty values.
+    """
+    generate_record = _load_generator(claim_entity.module)
+    history_records: list[dict[str, object]] = []
+    claim_records: list[dict[str, object]] = []
+    for index in range(claim_entity.count):
+        history_record = _build_record(claim_entity, seed, index, counts, generate_record)
+        history_records.append(history_record)
+        current_claim = deepcopy(history_record)
+        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+            current_claim[field] = ""
+        claim_records.append(current_claim)
+    claim_path = run_records(claim_entity, claim_records, output_directory)
+    history_path = run_records(history_entity, history_records, output_directory)
+    return claim_path, history_path
 
 
 def run_records(

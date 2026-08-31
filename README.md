@@ -12,7 +12,9 @@ The generator creates deterministic new records and can derive update fixtures f
 | Provider NPPES | `provider_nppes.jsonl` | Code-defined NPPES provider entities and nested provider data. |
 | Member | `members.jsonl` | Member, address, enrollment, and coordination-of-benefits data. |
 | Professional claim | `claims_professional.jsonl` | Professional claim headers, details, and embedded payment fields. |
+| Professional claims history | `claims_history_professional.jsonl` | The corresponding professional claim history record. |
 | Institutional claim | `claims_institutional.jsonl` | Institutional claim headers, details, and embedded payment fields. |
+| Institutional claims history | `claims_history_institutional.jsonl` | The corresponding institutional claim history record. |
 | Professional payment | `payments_professional.jsonl` | Standalone Payment P envelope linked to a professional claim. |
 | Institutional payment | `payments_institutional.jsonl` | Standalone Payment I envelope linked to an institutional claim. |
 
@@ -124,7 +126,7 @@ can use only `"claim-professional"` today.
 }
 ```
 
-`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file; Payments are never emitted independently.
+`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
 
 An entity with `count: 0` is treated as disabled. It is accepted by the
 configuration schema, skipped by both creation and update generation, and its
@@ -138,6 +140,15 @@ fresh per-run seed so independently generated datasets have varied names,
 addresses, identifiers, and other Faker-backed values.
 
 ### Claim and payment relationships
+
+Each enabled Claim type produces a paired current Claim and Claims History file.
+They share one standardized overall JSON contract across Institutional and
+Professional Claims. The paired rows are identical except for
+`CH_CLIENT_CLAIM_UNIQUE_ID`, `CH_CLIENT_CLAIM_ID`, and
+`CH_CLIENT_ORIGINAL_CLAIM_ID`: current Claim rows emit those required fields as
+empty strings, while the corresponding Claims History row carries generated
+values. Same-run Payments derive from the History rows so their claim matching
+identifiers and both provider NPIs remain populated.
 
 Payment P and Payment I are separate 835 streams projected from immutable 837
 Claim rows. The relationship is not based on an invented payment identifier.
@@ -205,7 +216,8 @@ fields are emitted.
 
 When a Claim stream and its corresponding Payment stream are both enabled in
 one invocation, the runtime automatically links the Payment stream to the
-Claims just generated in that run; no generated-file path is required.
+Claims History rows just generated in that run; no generated-file path is
+required.
 Claims are generated before Payments, so one `uv run generate-data` invocation
 is sufficient. `source_claims` remains available only when deliberately
 deriving Payments from an external, pre-existing Claim JSONL file.
@@ -430,7 +442,9 @@ output/
 │   ├── provider_nppes.jsonl
 │   ├── members.jsonl
 │   ├── claims_professional.jsonl
+│   ├── claims_history_professional.jsonl
 │   ├── claims_institutional.jsonl
+│   ├── claims_history_institutional.jsonl
 │   ├── payments_professional.jsonl
 │   └── payments_institutional.jsonl
 └── update-test-data/

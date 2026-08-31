@@ -32,8 +32,9 @@ class EntityConfig:
 
     Attributes:
         name: Internal entity identifier, such as ``member`` or
-            ``claim_professional``. Claim stream names are derived from the
-            public ``claims.professional`` and ``claims.institutional`` keys.
+            ``claim_professional``. Claim and Claims History stream names are
+            derived from the public ``claims.professional`` and
+            ``claims.institutional`` keys.
         count: Exact number of rows the entity must emit.
         client_headers: Immutable client-specific envelope values for this
             output stream.
@@ -267,13 +268,16 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
 
     claims = raw_config.get("claims")
     if isinstance(claims, dict):
-        for stream, entity_name in (
-            ("professional", "claim_professional"),
-            ("institutional", "claim_institutional"),
+        for stream, entity_name, history_entity_name in (
+            ("professional", "claim_professional", "claim_history_professional"),
+            ("institutional", "claim_institutional", "claim_history_institutional"),
         ):
             value = claims.get(stream)
             if isinstance(value, dict):
                 entities[entity_name] = _selected_entity(entities[entity_name], value)
+                entities[history_entity_name] = _selected_entity(
+                    entities[history_entity_name], value
+                )
 
     payments = raw_config.get("payments")
     if isinstance(payments, dict):
@@ -380,8 +384,8 @@ def _payment_source_path(
     if entity not in {"payment_professional", "payment_institutional"}:
         return None
     claim_entity_name = {
-        "payment_professional": "claim_professional",
-        "payment_institutional": "claim_institutional",
+        "payment_professional": "claim_history_professional",
+        "payment_institutional": "claim_history_institutional",
     }[entity]
     claim_entity = raw_entities.get(claim_entity_name)
     if not isinstance(claim_entity, dict) or not claim_entity.get("enabled"):
@@ -446,6 +450,15 @@ def _effective_record_count(
     count = raw_entity.get("count", 0)
     if not isinstance(count, int) or isinstance(count, bool) or count < 0:
         raise ConfigurationError(f"Count for {entity!r} must be a non-negative integer")
+    if entity in {"claim_history_professional", "claim_history_institutional"}:
+        paired_entity = {
+            "claim_history_professional": "claim_professional",
+            "claim_history_institutional": "claim_institutional",
+        }[entity]
+        paired = raw_entities.get(paired_entity)
+        if not isinstance(paired, Mapping):
+            raise ConfigurationError(f"Claims History {entity!r} has no paired Claim stream")
+        return _effective_record_count(paired_entity, paired, raw_entities)
     if (
         entity in {"claim_professional", "claim_institutional"}
         and count == 1
@@ -465,6 +478,8 @@ def _claim_lifecycles(
 ) -> tuple[tuple[str, int | None], ...]:
     """Resolve Claim lifecycles with deterministic random default frequencies."""
     value = raw_entity.get("frequencies")
+    if entity in {"claim_history_professional", "claim_history_institutional"}:
+        return ()
     if entity not in {"claim_professional", "claim_institutional"}:
         if value is not None:
             raise ConfigurationError("frequencies is supported only for Claim streams")
@@ -597,6 +612,16 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "updates": {},
             "header_order": None,
         },
+        "claim_history_professional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-professional",
+            "schema": str(schema_root / "claim/claim.schema.json"),
+            "module": "test_data_generator.entities.claim",
+            "filename": "claims_history_professional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
         "claim_institutional": {
             "enabled": False,
             "count": 0,
@@ -604,6 +629,16 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "schema": str(schema_root / "claim/claim.schema.json"),
             "module": "test_data_generator.entities.claim",
             "filename": "claims_institutional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "claim_history_institutional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-institutional",
+            "schema": str(schema_root / "claim/claim.schema.json"),
+            "module": "test_data_generator.entities.claim",
+            "filename": "claims_history_institutional.jsonl",
             "updates": {},
             "header_order": None,
         },
@@ -676,6 +711,8 @@ def _validate_profile(entity: str, profile: object) -> None:
         "member": frozenset({"member"}),
         "claim_professional": frozenset({"claim-professional"}),
         "claim_institutional": frozenset({"claim-institutional"}),
+        "claim_history_professional": frozenset({"claim-professional"}),
+        "claim_history_institutional": frozenset({"claim-institutional"}),
         "payment_professional": frozenset({"payment-professional"}),
         "payment_institutional": frozenset({"payment-institutional"}),
     }

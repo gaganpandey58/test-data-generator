@@ -73,7 +73,7 @@ def generate_record(
         liability = 0.0
         paid = 0.0
     claim_id = _claim_id(profile_code, index, frequency)
-    original_claim_id = ""
+    original_claim_id = claim_id
     root_index = index
     if frequency in {"7", "8"}:
         assert original_index is not None
@@ -219,9 +219,9 @@ def generate_record(
             "CH_RENDERING_PROVIDER_PHONE": provider_address.get("CP_PROVIDER_PHONE", ""),
         },
     )
-    _remove_profile_exclusions(record, claim_type)
     completed = _complete_source_shape(record, claim_type)
-    completed.setdefault("CH_CLIENT_CLAIM_ID", claim_id)
+    if claim_type == "I":
+        completed["otherAttributes"] = None
     return completed
 
 
@@ -348,32 +348,6 @@ def _query_code(frequency: str) -> str:
     return {"1": "3", "7": "5", "8": "0"}[frequency]
 
 
-def _remove_profile_exclusions(record: dict[str, object], claim_type: str) -> None:
-    """Remove fields not represented by the active claim layout.
-
-    Args:
-        record: Claim envelope with profile-neutral fields populated.
-        claim_type: Professional (``P``) or institutional (``I``) type.
-
-    Raises:
-        AssertionError: If claim detail is not a list of dictionaries.
-    """
-    excluded_headers = (
-        _INSTITUTIONAL_ONLY_HEADERS if claim_type == "P" else _PROFESSIONAL_ONLY_HEADERS
-    )
-    for field in excluded_headers:
-        record.pop(field, None)
-    details = record["CLAIM_DETAIL"]
-    assert isinstance(details, list)
-    excluded_details = (
-        _INSTITUTIONAL_ONLY_DETAIL_FIELDS if claim_type == "P" else _PROFESSIONAL_ONLY_DETAIL_FIELDS
-    )
-    for line in details:
-        assert isinstance(line, dict)
-        for field in excluded_details:
-            line.pop(field, None)
-
-
 def _complete_source_shape(record: dict[str, object], claim_type: str) -> dict[str, object]:
     """Complete a claim with its claim and payment sample-type patterns.
 
@@ -389,7 +363,14 @@ def _complete_source_shape(record: dict[str, object], claim_type: str) -> dict[s
         Source-complete, JSON-kind-normalized claim/payment envelope.
     """
     suffix = "professional" if claim_type == "P" else "institutional"
-    return complete_record(record, f"claim_{suffix}", f"payment_{suffix}")
+    other_suffix = "institutional" if suffix == "professional" else "professional"
+    return complete_record(
+        record,
+        f"claim_{suffix}",
+        f"payment_{suffix}",
+        f"claim_{other_suffix}",
+        f"payment_{other_suffix}",
+    )
 
 
 def _transport_headers(
@@ -404,8 +385,8 @@ def _transport_headers(
 
     The sample payloads use flattened ``cotiviti.*`` keys rather than a
     nested transport object.  These values deliberately model that wire
-    format while remaining test and repeatable.  Institutional sample
-    records carry a UUID ``ROWID``; professional records omit it entirely.
+    format while remaining test and repeatable.  The standardized Claim
+    contract uses a UUID ``ROWID`` for both source streams.
 
     Args:
         seed: Shared generation seed used for deterministic UUID namespaces.
@@ -455,8 +436,7 @@ def _transport_headers(
             nested_header_values(profile_entity, client_headers or {}, "otherAttributes"),
         ),
     }
-    if claim_type != "P":
-        headers["ROWID"] = deterministic_uuid4(seed, f"{namespace}:row:{sequence}")
+    headers["ROWID"] = deterministic_uuid4(seed, f"{namespace}:row:{sequence}")
     headers.update(record_header_values(profile_entity, client_headers or {}))
     return headers
 
@@ -511,39 +491,6 @@ def _other_attributes(
             client_headers.get("interchangeReceiverIdentifierQualifier", "")
         ),
     }
-
-
-_INSTITUTIONAL_ONLY_HEADERS = (
-    "CH_TYPE_OF_BILL_CODE",
-    "CH_ADMISSION_DATE",
-    "CH_DISCHARGE_DATE",
-    "CH_ADMISSION_TYPE",
-    "CH_ADMISSION_SOURCE_CODE",
-    "CH_PATIENT_DISCHARGE_STATUS_CODE",
-    "CH_ADMITTING_DIAGNOSIS_CODE",
-    "CH_ATTENDING_PROVIDER_NPI",
-    "CH_OPERATING_PROVIDER_NPI",
-)
-_PROFESSIONAL_ONLY_HEADERS = (
-    "CH_PLACE_OF_SERVICE_CODE",
-    "CH_SUBSCRIBER_SSN",
-    "CH_RENDERING_PROVIDER_CLIENT_ID",
-    "CH_RENDERING_PROVIDER_NPI",
-    "CH_REFERRING_PROVIDER_NPI",
-    "CH_SERVICE_FACILITY_NPI",
-)
-_INSTITUTIONAL_ONLY_DETAIL_FIELDS = (
-    "CD_SUBMITTED_REVENUE_CODE",
-    "CD_ALLOWED_REVENUE_CODE",
-)
-_PROFESSIONAL_ONLY_DETAIL_FIELDS = (
-    "CD_PLACE_OF_SERVICE_CODE",
-    "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-    "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
-    "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-    "CD_RENDERING_PROVIDER_CLIENT_ID",
-    "CD_RENDERING_PROVIDER_NPI",
-)
 
 
 def _profile_blanks(profile: str) -> dict[str, object]:

@@ -39,7 +39,7 @@
         },
         "CH_CLIENT_CLAIM_ID": {
           "type": "string",
-          "pattern": "^PCLM[0-9]{9}(?:-(?:R2|V8))?$"
+          "pattern": "^(?:|PCLM[0-9]{9}(?:-(?:R2|V8))?)$"
         },
         "CH_CLIENT_ROOT_CLAIM_ID": {
           "type": "string",
@@ -47,7 +47,7 @@
         },
         "CH_CLIENT_CLAIM_UNIQUE_ID": {
           "type": "string",
-          "minLength": 1
+          "minLength": 0
         },
         "CH_PATIENT_CLIENT_ID": {
           "type": "string",
@@ -79,7 +79,10 @@
           "type": "string",
           "minLength": 1
         },
-        "ROWID": false,
+        "ROWID": {
+          "type": "string",
+          "format": "uuid"
+        },
         "otherAttributes": {
           "type": "object"
         },
@@ -138,7 +141,7 @@
         },
         "CH_CLIENT_CLAIM_ID": {
           "type": "string",
-          "pattern": "^ICLM[0-9]{9}(?:-(?:R2|V8))?$"
+          "pattern": "^(?:|ICLM[0-9]{9}(?:-(?:R2|V8))?)$"
         },
         "CH_CLIENT_ROOT_CLAIM_ID": {
           "type": "string",
@@ -146,7 +149,7 @@
         },
         "CH_CLIENT_CLAIM_UNIQUE_ID": {
           "type": "string",
-          "minLength": 1
+          "minLength": 0
         },
         "CH_PATIENT_CLIENT_ID": {
           "type": "string",

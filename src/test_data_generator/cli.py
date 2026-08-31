@@ -15,6 +15,7 @@ from pathlib import Path
 
 from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import (
+    run_claim_pair,
     run_entity,
     run_records,
     run_update_entity,
@@ -82,7 +83,37 @@ def generate(config: Path, mode: str = "all") -> None:
 
     entity_counts = {entity.name: entity.count for entity in run_config.entities}
     if mode in {"all", "creation"}:
+        histories = {
+            entity.name: entity
+            for entity in run_config.entities
+            if entity.name in {"claim_history_professional", "claim_history_institutional"}
+        }
         for entity in run_config.entities:
+            if entity.name in histories:
+                continue
+            history_entity_name = {
+                "claim_professional": "claim_history_professional",
+                "claim_institutional": "claim_history_institutional",
+            }.get(entity.name)
+            if history_entity_name is not None:
+                history_entity = histories.get(history_entity_name)
+                if history_entity is None:
+                    raise CommandError(f"Claim stream {entity.name!r} has no Claims History stream")
+                try:
+                    claim_path, history_path = run_claim_pair(
+                        entity,
+                        history_entity,
+                        run_config.seed,
+                        run_config.creation_directory,
+                        entity_counts,
+                    )
+                except GenerationError as error:
+                    raise CommandError(
+                        f"Claim generation failed for entity {entity.name!r}: {error}"
+                    ) from error
+                print(f"{entity.name}: {entity.count} records -> {claim_path}")
+                print(f"{history_entity.name}: {history_entity.count} records -> {history_path}")
+                continue
             if entity.source_claims is not None:
                 try:
                     records = derive_payments_from_claims(
@@ -163,6 +194,8 @@ def generate(config: Path, mode: str = "all") -> None:
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
         for entity in run_config.entities:
+            if entity.name in {"claim_history_professional", "claim_history_institutional"}:
+                continue
             # Payment creation is derived from Claims, but a Payment update is an
             # adjudication event.  Do not turn a global Claim update into a
             # duplicate Payment update; require an explicit local operation.
