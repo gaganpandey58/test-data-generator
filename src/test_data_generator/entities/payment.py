@@ -24,10 +24,8 @@ _PAYMENT_TYPES = {
     "payment-professional": "P",
     "payment-institutional": "I",
 }
-_PAYMENT_FILE_TYPES = {
-    "payment-professional": "835P",
-    "payment-institutional": "835I",
-}
+_PAYMENT_FILE_TYPE = "835"
+_PAYMENT_SOURCE_FORMAT = "edi_x12_835"
 _PAYMENT_SOURCES = {
     "payment-professional": "payment_professional",
     "payment-institutional": "payment_institutional",
@@ -196,15 +194,29 @@ def generate_record(
 def _validate_payment_record(record: Mapping[str, object], profile: str) -> None:
     """Validate the generated Payment envelope and relationship shape."""
     unexpected = sorted(set(record) - _PAYMENT_ROOT_FIELDS)
-    missing = [field for field in _PAYMENT_ROOT_FIELDS if not _present(record.get(field))]
+    absent = [field for field in _PAYMENT_ROOT_FIELDS if field not in record]
+    optional_empty_root = {"CH_TYPE_OF_BILL_CODE"} if profile == "payment-professional" else set()
+    missing = [
+        field
+        for field in _PAYMENT_ROOT_FIELDS
+        if field in record
+        and field not in optional_empty_root
+        and field != "CLAIM_DETAIL"
+        and not _present(record[field])
+    ]
     if unexpected:
         raise ValueError(
             f"Generated {profile} payment contains unsupported fields: {', '.join(unexpected)}"
         )
-    if missing:
-        raise ValueError(f"Generated {profile} payment is missing fields: {', '.join(missing)}")
-    if record["FILE_TYPE"] != _PAYMENT_FILE_TYPES[profile]:
+    if absent or missing:
+        missing_fields = sorted({*absent, *missing})
+        raise ValueError(
+            f"Generated {profile} payment is missing fields: {', '.join(missing_fields)}"
+        )
+    if record["FILE_TYPE"] != _PAYMENT_FILE_TYPE:
         raise ValueError(f"Generated {profile} payment has an invalid FILE_TYPE")
+    if record["cotiviti.source_format"] != _PAYMENT_SOURCE_FORMAT:
+        raise ValueError(f"Generated {profile} payment has an invalid cotiviti.source_format")
     if record["CH_CLAIM_TYPE"] != _PAYMENT_TYPES[profile]:
         raise ValueError(f"Generated {profile} payment has an invalid CH_CLAIM_TYPE")
 
@@ -215,14 +227,35 @@ def _validate_payment_record(record: Mapping[str, object], profile: str) -> None
         if not isinstance(detail, Mapping):
             raise ValueError(f"Generated {profile} payment detail {line_number} must be an object")
         unexpected_detail = sorted(set(detail) - set(_PAYMENT_DETAIL_FIELDS))
+        absent_detail = [field for field in _PAYMENT_DETAIL_FIELDS if field not in detail]
+        optional_empty_detail = {
+            *(
+                field
+                for number in range(1, 7)
+                for field in (
+                    f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}",
+                    f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}",
+                )
+            ),
+        }
+        if profile == "payment-professional":
+            optional_empty_detail.add("CD_SUBMITTED_REVENUE_CODE")
         missing_detail = [
-            field for field in _PAYMENT_DETAIL_FIELDS if not _present(detail.get(field))
+            field
+            for field in _PAYMENT_DETAIL_FIELDS
+            if field in detail
+            and field not in optional_empty_detail
+            and not _present(detail[field])
         ]
-        if unexpected_detail or missing_detail:
+        if unexpected_detail or absent_detail or missing_detail:
+            missing_detail_fields = sorted({*absent_detail, *missing_detail})
             raise ValueError(
                 f"Generated {profile} payment detail {line_number} has an invalid field contract; "
-                f"unexpected={unexpected_detail}, missing={missing_detail}"
+                f"unexpected={unexpected_detail}, missing={missing_detail_fields}"
             )
+        _validate_adjustments(detail, profile, line_number)
+        _validate_detail_financials(detail, profile, line_number)
+    _validate_header_financials(record, details, profile)
     rules = PAYMENT_MATCHING_RULES[profile]
     missing_header = [field for field in rules["header"] if field not in record]
     missing_line = [field for field in rules["line"] if field not in details[0]]
@@ -237,6 +270,133 @@ def _validate_payment_record(record: Mapping[str, object], profile: str) -> None
 def _number(value: object) -> int | float:
     """Return a numeric source value while keeping blanks safe for arithmetic."""
     return value if isinstance(value, int | float) and not isinstance(value, bool) else 0
+
+
+def _number_or_default(value: object, default: int | float) -> int | float:
+    """Preserve numeric zero while defaulting only absent or non-numeric values."""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return value
+    return default
+
+
+def _decimal_amount(value: object, field: str, profile: str) -> Decimal:
+    """Return one finite, non-negative monetary value or reject the record."""
+    if isinstance(value, bool) or not isinstance(value, int | float | Decimal):
+        raise ValueError(f"Generated {profile} payment field {field} must be numeric")
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation as error:
+        raise ValueError(f"Generated {profile} payment field {field} must be numeric") from error
+    if not amount.is_finite() or amount < 0:
+        raise ValueError(f"Generated {profile} payment field {field} must be non-negative")
+    return amount
+
+
+def _validate_adjustments(detail: Mapping[str, object], profile: str, line_number: int) -> None:
+    """Require codes only for adjustment slots that carry a positive amount."""
+    for number in range(1, 7):
+        amount_field = f"CD_ADJUSTMENT_AMOUNT_{number}"
+        group_field = f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}"
+        reason_field = f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}"
+        amount = _decimal_amount(detail[amount_field], amount_field, profile)
+        group_present = _present(detail[group_field])
+        reason_present = _present(detail[reason_field])
+        if amount > 0 and not (group_present and reason_present):
+            raise ValueError(
+                f"Generated {profile} payment detail {line_number} adjustment {number} "
+                "requires group and reason codes"
+            )
+        if amount == 0 and (group_present or reason_present):
+            raise ValueError(
+                f"Generated {profile} payment detail {line_number} adjustment {number} "
+                "must not carry codes when its amount is zero"
+            )
+
+
+def _validate_detail_financials(
+    detail: Mapping[str, object], profile: str, line_number: int
+) -> None:
+    """Validate line-level 835 payment arithmetic."""
+    amounts = {
+        field: _decimal_amount(detail[field], field, profile)
+        for field in (
+            "CD_CHARGE_AMOUNT",
+            "CD_ALLOWED_AMOUNT",
+            "CD_PAID_AMOUNT",
+            "CD_COINSURANCE_AMOUNT",
+            "CD_COPAY_AMOUNT",
+            "CD_DEDUCTIBLE_AMOUNT",
+            "CD_PATIENT_LIABILITY_AMOUNT",
+        )
+    }
+    expected_liability = (
+        amounts["CD_COINSURANCE_AMOUNT"]
+        + amounts["CD_COPAY_AMOUNT"]
+        + amounts["CD_DEDUCTIBLE_AMOUNT"]
+    )
+    if amounts["CD_PATIENT_LIABILITY_AMOUNT"] != expected_liability:
+        raise ValueError(
+            f"Generated {profile} payment detail {line_number} patient liability does not reconcile"
+        )
+    if amounts["CD_ALLOWED_AMOUNT"] != (
+        amounts["CD_PAID_AMOUNT"] + amounts["CD_PATIENT_LIABILITY_AMOUNT"]
+    ):
+        raise ValueError(
+            f"Generated {profile} payment detail {line_number} allowed amount does not reconcile"
+        )
+    adjustments = sum(
+        (
+            _decimal_amount(
+                detail[f"CD_ADJUSTMENT_AMOUNT_{number}"],
+                f"CD_ADJUSTMENT_AMOUNT_{number}",
+                profile,
+            )
+            for number in range(1, 7)
+        ),
+        Decimal(0),
+    )
+    if amounts["CD_CHARGE_AMOUNT"] != amounts["CD_PAID_AMOUNT"] + adjustments:
+        raise ValueError(
+            f"Generated {profile} payment detail {line_number} adjustments do not reconcile"
+        )
+
+
+def _validate_header_financials(
+    record: Mapping[str, object], details: Sequence[Mapping[str, object]], profile: str
+) -> None:
+    """Validate Claim Header arithmetic and its totals against Claim Detail."""
+    header_to_detail = {
+        "CH_CHARGE_AMOUNT": "CD_CHARGE_AMOUNT",
+        "CH_ALLOWED_AMOUNT": "CD_ALLOWED_AMOUNT",
+        "CH_PAID_AMOUNT": "CD_PAID_AMOUNT",
+        "CH_COINSURANCE_AMOUNT": "CD_COINSURANCE_AMOUNT",
+        "CH_COPAY_AMOUNT": "CD_COPAY_AMOUNT",
+        "CH_DEDUCTIBLE_AMOUNT": "CD_DEDUCTIBLE_AMOUNT",
+        "CH_PATIENT_LIABILITY_AMOUNT": "CD_PATIENT_LIABILITY_AMOUNT",
+    }
+    header_amounts = {
+        header: _decimal_amount(record[header], header, profile) for header in header_to_detail
+    }
+    expected_liability = (
+        header_amounts["CH_COINSURANCE_AMOUNT"]
+        + header_amounts["CH_COPAY_AMOUNT"]
+        + header_amounts["CH_DEDUCTIBLE_AMOUNT"]
+    )
+    if header_amounts["CH_PATIENT_LIABILITY_AMOUNT"] != expected_liability:
+        raise ValueError(f"Generated {profile} payment header patient liability does not reconcile")
+    if header_amounts["CH_ALLOWED_AMOUNT"] != (
+        header_amounts["CH_PAID_AMOUNT"] + header_amounts["CH_PATIENT_LIABILITY_AMOUNT"]
+    ):
+        raise ValueError(f"Generated {profile} payment header allowed amount does not reconcile")
+    for header, detail_field in header_to_detail.items():
+        detail_total = sum(
+            (_decimal_amount(detail[detail_field], detail_field, profile) for detail in details),
+            Decimal(0),
+        )
+        if header_amounts[header] != detail_total:
+            raise ValueError(
+                f"Generated {profile} payment field {header} does not equal its detail total"
+            )
 
 
 def load_claim_records(path: Path) -> list[dict[str, object]]:
@@ -286,9 +446,8 @@ def derive_payment_from_claim(
 
 def _set_payment_transport(payment: dict[str, object], profile: str, seed: int, index: int) -> None:
     """Convert Claim transport metadata to the derived Payment 835 stream."""
-    file_type = "835P" if profile == "payment-professional" else "835I"
-    payment["FILE_TYPE"] = file_type
-    payment["cotiviti.source_format"] = f"edi_x12_{file_type}"
+    payment["FILE_TYPE"] = _PAYMENT_FILE_TYPE
+    payment["cotiviti.source_format"] = _PAYMENT_SOURCE_FORMAT
     payment["cotiviti.message_id"] = deterministic_uuid4(seed, f"{profile}:message:{index + 1}")
     payment["cotiviti.message_seq"] = index + 1
     produced_at = datetime(2026, 8, 5) + timedelta(seconds=index)
@@ -438,9 +597,9 @@ def _set_source_payment_defaults(
     billing_npi = claim.get("CH_BILLING_PROVIDER_NPI") or "1234567893"
     rendering_npi = claim.get("CH_RENDERING_PROVIDER_NPI") or billing_npi
     billing_tax_id = str(claim.get("CH_BILLING_PROVIDER_FEDERAL_TAX_ID") or "521234567")
-    charge = _number(claim.get("CH_CHARGE_AMOUNT")) or 1000
-    allowed = _number(claim.get("CH_ALLOWED_AMOUNT")) or round(charge * 0.75)
-    paid = _number(claim.get("CH_PAID_AMOUNT")) or round(allowed * 0.70)
+    charge = _number_or_default(claim.get("CH_CHARGE_AMOUNT"), 1000)
+    allowed = _number_or_default(claim.get("CH_ALLOWED_AMOUNT"), round(charge * 0.75))
+    paid = _number_or_default(claim.get("CH_PAID_AMOUNT"), round(allowed * 0.70))
     payment.update(
         {
             "CH_DIAGNOSIS_CODE_01": claim.get("CH_DIAGNOSIS_CODE_01") or "I10",
@@ -449,7 +608,7 @@ def _set_source_payment_defaults(
             "CH_PATIENT_CLIENT_ID": claim.get("CH_PATIENT_CLIENT_ID") or f"PT{index + 1:010d}",
             "CH_CREDIT_DEBIT_FLAG_CODE": "C",
             "CH_PAYMENT_METHOD_CODE": "ACH",
-            "CH_REFERENCE_IDENTIFICATION_NUMBER": f"PAYREF{index + 1:010d}",
+            "CH_REFERENCE_IDENTIFICATION_NUMBER": f"{prefix}PAYREF{index + 1:010d}",
             "CH_CLAIM_TYPE": claim_type,
             "CH_CHARGE_AMOUNT": charge,
             "CH_PAID_AMOUNT": paid,
@@ -459,8 +618,10 @@ def _set_source_payment_defaults(
             "CH_CLIENT_RECEIVED_DATE": claim.get("CH_CLIENT_RECEIVED_DATE") or service_to,
             "CH_CLIENT_CLAIM_ID": claim_id,
             "CH_CLIENT_ORIGINAL_CLAIM_ID": original_claim_id,
-            "CH_PLACE_OF_SERVICE_CODE": claim.get("CH_PLACE_OF_SERVICE_CODE") or 11,
-            "CH_TYPE_OF_BILL_CODE": claim.get("CH_TYPE_OF_BILL_CODE") or "131",
+            "CH_PLACE_OF_SERVICE_CODE": claim.get("CH_PLACE_OF_SERVICE_CODE")
+            or ("11" if claim_type == "P" else "21"),
+            "CH_TYPE_OF_BILL_CODE": claim.get("CH_TYPE_OF_BILL_CODE")
+            or ("" if claim_type == "P" else "131"),
             "CH_CLAIM_FREQUENCY_CODE": claim.get("CH_CLAIM_FREQUENCY_CODE") or "1",
             "CH_CLAIM_SERVICE_FROM_DATE": service_from,
             "CH_CLAIM_SERVICE_TO_DATE": service_to,
@@ -497,7 +658,9 @@ def _set_source_payment_defaults(
             "cotiviti.client_system": claim.get("cotiviti.client_system") or "test.health.payer",
             "cotiviti.source_system": claim.get("cotiviti.source_system") or "PPC",
             "cotiviti.batch_id": f"test-{profile}-{seed}-{index + 1:06d}",
-            "cotiviti.correlation_id": deterministic_uuid4(seed, f"{profile}:correlation"),
+            "cotiviti.correlation_id": deterministic_uuid4(
+                seed, f"{profile}:correlation:{index + 1}"
+            ),
             "cotiviti.producer_version": "test-data-generator/1",
             "cotiviti.source.isa_control": claim.get("cotiviti.source.isa_control")
             or f"{seed % 1_000_000_000:09d}",
@@ -522,19 +685,17 @@ def _set_source_payment_defaults(
         and isinstance(source_details[0], Mapping)
         else {}
     )
-    line_charge = _number(source_detail.get("CD_CHARGE_AMOUNT")) or charge
-    line_allowed = _number(source_detail.get("CD_ALLOWED_AMOUNT")) or allowed
-    line_paid = _number(source_detail.get("CD_PAID_AMOUNT")) or paid
-    adjustment_groups = ("CO", "PR", "PR", "PR", "OA", "PI")
-    adjustment_reasons = ("45", "1", "2", "3", "23", "204")
-    adjustment_amounts = (
-        max(line_charge - line_allowed, 0),
-        _number(source_detail.get("CD_DEDUCTIBLE_AMOUNT")),
-        _number(source_detail.get("CD_COINSURANCE_AMOUNT")),
-        _number(source_detail.get("CD_COPAY_AMOUNT")),
-        0,
-        0,
-    )
+    line_charge = _number_or_default(source_detail.get("CD_CHARGE_AMOUNT"), charge)
+    line_allowed = _number_or_default(source_detail.get("CD_ALLOWED_AMOUNT"), allowed)
+    line_paid = _number_or_default(source_detail.get("CD_PAID_AMOUNT"), paid)
+    adjustments = [
+        ("CO", "45", max(line_charge - line_allowed, 0)),
+        ("PR", "1", _number(source_detail.get("CD_DEDUCTIBLE_AMOUNT"))),
+        ("PR", "2", _number(source_detail.get("CD_COINSURANCE_AMOUNT"))),
+        ("PR", "3", _number(source_detail.get("CD_COPAY_AMOUNT"))),
+    ]
+    adjustments = [adjustment for adjustment in adjustments if adjustment[2] > 0]
+    adjustments.extend(("", "", 0) for _ in range(6 - len(adjustments)))
     detail: dict[str, object] = {
         "CD_CHARGE_AMOUNT": line_charge,
         "CD_PAID_AMOUNT": line_paid,
@@ -564,7 +725,8 @@ def _set_source_payment_defaults(
             "CD_SUBMITTED_PROCEDURE_MODIFIER_04"
         )
         or "KX",
-        "CD_SUBMITTED_REVENUE_CODE": source_detail.get("CD_SUBMITTED_REVENUE_CODE") or "0510",
+        "CD_SUBMITTED_REVENUE_CODE": source_detail.get("CD_SUBMITTED_REVENUE_CODE")
+        or ("" if claim_type == "P" else "0510"),
         "CD_LINE_PAID_DATE": paid_date,
         "CD_ALLOWED_AMOUNT": line_allowed,
         "CD_COINSURANCE_AMOUNT": _number(source_detail.get("CD_COINSURANCE_AMOUNT")),
@@ -575,9 +737,7 @@ def _set_source_payment_defaults(
         or source_detail.get("CD_SUBMITTED_PROCEDURE_CODE")
         or ("99213" if claim_type == "P" else "99223"),
     }
-    for number, (group, reason, amount) in enumerate(
-        zip(adjustment_groups, adjustment_reasons, adjustment_amounts, strict=True), start=1
-    ):
+    for number, (group, reason, amount) in enumerate(adjustments, start=1):
         detail[f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}"] = group
         detail[f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}"] = reason
         detail[f"CD_ADJUSTMENT_AMOUNT_{number}"] = amount

@@ -142,8 +142,7 @@
       ]
     },
     "CH_TYPE_OF_BILL_CODE": {
-      "type": "string",
-      "minLength": 1
+      "type": "string"
     },
     "CH_CLAIM_FREQUENCY_CODE": {
       "type": "string",
@@ -279,7 +278,7 @@
     },
     "cotiviti.source_format": {
       "type": "string",
-      "minLength": 1
+      "const": "edi_x12_835"
     },
     "cotiviti.source_system": {
       "type": "string",
@@ -343,7 +342,7 @@
     },
     "FILE_TYPE": {
       "type": "string",
-      "minLength": 1
+      "const": "835"
     },
     "DATA_CATEGORY": {
       "type": "string",
@@ -417,72 +416,60 @@
             "minimum": 0
           },
           "CD_CLAIM_ADJUSTMENT_GROUP_CODE_1": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_CLAIM_ADJUSTMENT_REASON_CODE_1": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_ADJUSTMENT_AMOUNT_1": {
             "type": "number",
             "minimum": 0
           },
           "CD_CLAIM_ADJUSTMENT_GROUP_CODE_2": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_CLAIM_ADJUSTMENT_REASON_CODE_2": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_ADJUSTMENT_AMOUNT_2": {
             "type": "number",
             "minimum": 0
           },
           "CD_CLAIM_ADJUSTMENT_GROUP_CODE_3": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_CLAIM_ADJUSTMENT_REASON_CODE_3": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_ADJUSTMENT_AMOUNT_3": {
             "type": "number",
             "minimum": 0
           },
           "CD_CLAIM_ADJUSTMENT_GROUP_CODE_4": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_CLAIM_ADJUSTMENT_REASON_CODE_4": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_ADJUSTMENT_AMOUNT_4": {
             "type": "number",
             "minimum": 0
           },
           "CD_CLAIM_ADJUSTMENT_GROUP_CODE_5": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_CLAIM_ADJUSTMENT_REASON_CODE_5": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_ADJUSTMENT_AMOUNT_5": {
             "type": "number",
             "minimum": 0
           },
           "CD_CLAIM_ADJUSTMENT_GROUP_CODE_6": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_CLAIM_ADJUSTMENT_REASON_CODE_6": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_ADJUSTMENT_AMOUNT_6": {
             "type": "number",
@@ -529,8 +516,7 @@
             "minLength": 1
           },
           "CD_SUBMITTED_REVENUE_CODE": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           },
           "CD_LINE_PAID_DATE": {
             "type": "string",
@@ -573,7 +559,7 @@
               "const": "P"
             },
             "FILE_TYPE": {
-              "const": "835P"
+              "const": "835"
             }
           },
           "required": [
@@ -587,7 +573,7 @@
               "const": "I"
             },
             "FILE_TYPE": {
-              "const": "835I"
+              "const": "835"
             }
           },
           "required": [

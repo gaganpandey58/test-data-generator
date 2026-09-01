@@ -46,14 +46,16 @@ def generate_record(
         Medical claim linked to deterministic member and provider source records.
     """
     del client_values
-    randomizer = Random(_record_seed(seed, index))
     claim_type = _claim_type(profile)
+    profile_offset = 1_000_000 if claim_type == "I" else 0
+    randomizer = Random(_record_seed(seed, index + profile_offset))
     frequency, original_index = _lifecycle(lifecycle, index)
     patient_index = original_index if frequency in {"7", "8"} else index
     assert patient_index is not None
     patient_identity_index = patient_index + (1_000_000 if claim_type == "I" else 0)
     member = _linked_member(seed, patient_identity_index, entity_counts)
-    provider = _linked_provider(seed, index, entity_counts, related_records)
+    provider_index = index + (1 if claim_type == "I" else 0)
+    provider = _linked_provider(seed, provider_index, entity_counts, related_records)
     profile_code = "P" if claim_type == "P" else "I"
     service_from_date = date(2025, 1, 1) + timedelta(days=randomizer.randrange(500))
     service_from = _compact_date(service_from_date)
@@ -91,7 +93,7 @@ def generate_record(
             "CH_CLIENT_CLAIM_VERSION_NUMBER": "1" if frequency == "1" else "2",
             "CH_CLIENT_ORIGINAL_CLAIM_ID": original_claim_id,
             "CH_NUMBER_OF_ADJUSTMENTS": 0 if frequency == "1" else 1,
-            "CH_BILLING_PROVIDER_CLAIM_ID": f"BPC{index + 1:010d}",
+            "CH_BILLING_PROVIDER_CLAIM_ID": f"{profile_code}BPC{index + 1:09d}",
             "CH_CLAIM_TYPE": claim_type,
             "CH_CLAIM_FREQUENCY_CODE": frequency,
             "CH_PAYER_ORGANIZATION_NAME": "COTIVITI TEST HEALTH PLAN",
@@ -114,8 +116,8 @@ def generate_record(
             "CH_SERVICE_FACILITY_NPI": provider["CP_PROVIDER_NPI"],
             "CH_ATTENDING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
             "CH_OPERATING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": f"PAC{index + 1:010d}",
-            "CH_PATIENT_MEDICAL_RECORD_NUMBER": f"MRN{index + 1:010d}",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": f"{profile_code}PAC{index + 1:09d}",
+            "CH_PATIENT_MEDICAL_RECORD_NUMBER": f"{profile_code}MRN{index + 1:09d}",
             "CH_CLAIM_SERVICE_FROM_DATE": service_from,
             "CH_CLAIM_SERVICE_TO_DATE": service_to,
             "CH_ADMISSION_DATE": service_from,
@@ -124,10 +126,14 @@ def generate_record(
             "CH_ADMISSION_SOURCE_CODE": "1",
             "CH_PATIENT_DISCHARGE_STATUS_CODE": "01",
             "CH_ICD_VERSION_CODE": "0",
-            "CH_ADMITTING_DIAGNOSIS_CODE": "I10",
-            "CH_DIAGNOSIS_CODE_01": randomizer.choice(("I10", "E119", "J069")),
-            "CH_TYPE_OF_BILL_CODE": "131",
-            "CH_PLACE_OF_SERVICE_CODE": randomizer.choice(("11", "22", "23")),
+            "CH_ADMITTING_DIAGNOSIS_CODE": "I10" if claim_type == "P" else "J189",
+            "CH_DIAGNOSIS_CODE_01": randomizer.choice(
+                ("I10", "E119", "M5450") if claim_type == "P" else ("J189", "K3580", "I509")
+            ),
+            "CH_TYPE_OF_BILL_CODE": "" if claim_type == "P" else "131",
+            "CH_PLACE_OF_SERVICE_CODE": randomizer.choice(
+                ("11", "22", "23") if claim_type == "P" else ("21", "31")
+            ),
             "CH_CHARGE_AMOUNT": charge,
             "CH_ALLOWED_AMOUNT": allowed,
             "CH_COINSURANCE_AMOUNT": coinsurance,

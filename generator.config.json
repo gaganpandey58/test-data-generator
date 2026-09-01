@@ -38,21 +38,21 @@
     "professional": {
       "count": 7,
       "scenarios": {
-        "MATCHED": 3,
+        "MATCHED": 4,
         "REVERSAL": 1,
         "REPLACEMENT": 1,
         "STALE": 1,
-        "ORPHAN": 1
+        "ORPHAN": 0
       }
     },
     "institutional": {
       "count": 7,
       "scenarios": {
-        "MATCHED": 3,
+        "MATCHED": 4,
         "REVERSAL": 1,
         "REPLACEMENT": 1,
         "STALE": 1,
-        "ORPHAN": 1
+        "ORPHAN": 0
       }
     }
   }
