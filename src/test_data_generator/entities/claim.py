@@ -10,10 +10,7 @@ from collections.abc import Mapping
 from datetime import date, timedelta
 from random import Random
 
-from test_data_generator.configuration.profiles import (
-    nested_header_values,
-    record_header_values,
-)
+from test_data_generator.configuration.profiles import record_header_values
 from test_data_generator.core.identifiers import deterministic_uuid4
 from test_data_generator.entities.member import generate_record as generate_member
 from test_data_generator.entities.provider import generate_record as generate_provider
@@ -97,6 +94,7 @@ def generate_record(
             "CH_BILLING_PROVIDER_CLAIM_ID": f"BPC{index + 1:010d}",
             "CH_CLAIM_TYPE": claim_type,
             "CH_CLAIM_FREQUENCY_CODE": frequency,
+            "CH_PAYER_ORGANIZATION_NAME": "COTIVITI TEST HEALTH PLAN",
             "CH_PATIENT_CLIENT_ID": member["CM_MEMBER_CLIENT_ID"],
             "CH_PATIENT_CLIENT_MASTER_ID": member["CM_MEMBER_CLIENT_MASTER_ID"],
             "CH_PATIENT_FIRST_NAME": member["CM_MEMBER_FIRST_NAME"],
@@ -117,6 +115,7 @@ def generate_record(
             "CH_ATTENDING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
             "CH_OPERATING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
             "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": f"PAC{index + 1:010d}",
+            "CH_PATIENT_MEDICAL_RECORD_NUMBER": f"MRN{index + 1:010d}",
             "CH_CLAIM_SERVICE_FROM_DATE": service_from,
             "CH_CLAIM_SERVICE_TO_DATE": service_to,
             "CH_ADMISSION_DATE": service_from,
@@ -222,9 +221,7 @@ def generate_record(
             "CH_RENDERING_PROVIDER_PHONE": provider_address.get("CP_PROVIDER_PHONE", ""),
         },
     )
-    completed = _complete_source_shape(record, claim_type)
-    completed["otherAttributes"] = None
-    return completed
+    return _complete_source_shape(record, claim_type)
 
 
 def _line(
@@ -295,7 +292,9 @@ def _line(
                 "CD_PLACE_OF_SERVICE_CODE": "11",
                 "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": "HCPCS",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
-                "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "59",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_03": "GP",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_04": "KX",
                 "CD_RENDERING_PROVIDER_ENTITY_TYPE": (
                     "P" if provider.get("CP_PROVIDER_RECORD_TYPE") in {"1", "P"} else "E"
                 ),
@@ -310,6 +309,11 @@ def _line(
     else:
         line.update(
             {
+                "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": "HCPCS",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "59",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_03": "LT",
+                "CD_SUBMITTED_PROCEDURE_MODIFIER_04": "KX",
                 "CD_SUBMITTED_REVENUE_CODE": "0510",
                 "CD_ALLOWED_REVENUE_CODE": "0510",
                 "CD_NUMBER_OF_ADJUSTMENTS": 0,
@@ -436,67 +440,10 @@ def _transport_headers(
         "cotiviti.source.st_control": f"{sequence:04d}",
         "cotiviti.source.claim_id": claim_id,
         "cotiviti.source.raw_file_ref": f"{namespace}-{seed}-{sequence:06d}.x12",
-        "otherAttributes": _other_attributes(
-            claim_type,
-            sequence,
-            nested_header_values(profile_entity, client_headers or {}, "otherAttributes"),
-        ),
     }
     headers["ROWID"] = deterministic_uuid4(seed, f"{namespace}:row:{sequence}")
     headers.update(record_header_values(profile_entity, client_headers or {}))
     return headers
-
-
-def _other_attributes(
-    claim_type: str, sequence: int, client_headers: Mapping[str, object]
-) -> dict[str, str] | None:
-    """Create the source-compatible EDI control attributes for a claim row.
-
-    Professional examples carry an ``otherAttributes`` object while the
-    institutional example carries ``null``.  Keeping that distinction makes
-    the generated envelopes match the source contracts without reusing sample
-    values.
-
-    Args:
-        claim_type: ``P`` for professional or ``O`` for institutional.
-        sequence: One-based deterministic transaction sequence.
-        client_headers: Declared nested payer values from the client profile.
-
-    Returns:
-        Professional EDI control attributes, or ``None`` for institutional
-        claims as represented by the supplied institutional source sample.
-    """
-    if claim_type != "P":
-        return None
-    control = f"{sequence:04d}"
-    return {
-        "payerName": str(client_headers.get("payerName", "")),
-        "payerIdentifier": str(client_headers.get("payerIdentifier", "")),
-        "payerIdCodeQualifier": str(client_headers.get("payerIdCodeQualifier", "")),
-        "payerAddressLine1": str(client_headers.get("payerAddressLine1", "")),
-        "payerCity": str(client_headers.get("payerCity", "")),
-        "payerState": str(client_headers.get("payerState", "")),
-        "payerZip": str(client_headers.get("payerZip", "")),
-        "submitterName": str(client_headers.get("submitterName", "")),
-        "submitterIdentifier": str(client_headers.get("submitterIdentifier", "")),
-        "submitterTelephone": str(client_headers.get("submitterTelephone", "")),
-        "receiverName": str(client_headers.get("receiverName", "")),
-        "receiverIdentifier": str(client_headers.get("receiverIdentifier", "")),
-        "tradingPartner": str(client_headers.get("tradingPartner", "")),
-        "batchPurpose": "CH",
-        "claimPurpose": "CH",
-        "batchControlNumber": control,
-        "interchangeControlNumber": f"{sequence:09d}",
-        "functionalGroupControlNumber": str(sequence),
-        "transactionSetControlNumber": control,
-        "interchangeUsageIndicator": str(client_headers.get("interchangeUsageIndicator", "")),
-        "interchangeSenderIdentifierQualifier": str(
-            client_headers.get("interchangeSenderIdentifierQualifier", "")
-        ),
-        "interchangeReceiverIdentifierQualifier": str(
-            client_headers.get("interchangeReceiverIdentifierQualifier", "")
-        ),
-    }
 
 
 def _profile_blanks(profile: str) -> dict[str, object]:

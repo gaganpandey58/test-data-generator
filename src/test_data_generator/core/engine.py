@@ -95,7 +95,12 @@ def build_claim_pair_records(
         )
         history_records.append(history_record)
         current_claim = deepcopy(history_record)
-        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+        blank_identifiers = (
+            ("CH_CLIENT_CLAIM_UNIQUE_ID",)
+            if claim_entity.profile == "claim-professional"
+            else _CLAIM_HISTORY_IDENTIFIER_FIELDS
+        )
+        for field in blank_identifiers:
             current_claim[field] = ""
         claim_records.append(current_claim)
     return claim_records, history_records

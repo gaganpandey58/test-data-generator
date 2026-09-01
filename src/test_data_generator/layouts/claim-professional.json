@@ -102,11 +102,6 @@
       "max_length": 255
     },
     {
-      "name": "otherAttributes",
-      "type": "text",
-      "max_length": 255
-    },
-    {
       "name": "cotiviti.producer_version",
       "type": "text",
       "max_length": 255

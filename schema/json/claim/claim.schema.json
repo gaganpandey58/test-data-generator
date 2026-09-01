@@ -25,7 +25,6 @@
         "CH_CLAIM_SERVICE_TO_DATE",
         "CH_DIAGNOSIS_CODE_01",
         "CLAIM_DETAIL",
-        "otherAttributes",
         "cotiviti.batch_id",
         "cotiviti.message_id",
         "cotiviti.source_format"
@@ -83,9 +82,6 @@
         "ROWID": {
           "type": "string",
           "format": "uuid"
-        },
-        "otherAttributes": {
-          "type": "null"
         },
         "CLAIM_DETAIL": {
           "type": "array",
@@ -181,9 +177,6 @@
         "CH_DIAGNOSIS_CODE_01": {
           "type": "string",
           "minLength": 1
-        },
-        "otherAttributes": {
-          "type": "null"
         },
         "CLAIM_DETAIL": {
           "type": "array",

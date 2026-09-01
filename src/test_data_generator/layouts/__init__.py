@@ -178,13 +178,21 @@ def project_record(record: Mapping[str, object], profile: str) -> dict[str, obje
         A record containing only the selected declared fields.
     """
     layout = load_layout(profile)
-    allowed = {field.name for field in (*layout.headers, *layout.root)}
+    allowed = {
+        field.name
+        for field in (*layout.headers, *layout.root)
+        if field.name != "otherAttributes" and not field.name.startswith("otherAttributes.")
+    }
     projected = {key: value for key, value in record.items() if key in allowed}
     for group_name, fields in layout.groups.items():
         group = record.get(group_name)
         if not isinstance(group, list):
             continue
-        allowed_group = {field.name for field in fields}
+        allowed_group = {
+            field.name
+            for field in fields
+            if field.name != "otherAttributes" and not field.name.startswith("otherAttributes.")
+        }
         projected[group_name] = [
             deduplicate_nested_fields(
                 {key: value for key, value in item.items() if key in allowed_group},

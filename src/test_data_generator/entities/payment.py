@@ -16,7 +16,7 @@ from pathlib import Path
 
 from test_data_generator.core.identifiers import deterministic_uuid4
 from test_data_generator.entities.claim import generate_record as generate_claim
-from test_data_generator.layouts import load_layout, project_record
+from test_data_generator.layouts import project_record
 from test_data_generator.samples.shapes import complete_record
 from test_data_generator.update.payment_relationships import PAYMENT_MATCHING_RULES
 
@@ -28,23 +28,114 @@ _PAYMENT_FILE_TYPES = {
     "payment-professional": "835P",
     "payment-institutional": "835I",
 }
-_REQUIRED_FIELDS = (
-    "FILE_TYPE",
-    "CH_CLAIM_TYPE",
-    "CH_PATIENT_CLIENT_ID",
-    "CH_BILLING_PROVIDER_NPI",
-    "CH_RENDERING_PROVIDER_NPI",
-    "CH_CLAIM_SERVICE_FROM_DATE",
-    "CH_CLAIM_SERVICE_TO_DATE",
-    "CH_CHARGE_AMOUNT",
-    "CLAIM_DETAIL",
-    "INGESTION_DATE",
-    "INGESTION_EPOCH",
-)
 _PAYMENT_SOURCES = {
     "payment-professional": "payment_professional",
     "payment-institutional": "payment_institutional",
 }
+_PAYMENT_HEADER_FIELDS = (
+    "CH_DIAGNOSIS_CODE_01",
+    "CH_BILLING_PROVIDER_CLAIM_ID",
+    "CH_PATIENT_CLIENT_ID",
+    "CH_CREDIT_DEBIT_FLAG_CODE",
+    "CH_PAYMENT_METHOD_CODE",
+    "CH_REFERENCE_IDENTIFICATION_NUMBER",
+    "CH_CLAIM_TYPE",
+    "CH_CHARGE_AMOUNT",
+    "CH_PAID_AMOUNT",
+    "CH_CLAIM_FILING_INDICATOR_CODE",
+    "CH_PAYER_ORGANIZATION_NAME",
+    "CH_CLIENT_RECEIVED_DATE",
+    "CH_CLIENT_CLAIM_ID",
+    "CH_CLIENT_ORIGINAL_CLAIM_ID",
+    "CH_PLACE_OF_SERVICE_CODE",
+    "CH_TYPE_OF_BILL_CODE",
+    "CH_CLAIM_FREQUENCY_CODE",
+    "CH_CLAIM_SERVICE_FROM_DATE",
+    "CH_CLAIM_SERVICE_TO_DATE",
+    "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
+    "CH_BILLING_PROVIDER_NPI",
+    "CH_BILLING_PROVIDER_FULL_NAME",
+    "CH_RENDERING_PROVIDER_FEDERAL_TAX_ID",
+    "CH_RENDERING_PROVIDER_NPI",
+    "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
+    "CH_PATIENT_MEDICAL_RECORD_NUMBER",
+    "CH_SUBSCRIBER_CLIENT_ID",
+    "CH_CLAIM_PAID_DATE",
+    "CH_ALLOWED_AMOUNT",
+    "CH_COINSURANCE_AMOUNT",
+    "CH_COPAY_AMOUNT",
+    "CH_DEDUCTIBLE_AMOUNT",
+    "CH_PATIENT_LIABILITY_AMOUNT",
+    "CH_CLAIM_STATUS_CODE",
+    "CH_PAYER_ID",
+    "CH_PAYEE_TAX_ID",
+    "CH_PAYEE_ID",
+    "CH_PAYEE_ID_QUALIFIER",
+)
+_PAYMENT_METADATA_FIELDS = (
+    "cotiviti.dataset_id",
+    "cotiviti.tenant_id",
+    "cotiviti.schema_version",
+    "cotiviti.client_id",
+    "cotiviti.client_system",
+    "cotiviti.message_id",
+    "cotiviti.produced_at",
+    "cotiviti.source_format",
+    "cotiviti.source_system",
+    "cotiviti.batch_id",
+    "cotiviti.message_seq",
+    "cotiviti.correlation_id",
+    "cotiviti.producer_version",
+    "cotiviti.source.isa_control",
+    "cotiviti.source.gs_control",
+    "cotiviti.source.raw_file_ref",
+)
+_PAYMENT_ENVELOPE_FIELDS = (
+    "INGESTION_EPOCH",
+    "ROWID",
+    "PAYER",
+    "PRODUCT",
+    "GDF_VERSION",
+    "FILE_TYPE",
+    "DATA_CATEGORY",
+    "LOB",
+    "INGESTION_DATE",
+    "PUBLISHER_NAME",
+)
+_PAYMENT_DETAIL_FIELDS = (
+    "CD_CHARGE_AMOUNT",
+    "CD_PAID_AMOUNT",
+    *(
+        field
+        for number in range(1, 7)
+        for field in (
+            f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}",
+            f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}",
+            f"CD_ADJUSTMENT_AMOUNT_{number}",
+        )
+    ),
+    "CD_REMITTANCE_ADVICE_GROUP_CODE",
+    "CD_REMITTANCE_ADVICE_REASON_CODE",
+    "CD_SERVICE_FROM_DATE",
+    "CD_SERVICE_TO_DATE",
+    "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
+    "CD_SUBMITTED_PROCEDURE_CODE",
+    "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
+    "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
+    "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
+    "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
+    "CD_SUBMITTED_REVENUE_CODE",
+    "CD_LINE_PAID_DATE",
+    "CD_ALLOWED_AMOUNT",
+    "CD_COINSURANCE_AMOUNT",
+    "CD_COPAY_AMOUNT",
+    "CD_DEDUCTIBLE_AMOUNT",
+    "CD_PATIENT_LIABILITY_AMOUNT",
+    "CD_ALLOWED_PROCEDURE_CODE",
+)
+_PAYMENT_ROOT_FIELDS = frozenset(
+    (*_PAYMENT_HEADER_FIELDS, *_PAYMENT_METADATA_FIELDS, *_PAYMENT_ENVELOPE_FIELDS, "CLAIM_DETAIL")
+)
 _CLAIM_IDS = ("CH_CLIENT_CLAIM_ID", "CLAIM_ID", "CH_CLAIM_ID")
 _ORIGINAL_CLAIM_IDS = (
     "CH_CLIENT_ORIGINAL_CLAIM_ID",
@@ -102,71 +193,14 @@ def generate_record(
     return derive_payment_from_claim(claim, profile, seed, index)
 
 
-def _apply_payment_values(record: dict[str, object], profile: str) -> None:
-    """Populate Payment-specific financial values after claim generation.
-
-    Claim generation establishes the common charge, allowed, liability, and
-    paid amounts. Payment I also carries the source-defined reconciliation
-    fields that are not meaningful in the professional shape; those values
-    are derived here so they cannot drift from the base claim amounts.
-    """
-    if profile != "payment-institutional":
-        return
-    charge = _number(record.get("CH_CHARGE_AMOUNT"))
-    allowed = _number(record.get("CH_ALLOWED_AMOUNT"))
-    disallowed = max(charge - allowed, 0)
-    for field, value in {
-        "CH_PATIENT_RESPONSIBILITY_AMOUNT": _number(record.get("CH_PATIENT_LIABILITY_AMOUNT")),
-        "CH_DENIED_AMOUNT": 0,
-        "CH_DISALLOWED_AMOUNT": disallowed,
-        "CH_NON_COVERED_AMOUNT": 0,
-        "CH_CONTRACT_AMOUNT": allowed,
-        "CH_PRIOR_PAYMENT_AMOUNT": 0,
-    }.items():
-        if field in record:
-            record[field] = value
-
-    details = record.get("CLAIM_DETAIL")
-    if not isinstance(details, list):
-        return
-    for detail in details:
-        if not isinstance(detail, dict):
-            continue
-        line_charge = _number(detail.get("CD_CHARGE_AMOUNT"))
-        line_allowed = _number(detail.get("CD_ALLOWED_AMOUNT"))
-        line_disallowed = max(line_charge - line_allowed, 0)
-        for field, value in {
-            "CD_DENIED_AMOUNT": 0,
-            "CD_DISALLOWED_AMOUNT": line_disallowed,
-            "CD_NON_COVERED_AMOUNT": 0,
-            "CD_DISCOUNT_AMOUNT": line_disallowed,
-            "CD_OTHER_REDUCTION_AMOUNT": 0,
-        }.items():
-            if field in detail:
-                detail[field] = value
-
-
-def _set_payment_dates(record: dict[str, object]) -> None:
-    """Populate the source-defined payment dates without creating fields."""
-    paid_date = record.get("CH_CHECK_DATE") or record.get("CH_CLAIM_SERVICE_TO_DATE", "")
-    if "CH_CLAIM_PAID_DATE" in record and not record["CH_CLAIM_PAID_DATE"]:
-        record["CH_CLAIM_PAID_DATE"] = paid_date
-    details = record.get("CLAIM_DETAIL")
-    if isinstance(details, list):
-        for detail in details:
-            if (
-                isinstance(detail, dict)
-                and "CD_LINE_PAID_DATE" in detail
-                and not detail["CD_LINE_PAID_DATE"]
-            ):
-                detail["CD_LINE_PAID_DATE"] = paid_date
-
-
 def _validate_payment_record(record: Mapping[str, object], profile: str) -> None:
     """Validate the generated Payment envelope and relationship shape."""
-    missing = [
-        field for field in _REQUIRED_FIELDS if field not in record or record[field] in (None, "")
-    ]
+    unexpected = sorted(set(record) - _PAYMENT_ROOT_FIELDS)
+    missing = [field for field in _PAYMENT_ROOT_FIELDS if not _present(record.get(field))]
+    if unexpected:
+        raise ValueError(
+            f"Generated {profile} payment contains unsupported fields: {', '.join(unexpected)}"
+        )
     if missing:
         raise ValueError(f"Generated {profile} payment is missing fields: {', '.join(missing)}")
     if record["FILE_TYPE"] != _PAYMENT_FILE_TYPES[profile]:
@@ -177,6 +211,18 @@ def _validate_payment_record(record: Mapping[str, object], profile: str) -> None
     details = record["CLAIM_DETAIL"]
     if not isinstance(details, list) or not details:
         raise ValueError(f"Generated {profile} payment must contain CLAIM_DETAIL")
+    for line_number, detail in enumerate(details, start=1):
+        if not isinstance(detail, Mapping):
+            raise ValueError(f"Generated {profile} payment detail {line_number} must be an object")
+        unexpected_detail = sorted(set(detail) - set(_PAYMENT_DETAIL_FIELDS))
+        missing_detail = [
+            field for field in _PAYMENT_DETAIL_FIELDS if not _present(detail.get(field))
+        ]
+        if unexpected_detail or missing_detail:
+            raise ValueError(
+                f"Generated {profile} payment detail {line_number} has an invalid field contract; "
+                f"unexpected={unexpected_detail}, missing={missing_detail}"
+            )
     rules = PAYMENT_MATCHING_RULES[profile]
     missing_header = [field for field in rules["header"] if field not in record]
     missing_line = [field for field in rules["line"] if field not in details[0]]
@@ -229,10 +275,8 @@ def derive_payment_from_claim(
         raise ValueError(f"Unsupported Payment profile {profile!r}") from error
     payment = complete_record(deepcopy(claim), source)
     _set_payment_transport(payment, profile, seed, index)
-    _copy_line_indexes(payment, profile)
     _copy_claim_lineage(payment, claim)
-    _set_source_payment_defaults(payment, claim, profile)
-    _apply_payment_values(payment, profile)
+    _set_source_payment_defaults(payment, claim, profile, seed, index)
     _apply_scenario(payment, claim, profile, scenario, seed, index)
     projected = project_record(payment, profile)
     _validate_payment_record(projected, profile)
@@ -373,86 +417,171 @@ def _copy_claim_lineage(payment: dict[str, object], claim: Mapping[str, object])
             payment[field] = claim[field]
 
 
-def _copy_line_indexes(payment: dict[str, object], profile: str) -> None:
-    """Add stable one-based line indexes when the selected layout declares them."""
-    layout = load_layout(profile)
-    line_fields = {field.name for field in layout.groups.get("CLAIM_DETAIL", ())}
-    if "INDEX" not in line_fields:
-        return
-    details = payment.get("CLAIM_DETAIL")
-    if not isinstance(details, list):
-        return
-    for index, detail in enumerate(details, start=1):
-        if isinstance(detail, dict):
-            detail["INDEX"] = index
-
-
 def _set_source_payment_defaults(
-    payment: dict[str, object], claim: Mapping[str, object], profile: str
+    payment: dict[str, object],
+    claim: Mapping[str, object],
+    profile: str,
+    seed: int,
+    index: int,
 ) -> None:
-    """Fill Payment-only fields without changing copied Claim values."""
-    if "CLP02" not in payment and any(field.name == "CLP02" for field in load_layout(profile).root):
-        payment["CLP02"] = "1"
-    paid_date = _first_value(
-        claim,
-        ("CH_CLAIM_PAID_DATE", "CH_CHECK_DATE", "CH_CLAIM_SERVICE_TO_DATE"),
+    """Populate the exact, non-empty 835 field contract from one Claim."""
+    claim_type = _PAYMENT_TYPES[profile]
+    prefix = "P" if claim_type == "P" else "I"
+    service_from = str(claim.get("CH_CLAIM_SERVICE_FROM_DATE") or "20260101")
+    service_to = str(claim.get("CH_CLAIM_SERVICE_TO_DATE") or service_from)
+    paid_date = str(
+        _first_value(claim, ("CH_CLAIM_PAID_DATE", "CH_CHECK_DATE", "CH_CLAIM_SERVICE_TO_DATE"))
+        or service_to
     )
-    if paid_date is not None and "CH_CLAIM_PAID_DATE" in payment:
-        payment["CH_CLAIM_PAID_DATE"] = paid_date
-    if "CLP02" in payment and not payment["CLP02"]:
-        payment["CLP02"] = "1"
-    if "CH_PAYMENT_STATUS" in payment and not payment["CH_PAYMENT_STATUS"]:
-        payment["CH_PAYMENT_STATUS"] = "PAID"
-    details = payment.get("CLAIM_DETAIL")
-    if isinstance(details, list):
-        for detail in details:
-            if isinstance(detail, dict) and "CD_LINE_PAID_DATE" in detail and paid_date is not None:
-                detail["CD_LINE_PAID_DATE"] = paid_date
-    if profile == "payment-institutional":
-        _set_source_institutional_amount_defaults(payment)
-
-
-def _set_source_institutional_amount_defaults(payment: dict[str, object]) -> None:
-    """Derive only missing institutional Payment amounts from Claim amounts."""
-    charge = _number(payment.get("CH_CHARGE_AMOUNT"))
-    allowed = _number(payment.get("CH_ALLOWED_AMOUNT"))
-    if not _present(payment.get("CH_ALLOWED_AMOUNT")):
-        allowed = round(charge * 0.75)
-    disallowed = max(charge - allowed, 0)
-    values = {
-        "CH_ALLOWED_AMOUNT": allowed,
-        "CH_PATIENT_RESPONSIBILITY_AMOUNT": _number(payment.get("CH_PATIENT_LIABILITY_AMOUNT")),
-        "CH_DENIED_AMOUNT": 0,
-        "CH_DISALLOWED_AMOUNT": disallowed,
-        "CH_NON_COVERED_AMOUNT": 0,
-        "CH_CONTRACT_AMOUNT": allowed,
-        "CH_PRIOR_PAYMENT_AMOUNT": 0,
-    }
-    for field, value in values.items():
-        if field in payment and not _present(payment[field]):
-            payment[field] = value
-    details = payment.get("CLAIM_DETAIL")
-    if not isinstance(details, list):
-        return
-    for detail in details:
-        if not isinstance(detail, dict):
-            continue
-        line_charge = _number(detail.get("CD_CHARGE_AMOUNT"))
-        line_allowed = _number(detail.get("CD_ALLOWED_AMOUNT"))
-        if not _present(detail.get("CD_ALLOWED_AMOUNT")):
-            line_allowed = round(line_charge * 0.75)
-        line_disallowed = max(line_charge - line_allowed, 0)
-        values = {
-            "CD_ALLOWED_AMOUNT": line_allowed,
-            "CD_DENIED_AMOUNT": 0,
-            "CD_DISALLOWED_AMOUNT": line_disallowed,
-            "CD_NON_COVERED_AMOUNT": 0,
-            "CD_DISCOUNT_AMOUNT": line_disallowed,
-            "CD_OTHER_REDUCTION_AMOUNT": 0,
+    claim_id = str(claim.get("CH_CLIENT_CLAIM_ID") or f"{prefix}CLM{index + 1:09d}")
+    original_claim_id = str(claim.get("CH_CLIENT_ORIGINAL_CLAIM_ID") or claim_id)
+    billing_npi = claim.get("CH_BILLING_PROVIDER_NPI") or "1234567893"
+    rendering_npi = claim.get("CH_RENDERING_PROVIDER_NPI") or billing_npi
+    billing_tax_id = str(claim.get("CH_BILLING_PROVIDER_FEDERAL_TAX_ID") or "521234567")
+    charge = _number(claim.get("CH_CHARGE_AMOUNT")) or 1000
+    allowed = _number(claim.get("CH_ALLOWED_AMOUNT")) or round(charge * 0.75)
+    paid = _number(claim.get("CH_PAID_AMOUNT")) or round(allowed * 0.70)
+    payment.update(
+        {
+            "CH_DIAGNOSIS_CODE_01": claim.get("CH_DIAGNOSIS_CODE_01") or "I10",
+            "CH_BILLING_PROVIDER_CLAIM_ID": claim.get("CH_BILLING_PROVIDER_CLAIM_ID")
+            or f"BPC{index + 1:010d}",
+            "CH_PATIENT_CLIENT_ID": claim.get("CH_PATIENT_CLIENT_ID") or f"PT{index + 1:010d}",
+            "CH_CREDIT_DEBIT_FLAG_CODE": "C",
+            "CH_PAYMENT_METHOD_CODE": "ACH",
+            "CH_REFERENCE_IDENTIFICATION_NUMBER": f"PAYREF{index + 1:010d}",
+            "CH_CLAIM_TYPE": claim_type,
+            "CH_CHARGE_AMOUNT": charge,
+            "CH_PAID_AMOUNT": paid,
+            "CH_CLAIM_FILING_INDICATOR_CODE": claim.get("CH_CLAIM_FILING_INDICATOR_CODE") or "CI",
+            "CH_PAYER_ORGANIZATION_NAME": claim.get("CH_PAYER_ORGANIZATION_NAME")
+            or "COTIVITI TEST HEALTH PLAN",
+            "CH_CLIENT_RECEIVED_DATE": claim.get("CH_CLIENT_RECEIVED_DATE") or service_to,
+            "CH_CLIENT_CLAIM_ID": claim_id,
+            "CH_CLIENT_ORIGINAL_CLAIM_ID": original_claim_id,
+            "CH_PLACE_OF_SERVICE_CODE": claim.get("CH_PLACE_OF_SERVICE_CODE") or 11,
+            "CH_TYPE_OF_BILL_CODE": claim.get("CH_TYPE_OF_BILL_CODE") or "131",
+            "CH_CLAIM_FREQUENCY_CODE": claim.get("CH_CLAIM_FREQUENCY_CODE") or "1",
+            "CH_CLAIM_SERVICE_FROM_DATE": service_from,
+            "CH_CLAIM_SERVICE_TO_DATE": service_to,
+            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID": billing_tax_id,
+            "CH_BILLING_PROVIDER_NPI": billing_npi,
+            "CH_BILLING_PROVIDER_FULL_NAME": claim.get("CH_BILLING_PROVIDER_FULL_NAME")
+            or "TAYLOR JORDAN MEDICAL GROUP",
+            "CH_RENDERING_PROVIDER_FEDERAL_TAX_ID": claim.get(
+                "CH_RENDERING_PROVIDER_FEDERAL_TAX_ID"
+            )
+            or billing_tax_id,
+            "CH_RENDERING_PROVIDER_NPI": rendering_npi,
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": claim.get("CH_PATIENT_ACCOUNT_CONTROL_NUMBER")
+            or f"PAC{index + 1:010d}",
+            "CH_PATIENT_MEDICAL_RECORD_NUMBER": claim.get("CH_PATIENT_MEDICAL_RECORD_NUMBER")
+            or f"MRN{index + 1:010d}",
+            "CH_SUBSCRIBER_CLIENT_ID": claim.get("CH_SUBSCRIBER_CLIENT_ID")
+            or f"SUB{index + 1:010d}",
+            "CH_CLAIM_PAID_DATE": paid_date,
+            "CH_ALLOWED_AMOUNT": allowed,
+            "CH_COINSURANCE_AMOUNT": _number(claim.get("CH_COINSURANCE_AMOUNT")),
+            "CH_COPAY_AMOUNT": _number(claim.get("CH_COPAY_AMOUNT")),
+            "CH_DEDUCTIBLE_AMOUNT": _number(claim.get("CH_DEDUCTIBLE_AMOUNT")),
+            "CH_PATIENT_LIABILITY_AMOUNT": _number(claim.get("CH_PATIENT_LIABILITY_AMOUNT")),
+            "CH_CLAIM_STATUS_CODE": "1",
+            "CH_PAYER_ID": "CHC",
+            "CH_PAYEE_TAX_ID": billing_tax_id,
+            "CH_PAYEE_ID": str(billing_npi),
+            "CH_PAYEE_ID_QUALIFIER": "XX",
+            "cotiviti.dataset_id": "claims_payment",
+            "cotiviti.tenant_id": claim.get("cotiviti.tenant_id") or "test-health",
+            "cotiviti.schema_version": claim.get("cotiviti.schema_version") or "gdf-eip-v1",
+            "cotiviti.client_id": claim.get("cotiviti.client_id") or "test.health.payer",
+            "cotiviti.client_system": claim.get("cotiviti.client_system") or "test.health.payer",
+            "cotiviti.source_system": claim.get("cotiviti.source_system") or "PPC",
+            "cotiviti.batch_id": f"test-{profile}-{seed}-{index + 1:06d}",
+            "cotiviti.correlation_id": deterministic_uuid4(seed, f"{profile}:correlation"),
+            "cotiviti.producer_version": "test-data-generator/1",
+            "cotiviti.source.isa_control": claim.get("cotiviti.source.isa_control")
+            or f"{seed % 1_000_000_000:09d}",
+            "cotiviti.source.gs_control": claim.get("cotiviti.source.gs_control") or index + 1,
+            "cotiviti.source.raw_file_ref": f"{profile}-{seed}-{index + 1:06d}.835.x12",
+            "INGESTION_EPOCH": claim.get("INGESTION_EPOCH") or 1785888000 + index + 1,
+            "ROWID": deterministic_uuid4(seed, f"{profile}:row:{index + 1}"),
+            "PAYER": claim.get("PAYER") or "CHC",
+            "PRODUCT": claim.get("PRODUCT") or "PPC",
+            "GDF_VERSION": claim.get("GDF_VERSION") or "v2.9",
+            "DATA_CATEGORY": "CLAIMS_PAYMENT",
+            "LOB": claim.get("LOB") or "COMMERCIAL",
+            "INGESTION_DATE": claim.get("INGESTION_DATE") or "20260805",
+            "PUBLISHER_NAME": claim.get("PUBLISHER_NAME") or "test-data-generator",
         }
-        for field, value in values.items():
-            if field in detail and not _present(detail[field]):
-                detail[field] = value
+    )
+    source_details = claim.get("CLAIM_DETAIL")
+    source_detail = (
+        source_details[0]
+        if isinstance(source_details, list)
+        and source_details
+        and isinstance(source_details[0], Mapping)
+        else {}
+    )
+    line_charge = _number(source_detail.get("CD_CHARGE_AMOUNT")) or charge
+    line_allowed = _number(source_detail.get("CD_ALLOWED_AMOUNT")) or allowed
+    line_paid = _number(source_detail.get("CD_PAID_AMOUNT")) or paid
+    adjustment_groups = ("CO", "PR", "PR", "PR", "OA", "PI")
+    adjustment_reasons = ("45", "1", "2", "3", "23", "204")
+    adjustment_amounts = (
+        max(line_charge - line_allowed, 0),
+        _number(source_detail.get("CD_DEDUCTIBLE_AMOUNT")),
+        _number(source_detail.get("CD_COINSURANCE_AMOUNT")),
+        _number(source_detail.get("CD_COPAY_AMOUNT")),
+        0,
+        0,
+    )
+    detail: dict[str, object] = {
+        "CD_CHARGE_AMOUNT": line_charge,
+        "CD_PAID_AMOUNT": line_paid,
+        "CD_REMITTANCE_ADVICE_GROUP_CODE": "CO",
+        "CD_REMITTANCE_ADVICE_REASON_CODE": "45",
+        "CD_SERVICE_FROM_DATE": source_detail.get("CD_SERVICE_FROM_DATE") or service_from,
+        "CD_SERVICE_TO_DATE": source_detail.get("CD_SERVICE_TO_DATE") or service_to,
+        "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": source_detail.get(
+            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER"
+        )
+        or "HCPCS",
+        "CD_SUBMITTED_PROCEDURE_CODE": source_detail.get("CD_SUBMITTED_PROCEDURE_CODE")
+        or ("99213" if claim_type == "P" else "99223"),
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_01": source_detail.get(
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_01"
+        )
+        or "25",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_02": source_detail.get(
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_02"
+        )
+        or "59",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_03": source_detail.get(
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_03"
+        )
+        or "LT",
+        "CD_SUBMITTED_PROCEDURE_MODIFIER_04": source_detail.get(
+            "CD_SUBMITTED_PROCEDURE_MODIFIER_04"
+        )
+        or "KX",
+        "CD_SUBMITTED_REVENUE_CODE": source_detail.get("CD_SUBMITTED_REVENUE_CODE") or "0510",
+        "CD_LINE_PAID_DATE": paid_date,
+        "CD_ALLOWED_AMOUNT": line_allowed,
+        "CD_COINSURANCE_AMOUNT": _number(source_detail.get("CD_COINSURANCE_AMOUNT")),
+        "CD_COPAY_AMOUNT": _number(source_detail.get("CD_COPAY_AMOUNT")),
+        "CD_DEDUCTIBLE_AMOUNT": _number(source_detail.get("CD_DEDUCTIBLE_AMOUNT")),
+        "CD_PATIENT_LIABILITY_AMOUNT": _number(source_detail.get("CD_PATIENT_LIABILITY_AMOUNT")),
+        "CD_ALLOWED_PROCEDURE_CODE": source_detail.get("CD_ALLOWED_PROCEDURE_CODE")
+        or source_detail.get("CD_SUBMITTED_PROCEDURE_CODE")
+        or ("99213" if claim_type == "P" else "99223"),
+    }
+    for number, (group, reason, amount) in enumerate(
+        zip(adjustment_groups, adjustment_reasons, adjustment_amounts, strict=True), start=1
+    ):
+        detail[f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}"] = group
+        detail[f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}"] = reason
+        detail[f"CD_ADJUSTMENT_AMOUNT_{number}"] = amount
+    payment["CLAIM_DETAIL"] = [detail]
 
 
 def _apply_scenario(
@@ -468,11 +597,8 @@ def _apply_scenario(
     if normalized in {"MATCHED", "REPLACEMENT"}:
         return
     if normalized == "REVERSAL":
-        if "CLP02" not in payment:
-            raise ValueError(f"Payment layout {profile!r} does not declare CLP02")
-        payment["CLP02"] = "22"
-        if "CH_PAYMENT_STATUS" in payment:
-            payment["CH_PAYMENT_STATUS"] = "REVERSED"
+        payment["CH_CLAIM_STATUS_CODE"] = "22"
+        payment["CH_CREDIT_DEBIT_FLAG_CODE"] = "D"
         return
     if normalized == "STALE":
         paid_date = _first_value(
