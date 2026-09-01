@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from random import Random
 
 from test_data_generator.configuration.profiles import record_header_values
-from test_data_generator.core.identifiers import deterministic_uuid4
+from test_data_generator.core.identifiers import deterministic_uuid4, valid_phone_number
 from test_data_generator.entities.member import generate_record as generate_member
 from test_data_generator.entities.provider import generate_record as generate_provider
 from test_data_generator.layouts import load_layout
@@ -54,12 +54,26 @@ def generate_record(
     assert patient_index is not None
     patient_identity_index = patient_index + (1_000_000 if claim_type == "I" else 0)
     member = _linked_member(seed, patient_identity_index, entity_counts)
+    subscriber_identity_index = (
+        patient_identity_index
+        if member.get("CM_MEMBER_RELATIONSHIP_TO_SUBSCRIBER") == "18"
+        else patient_identity_index - 1
+    )
+    subscriber = _linked_member(seed, subscriber_identity_index, entity_counts)
     provider_index = index + (1 if claim_type == "I" else 0)
     provider = _linked_provider(seed, provider_index, entity_counts, related_records)
+    rendering_provider = _linked_rendering_provider(
+        seed, provider_index + 1, entity_counts, related_records
+    )
     profile_code = "P" if claim_type == "P" else "I"
     service_from_date = date(2025, 1, 1) + timedelta(days=randomizer.randrange(500))
     service_from = _compact_date(service_from_date)
     service_to = _compact_date(service_from_date + timedelta(days=randomizer.randrange(1, 4)))
+    accident_date = (
+        _compact_date(service_from_date - timedelta(days=2)) if patient_index % 3 == 0 else ""
+    )
+    diagnosis_1, diagnosis_2 = _diagnoses(claim_type, patient_index, bool(accident_date))
+    place_of_service = randomizer.choice(("11", "22", "23") if claim_type == "P" else ("21", "31"))
     charge = randomizer.randrange(120, 1_201)
     allowed = round(charge * 0.75)
     copay = min(30, allowed)
@@ -96,6 +110,10 @@ def generate_record(
             "CH_BILLING_PROVIDER_CLAIM_ID": f"{profile_code}BPC{index + 1:09d}",
             "CH_CLAIM_TYPE": claim_type,
             "CH_CLAIM_FREQUENCY_CODE": frequency,
+            "CH_ACCIDENT_DATE": accident_date,
+            "CH_BENEFITS_ASSIGNMENT_CERTIFICATION_INDICATOR": "Y",
+            "CH_BLUE_CARD_INDICATOR": "N",
+            "CH_OTHER_INSURANCE_INDICATOR": "Y",
             "CH_PAYER_ORGANIZATION_NAME": "COTIVITI TEST HEALTH PLAN",
             "CH_PATIENT_CLIENT_ID": member["CM_MEMBER_CLIENT_ID"],
             "CH_PATIENT_CLIENT_MASTER_ID": member["CM_MEMBER_CLIENT_MASTER_ID"],
@@ -106,16 +124,23 @@ def generate_record(
             "CH_SUBSCRIBER_CLIENT_ID": member["CM_SUBSCRIBER_CLIENT_ID"],
             "CH_SUBSCRIBER_CLIENT_MASTER_ID": member["CM_SUBSCRIBER_CLIENT_MASTER_ID"],
             "CH_SUBSCRIBER_SSN": member["CM_SUBSCRIBER_SSN"],
+            "CH_PATIENT_RELATIONSHIP_TO_SUBSCRIBER": member["CM_MEMBER_RELATIONSHIP_TO_SUBSCRIBER"],
+            "CH_SUBSCRIBER_FIRST_NAME": subscriber["CM_MEMBER_FIRST_NAME"],
+            "CH_SUBSCRIBER_LAST_NAME": subscriber["CM_MEMBER_LAST_NAME"],
+            "CH_SUBSCRIBER_BIRTH_DATE": subscriber["CM_MEMBER_BIRTH_DATE"],
+            "CH_SUBSCRIBER_GENDER": subscriber["CM_MEMBER_GENDER"],
+            "CH_GROUP_NUMBER": f"GRP{abs(seed) % 1_000_000:06d}{patient_index + 1:06d}",
+            "CH_PAYER_ORDER_OF_BENEFITS": "1",
             "CH_BILLING_PROVIDER_CLIENT_ID": provider["CP_PROVIDER_CLIENT_ID"],
             "CH_BILLING_PROVIDER_CLIENT_MASTER_ID": provider["CP_PROVIDER_CLIENT_MASTER_ID"],
             "CH_BILLING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
             "CH_BILLING_PROVIDER_FEDERAL_TAX_ID": provider["CP_PROVIDER_FEDERAL_TAX_ID"],
-            "CH_RENDERING_PROVIDER_CLIENT_ID": provider["CP_PROVIDER_CLIENT_ID"],
-            "CH_RENDERING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
-            "CH_REFERRING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
+            "CH_RENDERING_PROVIDER_CLIENT_ID": rendering_provider["CP_PROVIDER_CLIENT_ID"],
+            "CH_RENDERING_PROVIDER_NPI": rendering_provider["CP_PROVIDER_NPI"],
+            "CH_REFERRING_PROVIDER_NPI": rendering_provider["CP_PROVIDER_NPI"],
             "CH_SERVICE_FACILITY_NPI": provider["CP_PROVIDER_NPI"],
-            "CH_ATTENDING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
-            "CH_OPERATING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
+            "CH_ATTENDING_PROVIDER_NPI": rendering_provider["CP_PROVIDER_NPI"],
+            "CH_OPERATING_PROVIDER_NPI": rendering_provider["CP_PROVIDER_NPI"],
             "CH_PATIENT_ACCOUNT_CONTROL_NUMBER": f"{profile_code}PAC{index + 1:09d}",
             "CH_PATIENT_MEDICAL_RECORD_NUMBER": f"{profile_code}MRN{index + 1:09d}",
             "CH_CLAIM_SERVICE_FROM_DATE": service_from,
@@ -126,14 +151,11 @@ def generate_record(
             "CH_ADMISSION_SOURCE_CODE": "1",
             "CH_PATIENT_DISCHARGE_STATUS_CODE": "01",
             "CH_ICD_VERSION_CODE": "0",
-            "CH_ADMITTING_DIAGNOSIS_CODE": "I10" if claim_type == "P" else "J189",
-            "CH_DIAGNOSIS_CODE_01": randomizer.choice(
-                ("I10", "E119", "M5450") if claim_type == "P" else ("J189", "K3580", "I509")
-            ),
+            "CH_ADMITTING_DIAGNOSIS_CODE": diagnosis_1,
+            "CH_DIAGNOSIS_CODE_01": diagnosis_1,
+            "CH_DIAGNOSIS_CODE_02": diagnosis_2,
             "CH_TYPE_OF_BILL_CODE": "" if claim_type == "P" else "131",
-            "CH_PLACE_OF_SERVICE_CODE": randomizer.choice(
-                ("11", "22", "23") if claim_type == "P" else ("21", "31")
-            ),
+            "CH_PLACE_OF_SERVICE_CODE": place_of_service,
             "CH_CHARGE_AMOUNT": charge,
             "CH_ALLOWED_AMOUNT": allowed,
             "CH_COINSURANCE_AMOUNT": coinsurance,
@@ -168,8 +190,9 @@ def generate_record(
                     coinsurance,
                     liability,
                     paid,
-                    provider,
+                    rendering_provider,
                     frequency,
+                    place_of_service,
                 )
             ],
         }
@@ -178,11 +201,13 @@ def generate_record(
         _transport_headers(seed, index, claim_type, claim_id, entity_name, client_headers)
     )
     if isinstance(address, Mapping):
+        patient_address_02 = f"APT {100 + (patient_identity_index % 900)}"
         _set_existing_fields(
             record,
             {
                 "CH_PATIENT_MIDDLE_NAME": member.get("CM_MEMBER_MIDDLE_NAME", ""),
                 "CH_PATIENT_ADDRESS_01": address.get("CM_MEMBER_ADDRESS_01", ""),
+                "CH_PATIENT_ADDRESS_02": patient_address_02,
                 "CH_PATIENT_CITY": address.get("CM_MEMBER_CITY", ""),
                 "CH_PATIENT_STATE": address.get("CM_MEMBER_STATE", ""),
                 "CH_PATIENT_ZIP": address.get("CM_MEMBER_ZIP", ""),
@@ -190,6 +215,25 @@ def generate_record(
                 "CH_PATIENT_PHONE": address.get("CM_MEMBER_PHONE", ""),
             },
         )
+    subscriber_addresses = subscriber.get("CM_MEMBER_ADDRESSES")
+    subscriber_address = (
+        subscriber_addresses[0]
+        if isinstance(subscriber_addresses, list)
+        and subscriber_addresses
+        and isinstance(subscriber_addresses[0], Mapping)
+        else {}
+    )
+    subscriber_address_02 = f"APT {100 + (subscriber_identity_index % 900)}"
+    _set_existing_fields(
+        record,
+        {
+            "CH_SUBSCRIBER_ADDRESS_01": subscriber_address.get("CM_MEMBER_ADDRESS_01", ""),
+            "CH_SUBSCRIBER_ADDRESS_02": subscriber_address_02,
+            "CH_SUBSCRIBER_CITY": subscriber_address.get("CM_MEMBER_CITY", ""),
+            "CH_SUBSCRIBER_STATE": subscriber_address.get("CM_MEMBER_STATE", ""),
+            "CH_SUBSCRIBER_ZIP": subscriber_address.get("CM_MEMBER_ZIP", ""),
+        },
+    )
     provider_addresses = provider.get("CP_PROVIDER_ADDRESSES")
     provider_address = (
         provider_addresses[0]
@@ -198,9 +242,22 @@ def generate_record(
         and isinstance(provider_addresses[0], Mapping)
         else {}
     )
+    rendering_addresses = rendering_provider.get("CP_PROVIDER_ADDRESSES")
+    rendering_address = (
+        rendering_addresses[0]
+        if isinstance(rendering_addresses, list)
+        and rendering_addresses
+        and isinstance(rendering_addresses[0], Mapping)
+        else {}
+    )
     _set_existing_fields(
         record,
         {
+            "CH_BILLING_PROVIDER_ENTITY_TYPE": _provider_entity_type(provider),
+            "CH_BILLING_PROVIDER_CONTACT_NAME": rendering_provider.get("CP_PROVIDER_FULL_NAME", ""),
+            "CH_BILLING_PROVIDER_ALTERNATE_PHONE": valid_phone_number(randomizer),
+            "CH_BILLING_PROVIDER_FAX": valid_phone_number(randomizer),
+            "CH_BILLING_PROVIDER_TAXONOMY_CODE": provider.get("CP_PROVIDER_TAXONOMY_CODE", ""),
             "CH_BILLING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
             "CH_BILLING_PROVIDER_MIDDLE_NAME": provider.get("CP_PROVIDER_MIDDLE_NAME", ""),
             "CH_BILLING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
@@ -214,17 +271,31 @@ def generate_record(
                 "CP_PROVIDER_ZIP_PLUS_FOUR", ""
             ),
             "CH_BILLING_PROVIDER_PHONE": provider_address.get("CP_PROVIDER_PHONE", ""),
-            "CH_RENDERING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
-            "CH_RENDERING_PROVIDER_MIDDLE_NAME": provider.get("CP_PROVIDER_MIDDLE_NAME", ""),
-            "CH_RENDERING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
-            "CH_RENDERING_PROVIDER_ADDRESS_01": provider_address.get("CP_PROVIDER_ADDRESS_01", ""),
-            "CH_RENDERING_PROVIDER_CITY": provider_address.get("CP_PROVIDER_CITY", ""),
-            "CH_RENDERING_PROVIDER_STATE": provider_address.get("CP_PROVIDER_STATE", ""),
-            "CH_RENDERING_PROVIDER_ZIP": provider_address.get("CP_PROVIDER_ZIP", ""),
-            "CH_RENDERING_PROVIDER_ZIP_PLUS_FOUR": provider_address.get(
+            "CH_RENDERING_PROVIDER_ENTITY_TYPE": _provider_entity_type(rendering_provider),
+            "CH_RENDERING_PROVIDER_FIRST_NAME": rendering_provider.get(
+                "CP_PROVIDER_FIRST_NAME", ""
+            ),
+            "CH_RENDERING_PROVIDER_MIDDLE_NAME": rendering_provider.get(
+                "CP_PROVIDER_MIDDLE_NAME", ""
+            ),
+            "CH_RENDERING_PROVIDER_LAST_NAME": rendering_provider.get("CP_PROVIDER_LAST_NAME", ""),
+            "CH_RENDERING_PROVIDER_TAXONOMY_CODE": rendering_provider.get(
+                "CP_PROVIDER_TAXONOMY_CODE", ""
+            ),
+            "CH_RENDERING_PROVIDER_ADDRESS_01": rendering_address.get("CP_PROVIDER_ADDRESS_01", ""),
+            "CH_RENDERING_PROVIDER_ADDRESS_02": rendering_address.get("CP_PROVIDER_ADDRESS_02", ""),
+            "CH_RENDERING_PROVIDER_CITY": rendering_address.get("CP_PROVIDER_CITY", ""),
+            "CH_RENDERING_PROVIDER_STATE": rendering_address.get("CP_PROVIDER_STATE", ""),
+            "CH_RENDERING_PROVIDER_ZIP": rendering_address.get("CP_PROVIDER_ZIP", ""),
+            "CH_RENDERING_PROVIDER_ZIP_PLUS_FOUR": rendering_address.get(
                 "CP_PROVIDER_ZIP_PLUS_FOUR", ""
             ),
-            "CH_RENDERING_PROVIDER_PHONE": provider_address.get("CP_PROVIDER_PHONE", ""),
+            "CH_RENDERING_PROVIDER_PHONE": rendering_address.get("CP_PROVIDER_PHONE", ""),
+            "CH_REFERRING_PROVIDER_ENTITY_TYPE": _provider_entity_type(rendering_provider),
+            "CH_REFERRING_PROVIDER_FIRST_NAME": rendering_provider.get(
+                "CP_PROVIDER_FIRST_NAME", ""
+            ),
+            "CH_REFERRING_PROVIDER_LAST_NAME": rendering_provider.get("CP_PROVIDER_LAST_NAME", ""),
         },
     )
     return _complete_source_shape(record, claim_type)
@@ -244,6 +315,7 @@ def _line(
     paid: float,
     provider: Mapping[str, object],
     frequency: str,
+    place_of_service: str,
 ) -> dict[str, object]:
     """Build one EIP/GDF claim-detail row whose payment amounts reconcile.
 
@@ -261,6 +333,7 @@ def _line(
         paid: Payer payment amount.
         provider: Linked provider source record.
         frequency: Parent Claim lifecycle frequency code.
+        place_of_service: Claim-level place-of-service code copied to the line.
 
     Returns:
         One source-shaped claim-detail mapping.
@@ -286,35 +359,31 @@ def _line(
         "CD_RENDERING_PROVIDER_CLIENT_ID": provider["CP_PROVIDER_CLIENT_ID"],
         "CD_RENDERING_PROVIDER_NPI": provider["CP_PROVIDER_NPI"],
         "CD_LINE_ADJUSTMENTS": [],
-        "CD_RENDERING_PROVIDER_ENTITY_TYPE": "",
-        "CD_RENDERING_PROVIDER_FIRST_NAME": "",
-        "CD_RENDERING_PROVIDER_LAST_NAME": "",
-        "CD_RENDERING_PROVIDER_TAXONOMY_CODE": "",
+        "CD_RENDERING_PROVIDER_ENTITY_TYPE": _provider_entity_type(provider),
+        "CD_RENDERING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
+        "CD_RENDERING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
+        "CD_RENDERING_PROVIDER_TAXONOMY_CODE": provider.get("CP_PROVIDER_TAXONOMY_CODE", ""),
         "CH_CLAIM_FILING_INDICATOR_CODE": "",
     }
     if claim_type == "P":
         line.update(
             {
-                "CD_PLACE_OF_SERVICE_CODE": "11",
+                "CD_PLACE_OF_SERVICE_CODE": place_of_service,
                 "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": "HCPCS",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "59",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_03": "GP",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_04": "KX",
-                "CD_RENDERING_PROVIDER_ENTITY_TYPE": (
-                    "P" if provider.get("CP_PROVIDER_RECORD_TYPE") in {"1", "P"} else "E"
-                ),
-                "CD_RENDERING_PROVIDER_FIRST_NAME": provider.get("CP_PROVIDER_FIRST_NAME", ""),
-                "CD_RENDERING_PROVIDER_LAST_NAME": provider.get("CP_PROVIDER_LAST_NAME", ""),
-                "CD_RENDERING_PROVIDER_TAXONOMY_CODE": provider.get(
-                    "CP_PROVIDER_TAXONOMY_CODE", ""
-                ),
+                "CD_SUBMITTED_REVENUE_CODE": "0521",
+                "CD_PAYMENT_METHOD": "CHK",
+                "CD_PAYMENT_STATUS": "VOID" if frequency == "8" else "PAID",
                 "CH_CLAIM_FILING_INDICATOR_CODE": "CI",
             }
         )
     else:
         line.update(
             {
+                "CD_PLACE_OF_SERVICE_CODE": place_of_service,
                 "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER": "HCPCS",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_01": "25",
                 "CD_SUBMITTED_PROCEDURE_MODIFIER_02": "59",
@@ -549,6 +618,47 @@ def _linked_provider(
         return dict(emitted[claim_index % len(emitted)])
     provider_index = claim_index % _entity_count(entity_counts, "provider")
     return generate_provider(seed, provider_index, entity_counts, {}, {}, "provider")
+
+
+def _linked_rendering_provider(
+    seed: int,
+    claim_index: int,
+    entity_counts: Mapping[str, int],
+    related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
+) -> dict[str, object]:
+    """Select an individual provider for rendering and referring roles."""
+    emitted = related_records.get("provider", ()) if related_records else ()
+    for offset in range(len(emitted)):
+        candidate = emitted[(claim_index + offset) % len(emitted)]
+        if _provider_entity_type(candidate) == "P":
+            return dict(candidate)
+    for offset in range(100):
+        candidate = generate_provider(
+            seed,
+            10_000_000 + claim_index + offset,
+            entity_counts,
+            {},
+            {},
+            "provider",
+        )
+        if _provider_entity_type(candidate) == "P":
+            return candidate
+    raise ValueError("Could not generate an individual rendering provider")
+
+
+def _provider_entity_type(provider: Mapping[str, object]) -> str:
+    """Map CDF individual/facility record types to Claim person/entity codes."""
+    return "P" if provider.get("CP_PROVIDER_RECORD_TYPE") in {"1", "P"} else "E"
+
+
+def _diagnoses(claim_type: str, patient_index: int, accident: bool) -> tuple[str, str]:
+    """Return a realistic primary/secondary diagnosis pair for one Claim."""
+    if accident:
+        return ("S93401A", "W010XXA") if claim_type == "P" else ("S72001A", "W010XXA")
+    professional = (("I10", "E785"), ("E119", "I10"), ("M5450", "M62830"))
+    institutional = (("J189", "R0602"), ("K3580", "R109"), ("I509", "R0602"))
+    choices = professional if claim_type == "P" else institutional
+    return choices[patient_index % len(choices)]
 
 
 def _compact_date(value: date) -> str:
