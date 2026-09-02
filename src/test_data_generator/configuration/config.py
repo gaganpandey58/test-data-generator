@@ -63,19 +63,6 @@ class EntityConfig:
 
 
 @dataclass(frozen=True)
-class ClaimFixtureConfig:
-    """Describe one deterministic existing/incoming Claim comparison fixture."""
-
-    name: str
-    claim_type: str
-    claim_frequency: str
-    match: bool
-    existing_timestamps: Mapping[str, str | None]
-    recency: Mapping[str, str]
-    incoming_timestamp: str | None = None
-
-
-@dataclass(frozen=True)
 class RunConfig:
     """Describe the resolved settings needed for one complete generator run.
 
@@ -106,7 +93,6 @@ class RunConfig:
     nppes_organizational_count: int = 0
     nppes_filename: str = "provider_nppes.jsonl"
     provider_linked: bool = False
-    claim_fixtures: tuple[ClaimFixtureConfig, ...] = ()
 
 
 def load_config(path: Path) -> RunConfig:
@@ -236,7 +222,6 @@ def load_config(path: Path) -> RunConfig:
     )
     if not invalid_values_catalog.is_file():
         raise ConfigurationError(f"Invalid-value catalog does not exist: {invalid_values_catalog}")
-    claim_fixtures = _claim_fixture_configs(raw_config.get("claim_fixtures"))
     return RunConfig(
         client=client,
         seed=seed,
@@ -254,7 +239,6 @@ def load_config(path: Path) -> RunConfig:
         nppes_individual_count=nppes_individual_count,
         nppes_organizational_count=nppes_organizational_count,
         provider_linked=provider_linked,
-        claim_fixtures=claim_fixtures,
     )
 
 
@@ -342,7 +326,6 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         "output_directory": raw_config.get("output_directory", "./output"),
         "generation": raw_config.get("generation", {}),
         "provider_nppes": raw_config.get("provider_nppes", {}),
-        "claim_fixtures": raw_config.get("claim_fixtures"),
         "entities": entities,
     }
 
@@ -489,73 +472,6 @@ def _payment_requires_claim_source(entity: str, raw_entity: Mapping[str, object]
 
 
 _CLAIM_FREQUENCY_CODES = ("1", "7", "8")
-_FIXTURE_RECORD_TYPES = frozenset({"837", "ch", "835"})
-_RECENCY_VALUES = frozenset({"NEWER", "SAME", "OLDER"})
-
-
-def _claim_fixture_configs(value: object) -> tuple[ClaimFixtureConfig, ...]:
-    """Normalize explicit Claim recency fixtures after JSON Schema validation."""
-    if value is None:
-        return ()
-    if not isinstance(value, list):
-        raise ConfigurationError("claim_fixtures must be an array")
-    fixtures: list[ClaimFixtureConfig] = []
-    names: set[str] = set()
-    for raw_fixture in value:
-        if not isinstance(raw_fixture, Mapping):
-            raise ConfigurationError("Each claim fixture must be an object")
-        name = raw_fixture.get("name")
-        claim_type = raw_fixture.get("claim_type")
-        claim_frequency = raw_fixture.get("claim_frequency")
-        match = raw_fixture.get("match")
-        existing = raw_fixture.get("existing")
-        recency = raw_fixture.get("recency")
-        incoming_timestamp = raw_fixture.get("incoming_timestamp")
-        if not isinstance(name, str) or not name:
-            raise ConfigurationError("Claim fixture name must be a non-empty string")
-        if name in names:
-            raise ConfigurationError(f"Claim fixture name {name!r} must be unique")
-        names.add(name)
-        if claim_type not in {"P", "I"}:
-            raise ConfigurationError(f"Claim fixture {name!r} must use claim_type P or I")
-        if claim_frequency not in _CLAIM_FREQUENCY_CODES:
-            raise ConfigurationError(f"Claim fixture {name!r} must use claim_frequency 1, 7, or 8")
-        if not isinstance(match, bool):
-            raise ConfigurationError(f"Claim fixture {name!r} match must be boolean")
-        if not isinstance(existing, Mapping) or not isinstance(recency, Mapping):
-            raise ConfigurationError(f"Claim fixture {name!r} existing and recency must be objects")
-        existing_timestamps: dict[str, str | None] = {}
-        for kind, timestamp in existing.items():
-            if timestamp is not None and not isinstance(timestamp, str):
-                raise ConfigurationError(
-                    f"Claim fixture {name!r} existing timestamps must be strings or null"
-                )
-            existing_timestamps[str(kind)] = timestamp
-        recencies = {str(kind): str(relation) for kind, relation in recency.items()}
-        if set(existing_timestamps) != set(recencies):
-            raise ConfigurationError(
-                f"Claim fixture {name!r} must provide one recency for every existing record"
-            )
-        if not set(existing_timestamps).issubset(_FIXTURE_RECORD_TYPES):
-            raise ConfigurationError(
-                f"Claim fixture {name!r} has an unsupported existing record type"
-            )
-        if not set(recencies.values()).issubset(_RECENCY_VALUES):
-            raise ConfigurationError(f"Claim fixture {name!r} has an unsupported recency value")
-        if incoming_timestamp is not None and not isinstance(incoming_timestamp, str):
-            raise ConfigurationError(f"Claim fixture {name!r} incoming_timestamp must be a string")
-        fixtures.append(
-            ClaimFixtureConfig(
-                name=name,
-                claim_type=claim_type,
-                claim_frequency=claim_frequency,
-                match=match,
-                existing_timestamps=existing_timestamps,
-                recency=recencies,
-                incoming_timestamp=incoming_timestamp,
-            )
-        )
-    return tuple(fixtures)
 
 
 def _effective_record_count(

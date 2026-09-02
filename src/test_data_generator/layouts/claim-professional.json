@@ -299,16 +299,6 @@
       "max_length": 255
     },
     {
-      "name": "CH_RECORD_TAG",
-      "type": "text",
-      "max_length": 255
-    },
-    {
-      "name": "CH_RECORD_STATUS",
-      "type": "text",
-      "max_length": 255
-    },
-    {
       "name": "CH_BILLING_PROVIDER_CLAIM_ID",
       "type": "text",
       "max_length": 255
