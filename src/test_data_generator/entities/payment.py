@@ -427,6 +427,7 @@ def derive_payment_from_claim(
     seed: int,
     index: int,
     scenario: str = "MATCHED",
+    changed_fields: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Project one immutable Claim into a source-shaped Payment record."""
     try:
@@ -436,7 +437,7 @@ def derive_payment_from_claim(
     payment = complete_record(deepcopy(claim), source)
     _set_payment_transport(payment, profile, seed, index)
     _copy_claim_lineage(payment, claim)
-    _set_source_payment_defaults(payment, claim, profile, seed, index)
+    _set_source_payment_defaults(payment, claim, profile, seed, index, changed_fields)
     _apply_scenario(payment, claim, profile, scenario, seed, index)
     projected = project_record(payment, profile)
     _validate_payment_record(projected, profile)
@@ -479,6 +480,7 @@ def derive_payments_from_records(
     scenario_counts: Mapping[str, int],
     seed: int,
     limit: int | None = None,
+    claim_changed_fields: Sequence[frozenset[str]] | None = None,
 ) -> list[dict[str, object]]:
     """Derive Payments from already-materialized Claims in scenario order."""
     count = limit if limit is not None else sum(scenario_counts.values())
@@ -496,6 +498,13 @@ def derive_payments_from_records(
     }
     if claim_backed and not claims:
         raise ValueError("Claim-backed Payment scenarios require at least one source Claim")
+    if claim_changed_fields is not None and len(claim_changed_fields) != len(claims):
+        raise ValueError("Claim update metadata must align with the Claim source records")
+    changes_by_record = (
+        {id(claim): changed for claim, changed in zip(claims, claim_changed_fields, strict=True)}
+        if claim_changed_fields is not None
+        else {}
+    )
     records: list[dict[str, object]] = []
     prior_payment_claims: list[Mapping[str, object]] = []
     source_index = 0
@@ -513,7 +522,16 @@ def derive_payments_from_records(
                 )
         for _ in range(scenario_count):
             claim = candidates[source_index % len(candidates)]
-            records.append(derive_payment_from_claim(claim, profile, seed, len(records), scenario))
+            records.append(
+                derive_payment_from_claim(
+                    claim,
+                    profile,
+                    seed,
+                    len(records),
+                    scenario,
+                    changes_by_record.get(id(claim), frozenset()),
+                )
+            )
             prior_payment_claims.append(claim)
             source_index += 1
     records.extend(
@@ -527,7 +545,14 @@ def derive_payments_from_records(
     for reversal_index in range(reversal_count):
         reversal_claim = prior_payment_claims[reversal_index % len(prior_payment_claims)]
         records.append(
-            derive_payment_from_claim(reversal_claim, profile, seed, len(records), "REVERSAL")
+            derive_payment_from_claim(
+                reversal_claim,
+                profile,
+                seed,
+                len(records),
+                "REVERSAL",
+                changes_by_record.get(id(reversal_claim), frozenset()),
+            )
         )
     if len(records) != count:
         raise ValueError(
@@ -582,6 +607,7 @@ def _set_source_payment_defaults(
     profile: str,
     seed: int,
     index: int,
+    changed_fields: frozenset[str] = frozenset(),
 ) -> None:
     """Populate the exact, non-empty 835 field contract from one Claim."""
     claim_type = _PAYMENT_TYPES[profile]
@@ -597,9 +623,18 @@ def _set_source_payment_defaults(
     billing_npi = claim.get("CH_BILLING_PROVIDER_NPI") or "1234567893"
     rendering_npi = claim.get("CH_RENDERING_PROVIDER_NPI") or billing_npi
     billing_tax_id = str(claim.get("CH_BILLING_PROVIDER_FEDERAL_TAX_ID") or "521234567")
-    charge = _number_or_default(claim.get("CH_CHARGE_AMOUNT"), 1000)
-    allowed = _number_or_default(claim.get("CH_ALLOWED_AMOUNT"), round(charge * 0.75))
-    paid = _number_or_default(claim.get("CH_PAID_AMOUNT"), round(allowed * 0.70))
+    source_details = claim.get("CLAIM_DETAIL")
+    source_detail = (
+        source_details[0]
+        if isinstance(source_details, list)
+        and source_details
+        and isinstance(source_details[0], Mapping)
+        else {}
+    )
+    financials = _reconciled_payment_financials(claim, source_detail, changed_fields)
+    charge = financials["charge"]
+    allowed = financials["allowed"]
+    paid = financials["paid"]
     payment.update(
         {
             "CH_DIAGNOSIS_CODE_01": claim.get("CH_DIAGNOSIS_CODE_01") or "I10",
@@ -642,10 +677,10 @@ def _set_source_payment_defaults(
             or f"SUB{index + 1:010d}",
             "CH_CLAIM_PAID_DATE": paid_date,
             "CH_ALLOWED_AMOUNT": allowed,
-            "CH_COINSURANCE_AMOUNT": _number(claim.get("CH_COINSURANCE_AMOUNT")),
-            "CH_COPAY_AMOUNT": _number(claim.get("CH_COPAY_AMOUNT")),
-            "CH_DEDUCTIBLE_AMOUNT": _number(claim.get("CH_DEDUCTIBLE_AMOUNT")),
-            "CH_PATIENT_LIABILITY_AMOUNT": _number(claim.get("CH_PATIENT_LIABILITY_AMOUNT")),
+            "CH_COINSURANCE_AMOUNT": financials["coinsurance"],
+            "CH_COPAY_AMOUNT": financials["copay"],
+            "CH_DEDUCTIBLE_AMOUNT": financials["deductible"],
+            "CH_PATIENT_LIABILITY_AMOUNT": financials["liability"],
             "CH_CLAIM_STATUS_CODE": "1",
             "CH_PAYER_ID": "CHC",
             "CH_PAYEE_TAX_ID": billing_tax_id,
@@ -677,22 +712,14 @@ def _set_source_payment_defaults(
             "PUBLISHER_NAME": claim.get("PUBLISHER_NAME") or "test-data-generator",
         }
     )
-    source_details = claim.get("CLAIM_DETAIL")
-    source_detail = (
-        source_details[0]
-        if isinstance(source_details, list)
-        and source_details
-        and isinstance(source_details[0], Mapping)
-        else {}
-    )
-    line_charge = _number_or_default(source_detail.get("CD_CHARGE_AMOUNT"), charge)
-    line_allowed = _number_or_default(source_detail.get("CD_ALLOWED_AMOUNT"), allowed)
-    line_paid = _number_or_default(source_detail.get("CD_PAID_AMOUNT"), paid)
+    line_charge = charge
+    line_allowed = allowed
+    line_paid = paid
     adjustments = [
         ("CO", "45", max(line_charge - line_allowed, 0)),
-        ("PR", "1", _number(source_detail.get("CD_DEDUCTIBLE_AMOUNT"))),
-        ("PR", "2", _number(source_detail.get("CD_COINSURANCE_AMOUNT"))),
-        ("PR", "3", _number(source_detail.get("CD_COPAY_AMOUNT"))),
+        ("PR", "1", financials["deductible"]),
+        ("PR", "2", financials["coinsurance"]),
+        ("PR", "3", financials["copay"]),
     ]
     adjustments = [adjustment for adjustment in adjustments if adjustment[2] > 0]
     adjustments.extend(("", "", 0) for _ in range(6 - len(adjustments)))
@@ -729,10 +756,10 @@ def _set_source_payment_defaults(
         or ("" if claim_type == "P" else "0510"),
         "CD_LINE_PAID_DATE": paid_date,
         "CD_ALLOWED_AMOUNT": line_allowed,
-        "CD_COINSURANCE_AMOUNT": _number(source_detail.get("CD_COINSURANCE_AMOUNT")),
-        "CD_COPAY_AMOUNT": _number(source_detail.get("CD_COPAY_AMOUNT")),
-        "CD_DEDUCTIBLE_AMOUNT": _number(source_detail.get("CD_DEDUCTIBLE_AMOUNT")),
-        "CD_PATIENT_LIABILITY_AMOUNT": _number(source_detail.get("CD_PATIENT_LIABILITY_AMOUNT")),
+        "CD_COINSURANCE_AMOUNT": financials["coinsurance"],
+        "CD_COPAY_AMOUNT": financials["copay"],
+        "CD_DEDUCTIBLE_AMOUNT": financials["deductible"],
+        "CD_PATIENT_LIABILITY_AMOUNT": financials["liability"],
         "CD_ALLOWED_PROCEDURE_CODE": source_detail.get("CD_ALLOWED_PROCEDURE_CODE")
         or source_detail.get("CD_SUBMITTED_PROCEDURE_CODE")
         or ("99213" if claim_type == "P" else "99223"),
@@ -742,6 +769,94 @@ def _set_source_payment_defaults(
         detail[f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}"] = reason
         detail[f"CD_ADJUSTMENT_AMOUNT_{number}"] = amount
     payment["CLAIM_DETAIL"] = [detail]
+
+
+def _reconciled_payment_financials(
+    claim: Mapping[str, object],
+    detail: Mapping[str, object],
+    changed_fields: frozenset[str],
+) -> dict[str, int | float]:
+    """Project Claim financial changes into a valid, balanced 835 transaction.
+
+    A Claim update is allowed to target an individual financial value.  An 835
+    Payment has stricter arithmetic, so it retains the changed source value
+    when possible and recalculates its dependent payment-only amounts.
+    """
+    charge = _number_or_default(
+        claim.get("CH_CHARGE_AMOUNT"),
+        _number_or_default(detail.get("CD_CHARGE_AMOUNT"), 1000),
+    )
+    allowed = _number_or_default(
+        claim.get("CH_ALLOWED_AMOUNT"),
+        _number_or_default(detail.get("CD_ALLOWED_AMOUNT"), round(charge * 0.75)),
+    )
+    paid = _number_or_default(
+        claim.get("CH_PAID_AMOUNT"),
+        _number_or_default(detail.get("CD_PAID_AMOUNT"), round(allowed * 0.70)),
+    )
+    coinsurance = _number_or_default(
+        claim.get("CH_COINSURANCE_AMOUNT"), _number(detail.get("CD_COINSURANCE_AMOUNT"))
+    )
+    copay = _number_or_default(claim.get("CH_COPAY_AMOUNT"), _number(detail.get("CD_COPAY_AMOUNT")))
+    deductible = _number_or_default(
+        claim.get("CH_DEDUCTIBLE_AMOUNT"), _number(detail.get("CD_DEDUCTIBLE_AMOUNT"))
+    )
+    liability = _number_or_default(
+        claim.get("CH_PATIENT_LIABILITY_AMOUNT"),
+        _number_or_default(
+            detail.get("CD_PATIENT_LIABILITY_AMOUNT"), coinsurance + copay + deductible
+        ),
+    )
+    total_changed = bool(
+        changed_fields.intersection({"CH_PATIENT_LIABILITY_AMOUNT", "CD_PATIENT_LIABILITY_AMOUNT"})
+    )
+    components_changed = bool(
+        changed_fields.intersection(
+            {
+                "CH_COINSURANCE_AMOUNT",
+                "CD_COINSURANCE_AMOUNT",
+                "CH_COPAY_AMOUNT",
+                "CD_COPAY_AMOUNT",
+                "CH_DEDUCTIBLE_AMOUNT",
+                "CD_DEDUCTIBLE_AMOUNT",
+            }
+        )
+    )
+    if total_changed or (not components_changed and liability != coinsurance + copay + deductible):
+        copay, deductible, coinsurance = _allocate_liability(liability, copay, deductible)
+    elif components_changed:
+        liability = coinsurance + copay + deductible
+
+    charge = max(charge, 0)
+    liability = min(max(liability, 0), charge)
+    copay, deductible, coinsurance = _allocate_liability(liability, copay, deductible)
+    paid_changed = bool(changed_fields.intersection({"CH_PAID_AMOUNT", "CD_PAID_AMOUNT"}))
+    allowed_changed = bool(changed_fields.intersection({"CH_ALLOWED_AMOUNT", "CD_ALLOWED_AMOUNT"}))
+    if paid_changed and not allowed_changed:
+        allowed = paid + liability
+    allowed = min(max(allowed, liability), charge)
+    paid = allowed - liability
+    return {
+        "charge": charge,
+        "allowed": allowed,
+        "paid": paid,
+        "coinsurance": coinsurance,
+        "copay": copay,
+        "deductible": deductible,
+        "liability": liability,
+    }
+
+
+def _allocate_liability(
+    liability: int | float, copay: int | float, deductible: int | float
+) -> tuple[int | float, int | float, int | float]:
+    """Allocate total patient liability without producing negative components."""
+    remaining = max(liability, 0)
+    allocated_copay = min(max(copay, 0), remaining)
+    remaining -= allocated_copay
+    allocated_deductible = min(max(deductible, 0), remaining)
+    remaining -= allocated_deductible
+    return allocated_copay, allocated_deductible, remaining
 
 
 def _apply_scenario(

@@ -22,6 +22,7 @@ from test_data_generator.core.engine import (
     build_claim_pair_records,
     build_entity_records,
     run_claim_pair,
+    run_derived_update_records,
     run_entity,
     run_records,
     run_update_entity,
@@ -257,12 +258,13 @@ def generate(config: Path, mode: str = "all") -> None:
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
         _materialize_update_bases(run_config, entity_counts, generated_records)
+        entities_by_name = {entity.name: entity for entity in run_config.entities}
+        propagated_payment_updates: set[str] = set()
         for entity in run_config.entities:
             if entity.name in {"claim_history_professional", "claim_history_institutional"}:
                 continue
-            # Payment creation is derived from Claims, but a Payment update is an
-            # adjudication event.  Do not turn a global Claim update into a
-            # duplicate Payment update; require an explicit local operation.
+            # A Claim update derives its related Payment update below. A direct
+            # Payment operation remains an independent adjudication fixture.
             if (
                 entity.name in {"payment_professional", "payment_institutional"}
                 and "operation" not in entity.update
@@ -341,7 +343,71 @@ def generate(config: Path, mode: str = "all") -> None:
                     f"Update generation failed for entity {entity.name!r}: {error}"
                 ) from error
             print(f"{entity.name}: {entity.count} updates -> {transaction.final_path(output_path)}")
-        _remove_unrequested_payment_updates(run_config)
+            if entity.name in {"claim_professional", "claim_institutional"}:
+                history_name = {
+                    "claim_professional": "claim_history_professional",
+                    "claim_institutional": "claim_history_institutional",
+                }[entity.name]
+                payment_name = {
+                    "claim_professional": "payment_professional",
+                    "claim_institutional": "payment_institutional",
+                }[entity.name]
+                history_entity = entities_by_name.get(history_name)
+                payment_entity = entities_by_name.get(payment_name)
+                if history_entity is None:
+                    raise CommandError(f"Claim stream {entity.name!r} has no Claims History stream")
+                try:
+                    history_bases = generated_records[history_name]
+                    history_path = run_update_records(
+                        history_entity,
+                        history_bases,
+                        run_config.seed,
+                        run_config.update_directory,
+                        request,
+                        entity_rules,
+                    )
+                    updated_history = _read_jsonl_records(history_path)
+                    changed_history_fields = tuple(
+                        _changed_field_names(base, updated)
+                        for base, updated in zip(history_bases, updated_history, strict=True)
+                    )
+                    generated_records[history_name] = updated_history
+                    print(
+                        f"{history_entity.name}: {history_entity.count} updates -> "
+                        f"{transaction.final_path(history_path)}"
+                    )
+                    if payment_entity is None:
+                        continue
+                    payment_records = derive_payments_from_records(
+                        updated_history,
+                        payment_entity.profile,
+                        payment_entity.scenarios,
+                        run_config.seed,
+                        payment_entity.count,
+                        changed_history_fields,
+                    )
+                    payment_path = run_derived_update_records(
+                        payment_entity,
+                        payment_records,
+                        run_config.update_directory,
+                        validate_schema=request.operation
+                        not in {
+                            OperationType.MISSING,
+                            OperationType.EMPTY,
+                            OperationType.INVALID,
+                        },
+                    )
+                except (GenerationError, ValueError) as error:
+                    raise CommandError(
+                        f"Claim update propagation failed for entity {entity.name!r}: {error}"
+                    ) from error
+                generated_records[payment_name] = tuple(payment_records)
+                propagated_payment_updates.add(payment_name)
+                print(
+                    f"{payment_entity.name}: {payment_entity.count} updates -> "
+                    f"{transaction.final_path(payment_path)}"
+                )
+        _remove_unrequested_payment_updates(run_config, propagated_payment_updates)
     _remove_disabled_outputs(run_config)
     transaction.commit()
 
@@ -444,6 +510,32 @@ def _read_jsonl_records(path: Path) -> tuple[Mapping[str, object], ...]:
                 raise CommandError(f"Generated JSONL record in {path} is not an object")
             records.append(value)
     return tuple(records)
+
+
+def _changed_field_names(
+    original: Mapping[str, object], updated: Mapping[str, object]
+) -> frozenset[str]:
+    """Return field names changed between paired source records, including lines."""
+    absent = object()
+    changed: set[str] = set()
+    for field in set(original).union(updated):
+        old = original.get(field, absent)
+        new = updated.get(field, absent)
+        if old is absent or new is absent:
+            changed.add(field)
+        elif isinstance(old, Mapping) and isinstance(new, Mapping):
+            changed.update(_changed_field_names(old, new))
+        elif isinstance(old, list) and isinstance(new, list):
+            if len(old) != len(new):
+                changed.add(field)
+            for old_item, new_item in zip(old, new, strict=False):
+                if isinstance(old_item, Mapping) and isinstance(new_item, Mapping):
+                    changed.update(_changed_field_names(old_item, new_item))
+                elif old_item != new_item:
+                    changed.add(field)
+        elif old != new:
+            changed.add(field)
+    return frozenset(changed)
 
 
 def _payment_claim_history_name(name: str) -> str:
@@ -554,12 +646,12 @@ def _string_tuple(values: dict[str, object], key: str) -> tuple[str, ...]:
     )
 
 
-def _remove_unrequested_payment_updates(run_config: RunConfig) -> None:
-    """Remove stale 835 update fixtures unless their stream requests one."""
+def _remove_unrequested_payment_updates(run_config: RunConfig, propagated: set[str]) -> None:
+    """Remove stale 835 updates unless explicitly or Claim-derived requested."""
     for entity in run_config.entities:
         if entity.name not in {"payment_professional", "payment_institutional"}:
             continue
-        if "operation" in entity.update:
+        if "operation" in entity.update or entity.name in propagated:
             continue
         path = run_config.update_directory / entity.filename.removesuffix(".jsonl")
         path = path.with_suffix(".update.jsonl")

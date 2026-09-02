@@ -112,7 +112,32 @@ def run_records(
     output_directory: Path,
 ) -> Path:
     """Validate and atomically publish already-derived records for one entity."""
-    final_path = resolve_output_path(output_directory, entity.filename)
+    return _publish_records(
+        entity, records, output_directory, entity.filename, validate_schema=True
+    )
+
+
+def run_derived_update_records(
+    entity: EntityConfig,
+    records: Iterable[Mapping[str, object]],
+    output_directory: Path,
+    *,
+    validate_schema: bool,
+) -> Path:
+    """Atomically publish records derived from an already-resolved parent update."""
+    filename = entity.filename.removesuffix(".jsonl") + ".update.jsonl"
+    return _publish_records(entity, records, output_directory, filename, validate_schema)
+
+
+def _publish_records(
+    entity: EntityConfig,
+    records: Iterable[Mapping[str, object]],
+    output_directory: Path,
+    filename: str,
+    validate_schema: bool,
+) -> Path:
+    """Write one record stream atomically using its declared schema when required."""
+    final_path = resolve_output_path(output_directory, filename)
     temporary_path: Path | None = None
     try:
         validator = _load_validator(entity.schema)
@@ -127,10 +152,11 @@ def run_records(
             temporary_path = Path(output_file.name)
             for record in records:
                 normalized = dict(record)
-                try:
-                    validator.validate(normalized)
-                except ValidationError as error:
-                    raise GenerationError(_validation_detail(error)) from error
+                if validate_schema:
+                    try:
+                        validator.validate(normalized)
+                    except ValidationError as error:
+                        raise GenerationError(_validation_detail(error)) from error
                 output_file.write(orjson.dumps(normalized))
                 output_file.write(b"\n")
         return temporary_path.replace(final_path)
