@@ -206,6 +206,50 @@ type `1`, and emits a zero-paid `VOID` Claim. The generator always creates the
 needed original Claim lineage before a replacement or void. A `frequencies`
 map remains available only for an intentionally targeted lifecycle fixture.
 
+### Deterministic Claim recency fixtures
+
+Use `claim_fixtures` to create matching existing and incoming Claim fixtures
+without changing normal Claim generation. The visible comparison field is
+`cotiviti.produced_at`; it is deterministic and never uses the system clock.
+The compact form produces both an existing 837 and Claims History (`CH`) record
+plus an incoming 837 record:
+
+```json
+{
+  "client": "chc",
+  "seed": 20260902,
+  "claim_fixtures": [
+    {"claim_type": "P", "claim_frequency": "7", "recency": "NEWER"},
+    {"claim_type": "I", "claim_frequency": "8", "recency": "OLDER"}
+  ]
+}
+```
+
+`claim_type` is `P` or `I`; `claim_frequency` is `1`, `7`, or `8`; and
+`recency` is `NEWER`, `SAME`, or `OLDER`. Fixture files are written to
+`new-test-data/claim-fixtures/`. Existing 837 records retain `FILE_TYPE`
+`837P` or `837I`; Claims History records use `FILE_TYPE` `CH`.
+
+For explicitly different existing 837 and CH times, use per-record recency and
+timestamps:
+
+```json
+{
+  "name": "replacement-between-existing-records",
+  "claim_type": "P",
+  "claim_frequency": "7",
+  "existing": {
+    "837": "2026-08-20T00:00:00Z",
+    "ch": "2026-08-25T00:00:00Z"
+  },
+  "incoming_timestamp": "2026-08-22T00:00:00Z",
+  "recency": {"837": "NEWER", "ch": "OLDER"}
+}
+```
+
+The existing and incoming records reuse the same Claim identity and lifecycle;
+only transport/event metadata and the configured timestamp differ.
+
 Supported Payment scenarios are `MATCHED`, `REVERSAL`, `REPLACEMENT`, `STALE`,
 and `ORPHAN`. `REPLACEMENT` selects only source Claims whose
 `CH_CLAIM_FREQUENCY_CODE` is `7`; `REVERSAL` sets `CLP02` to `22`; `STALE`
@@ -485,4 +529,3 @@ src/test_data_generator/
 - Data is test and intended for development, integration, and processing exercises; the generator produces matching/survivorship fixtures but is not a production matching or adjudication engine.
 - Provider, member, professional claim, and institutional claim are the currently supported entity streams.
 - Update generation is layered after creation generation; operation rules are reusable across supported entity streams.
-
