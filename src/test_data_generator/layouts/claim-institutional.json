@@ -2994,6 +2994,16 @@
       "max_length": 255
     },
     {
+      "name": "CH_RECORD_TAG",
+      "type": "text",
+      "max_length": 255
+    },
+    {
+      "name": "CH_RECORD_STATUS",
+      "type": "text",
+      "max_length": 255
+    },
+    {
       "name": "CH_MEDICARE_NON_PAYMENT_REASON_CODE",
       "type": "text",
       "max_length": 255

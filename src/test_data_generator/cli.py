@@ -29,6 +29,7 @@ from test_data_generator.core.engine import (
     run_update_records,
 )
 from test_data_generator.core.errors import ConfigurationError, GenerationError
+from test_data_generator.entities.claim_fixtures import write_claim_fixtures
 from test_data_generator.entities.payment import (
     derive_payments_from_claims,
     derive_payments_from_records,
@@ -255,6 +256,18 @@ def generate(config: Path, mode: str = "all") -> None:
                 f"provider_nppes: {run_config.nppes_count} records -> "
                 f"{transaction.final_path(nppes_path)}"
             )
+        if run_config.claim_fixtures:
+            try:
+                fixture_paths = write_claim_fixtures(
+                    run_config.creation_directory,
+                    run_config.claim_fixtures,
+                    run_config.seed,
+                    entity_counts,
+                )
+            except ValueError as error:
+                raise CommandError(f"Claim fixture generation failed: {error}") from error
+            for fixture_name, fixture_path in fixture_paths.items():
+                print(f"claim fixture {fixture_name} -> {transaction.final_path(fixture_path)}")
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
         _materialize_update_bases(run_config, entity_counts, generated_records)
@@ -684,6 +697,12 @@ def _remove_disabled_outputs(run_config: RunConfig) -> None:
         for path in paths:
             if path.is_file() or path.is_symlink():
                 path.unlink()
+    if not run_config.claim_fixtures:
+        fixture_directory = run_config.creation_directory / "claim-fixtures"
+        if fixture_directory.is_symlink():
+            fixture_directory.unlink()
+        elif fixture_directory.is_dir():
+            shutil.rmtree(fixture_directory)
 
 
 def main() -> int:

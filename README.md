@@ -206,6 +206,45 @@ type `1`, and emits a zero-paid `VOID` Claim. The generator always creates the
 needed original Claim lineage before a replacement or void. A `frequencies`
 map remains available only for an intentionally targeted lifecycle fixture.
 
+### Deterministic Claim recency fixtures
+
+Use `claim_fixtures` when a test needs paired existing and incoming records with
+an explicit claim type, lifecycle, match state, and time relationship. Fixtures
+are written below `new-test-data/claim-fixtures/`. The timestamp used for every
+comparison is the visible `cotiviti.produced_at` value; it is deterministic and
+never derived from the system clock.
+
+```json
+{
+  "client": "chc",
+  "seed": 20260902,
+  "claim_fixtures": [
+    {
+      "name": "professional-replacement",
+      "claim_type": "P",
+      "claim_frequency": "7",
+      "match": true,
+      "existing": {
+        "837": "2026-08-20T00:00:00Z",
+        "ch": "2026-08-25T00:00:00Z"
+      },
+      "incoming_timestamp": "2026-08-22T00:00:00Z",
+      "recency": {"837": "NEWER", "ch": "OLDER"}
+    }
+  ]
+}
+```
+
+`claim_type` is `P` or `I`; `claim_frequency` is `1`, `7`, or `8`; and each
+recency value is `NEWER`, `SAME`, or `OLDER`. Existing record keys may be
+`837`, `ch`, or `835`. `ch` means the existing Claims History record: it keeps
+the matching 837P/837I envelope and is marked `CH_RECORD_TAG = "CH Verified"`.
+No separate CH file type is generated. Use `null` for an existing timestamp to
+let the generator derive it from the requested relationship. For a matching
+fixture, Claim identity and lineage are reused; for an unmatched fixture,
+deterministic unrelated Claim identity is generated. Every fixture produces one
+`*.incoming.jsonl` and one `*.existing_<type>.jsonl` file.
+
 Supported Payment scenarios are `MATCHED`, `REVERSAL`, `REPLACEMENT`, `STALE`,
 and `ORPHAN`. `REPLACEMENT` selects only source Claims whose
 `CH_CLAIM_FREQUENCY_CODE` is `7`; `REVERSAL` sets `CLP02` to `22`; `STALE`
