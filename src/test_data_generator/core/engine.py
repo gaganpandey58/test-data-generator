@@ -93,7 +93,6 @@ def build_claim_pair_records(
         history_record = _build_record(
             claim_entity, seed, index, counts, generate_record, related_records
         )
-        history_records.append(history_record)
         current_claim = deepcopy(history_record)
         blank_identifiers = (
             ("CH_CLIENT_CLAIM_UNIQUE_ID",)
@@ -103,6 +102,11 @@ def build_claim_pair_records(
         for field in blank_identifiers:
             current_claim[field] = ""
         claim_records.append(current_claim)
+        # Claims History is the existing-claim (CH) stream. It shares the
+        # Claim layout and business attributes with its paired 837 record but
+        # has its own envelope file type.
+        history_record["FILE_TYPE"] = "CH"
+        history_records.append(history_record)
     return claim_records, history_records
 
 

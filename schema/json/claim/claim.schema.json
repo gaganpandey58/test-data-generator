@@ -31,7 +31,7 @@
       ],
       "properties": {
         "FILE_TYPE": {
-          "const": "837P"
+          "enum": ["837P", "CH"]
         },
         "CH_CLAIM_TYPE": {
           "const": "P"
@@ -131,7 +131,7 @@
           "format": "uuid"
         },
         "FILE_TYPE": {
-          "const": "837I"
+          "enum": ["837I", "CH"]
         },
         "CH_CLAIM_TYPE": {
           "const": "I"
