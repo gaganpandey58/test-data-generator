@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from random import Random
 
 from test_data_generator.configuration.profiles import record_header_values
+from test_data_generator.core.dates import current_ingestion_date
 from test_data_generator.core.identifiers import deterministic_uuid4, valid_phone_number
 from test_data_generator.entities.member import generate_record as generate_member
 from test_data_generator.entities.provider import generate_record as generate_provider
@@ -179,7 +180,7 @@ def generate_record(
             "CH_CMS_CLAIM_QUERY_CODE": _query_code(frequency),
             "CH_RECORD_TAG": "CH Verified" if index % 2 else "837 Provisional",
             "CH_RECORD_STATUS": "Active" if index % 2 else "New",
-            "CH_SOURCE_UPDATED_AT": "20260805",
+            "CH_SOURCE_UPDATED_AT": current_ingestion_date(),
             "CH_PAYMENT_CLAIM_ID": claim_id,
             "CLAIM_DETAIL": [
                 _line(
@@ -499,7 +500,7 @@ def _transport_headers(
     )
     headers: dict[str, object] = {
         "FILE_TYPE": file_type,
-        "INGESTION_DATE": "20260805",
+        "INGESTION_DATE": current_ingestion_date(),
         "INGESTION_EPOCH": 1785888000 + sequence,
         "DATA_CATEGORY": "MEDICAL_CLAIMS",
         "GDF_VERSION": "v2.9",

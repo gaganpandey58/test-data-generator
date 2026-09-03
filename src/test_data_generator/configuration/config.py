@@ -23,6 +23,7 @@ from test_data_generator.configuration.profiles import (
     load_client_headers,
     load_client_values,
 )
+from test_data_generator.core.dates import current_ingestion_date
 from test_data_generator.core.errors import ConfigurationError
 from test_data_generator.layouts import available_profiles, load_layout
 
@@ -61,8 +62,8 @@ class EntityConfig:
     source_claims: Path | None = None
     scenarios: Mapping[str, int] = field(default_factory=dict)
     claim_lifecycles: tuple[tuple[str, int | None], ...] = ()
-    ingestion_date: str = "20260805"
-    update_ingestion_date: str = "20260805"
+    ingestion_date: str = field(default_factory=current_ingestion_date)
+    update_ingestion_date: str = field(default_factory=current_ingestion_date)
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,15 @@ class IngestionDateConfig:
 
     existing_date: str
     update_relationship: str
-    overrides: Mapping[str, str]
+    overrides: Mapping[str, "IngestionDateOverride"]
+
+
+@dataclass(frozen=True)
+class IngestionDateOverride:
+    """Optional per-group creation date and incoming-date relationship."""
+
+    existing_date: str | None = None
+    update_relationship: str | None = None
 
 
 @dataclass(frozen=True)
@@ -212,7 +221,7 @@ def load_config(path: Path) -> RunConfig:
                 claim_lifecycles=_claim_lifecycles(
                     name, raw_entity, record_count, seed, raw_entities
                 ),
-                ingestion_date=ingestion_dates.existing_date,
+                ingestion_date=_creation_ingestion_date(name, ingestion_dates),
                 update_ingestion_date=_update_ingestion_date(name, ingestion_dates),
             )
         )
@@ -506,10 +515,10 @@ def _ingestion_date_config(generation: Mapping[str, object]) -> IngestionDateCon
     """Parse the opt-in existing/update ingestion-date relationship settings."""
     value = generation.get("ingestion_dates")
     if value is None:
-        return IngestionDateConfig("20260805", "SAME", {})
+        return IngestionDateConfig(current_ingestion_date(), "SAME", {})
     if not isinstance(value, Mapping):
         raise ConfigurationError("generation.ingestion_dates must be an object")
-    existing = value.get("existing", "20260805")
+    existing = value.get("existing", current_ingestion_date())
     relationship = value.get("update", "SAME")
     overrides = value.get("overrides", {})
     if not isinstance(existing, str):
@@ -519,29 +528,61 @@ def _ingestion_date_config(generation: Mapping[str, object]) -> IngestionDateCon
         raise ConfigurationError("generation.ingestion_dates.update must be SAME, NEWER, or OLDER")
     if not isinstance(overrides, Mapping):
         raise ConfigurationError("generation.ingestion_dates.overrides must be an object")
-    normalized_overrides: dict[str, str] = {}
+    normalized_overrides: dict[str, IngestionDateOverride] = {}
     for group, override in overrides.items():
         if group not in {"member", "provider", "claims", "claims_history", "payments"}:
             raise ConfigurationError(f"Unsupported ingestion-date entity group {group!r}")
-        if override not in _INGESTION_RELATIONSHIPS:
+        if isinstance(override, str):
+            if override not in _INGESTION_RELATIONSHIPS:
+                raise ConfigurationError(
+                    f"Ingestion-date override for {group!r} must be SAME, NEWER, or OLDER"
+                )
+            normalized_overrides[str(group)] = IngestionDateOverride(update_relationship=override)
+            continue
+        if not isinstance(override, Mapping):
             raise ConfigurationError(
-                f"Ingestion-date override for {group!r} must be SAME, NEWER, or OLDER"
+                f"Ingestion-date override for {group!r} must be a relationship or an object"
             )
-        normalized_overrides[str(group)] = str(override)
+        override_existing = override.get("existing")
+        override_relationship = override.get("update")
+        if override_existing is not None:
+            if not isinstance(override_existing, str):
+                raise ConfigurationError(
+                    f"Ingestion-date existing override for {group!r} must be YYYYMMDD"
+                )
+            _parse_ingestion_date(override_existing)
+        if (
+            override_relationship is not None
+            and override_relationship not in _INGESTION_RELATIONSHIPS
+        ):
+            raise ConfigurationError(
+                f"Ingestion-date update override for {group!r} must be SAME, NEWER, or OLDER"
+            )
+        normalized_overrides[str(group)] = IngestionDateOverride(
+            existing_date=override_existing,
+            update_relationship=cast(str | None, override_relationship),
+        )
     return IngestionDateConfig(existing, str(relationship), normalized_overrides)
 
 
 def _update_ingestion_date(entity: str, config: IngestionDateConfig) -> str:
     """Return the configured incoming date for one internal entity stream."""
     group = _INGESTION_ENTITY_GROUPS.get(entity)
-    relationship = (
-        config.overrides.get(group, config.update_relationship)
-        if group is not None
-        else config.update_relationship
+    override = config.overrides.get(group) if group is not None else None
+    relationship = override.update_relationship if override else None
+    existing_value = (
+        override.existing_date if override and override.existing_date else config.existing_date
     )
-    existing = _parse_ingestion_date(config.existing_date)
-    offset = {"OLDER": -1, "SAME": 0, "NEWER": 1}[relationship]
+    existing = _parse_ingestion_date(existing_value)
+    offset = {"OLDER": -1, "SAME": 0, "NEWER": 1}[relationship or config.update_relationship]
     return (existing + timedelta(days=offset)).strftime("%Y%m%d")
+
+
+def _creation_ingestion_date(entity: str, config: IngestionDateConfig) -> str:
+    """Return the configured creation date for one internal entity stream."""
+    group = _INGESTION_ENTITY_GROUPS.get(entity)
+    override = config.overrides.get(group) if group is not None else None
+    return override.existing_date if override and override.existing_date else config.existing_date
 
 
 def _parse_ingestion_date(value: str) -> datetime:

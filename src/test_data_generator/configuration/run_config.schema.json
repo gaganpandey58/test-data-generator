@@ -65,11 +65,11 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "member": {"enum": ["SAME", "NEWER", "OLDER"]},
-                "provider": {"enum": ["SAME", "NEWER", "OLDER"]},
-                "claims": {"enum": ["SAME", "NEWER", "OLDER"]},
-                "claims_history": {"enum": ["SAME", "NEWER", "OLDER"]},
-                "payments": {"enum": ["SAME", "NEWER", "OLDER"]}
+                "member": {"$ref": "#/$defs/ingestion_date_override"},
+                "provider": {"$ref": "#/$defs/ingestion_date_override"},
+                "claims": {"$ref": "#/$defs/ingestion_date_override"},
+                "claims_history": {"$ref": "#/$defs/ingestion_date_override"},
+                "payments": {"$ref": "#/$defs/ingestion_date_override"}
               }
             }
           }
@@ -128,6 +128,20 @@
       "allOf": [
         {"$ref": "#/$defs/entity"},
         {"anyOf": [{"required": ["count"]}, {"required": ["nppes"]}, {"required": ["cdf"]}]}
+      ]
+    },
+    "ingestion_date_override": {
+      "oneOf": [
+        {"enum": ["SAME", "NEWER", "OLDER"]},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existing": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "update": {"enum": ["SAME", "NEWER", "OLDER"]}
+          },
+          "minProperties": 1
+        }
       ]
     },
     "counted_entity": {

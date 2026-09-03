@@ -11,6 +11,7 @@ from random import Random
 from faker import Faker
 
 from test_data_generator.configuration.profiles import record_header_values
+from test_data_generator.core.dates import current_ingestion_date
 from test_data_generator.core.identifiers import (
     deterministic_uuid4,
     run_token,
@@ -108,7 +109,7 @@ def generate_record(
             "CP_PROVIDER_RECORD_START_DATE": start,
             "CP_PROVIDER_RECORD_END_DATE": "",
             "CP_PROVIDER_SOURCE_RECORD_TAG": "MR Verified" if index % 2 else "Provider Roster",
-            "CP_PROVIDER_SOURCE_UPDATED_AT": "20260805",
+            "CP_PROVIDER_SOURCE_UPDATED_AT": current_ingestion_date(),
             "CP_PROVIDER_ADDRESSES": [
                 _address(
                     provider_id,
@@ -277,7 +278,7 @@ def _transport_headers(
         "GDF_VERSION": "gdf-ppc-v1",
         "FILE_TYPE": "PR",
         "DATA_CATEGORY": "provider",
-        "INGESTION_DATE": "20260805",
+        "INGESTION_DATE": current_ingestion_date(),
         "INGESTION_EPOCH": 1785888000 + sequence,
     }
     headers.update(record_header_values("provider", client_headers or {}))

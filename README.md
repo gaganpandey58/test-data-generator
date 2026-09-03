@@ -208,22 +208,22 @@ map remains available only for an intentionally targeted lifecycle fixture.
 
 ### Ingestion-date relationship scenarios
 
-The default output remains unchanged: both creation and update rows use
-`20260805`. To opt in to date relationship fixtures, configure one existing
-date and the requested relationship for update rows. `NEWER` and `OLDER` are
-one calendar day after or before the existing date; `SAME` reuses it.
+Without this setting, both creation and update rows use the date of the run.
+To produce repeatable date fixtures, configure an explicit existing date and
+the requested relationship for update rows. `NEWER` and `OLDER` are one
+calendar day after or before the existing date; `SAME` reuses it.
 
 ```json
 {
   "generation": {
     "ingestion_dates": {
-      "existing": "20260820",
       "update": "NEWER",
       "overrides": {
         "member": "SAME",
         "provider": "OLDER",
-        "claims_history": "SAME",
-        "payments": "OLDER"
+        "claims": {"existing": "<YYYYMMDD>", "update": "NEWER"},
+        "claims_history": {"existing": "<YYYYMMDD>", "update": "SAME"},
+        "payments": {"existing": "<YYYYMMDD>", "update": "OLDER"}
       }
     }
   }
@@ -231,9 +231,12 @@ one calendar day after or before the existing date; `SAME` reuses it.
 ```
 
 The supported override groups are `member`, `provider`, `claims`,
-`claims_history`, and `payments`. The shared engine applies the configured
-creation date to every selected stream and the incoming date to normal updates,
-propagated Claims History updates, and Claim-derived Payment updates.
+`claims_history`, and `payments`. The original string form controls only the
+incoming relationship. The object form independently overrides both the
+creation date (`existing`) and incoming relationship (`update`), which is useful
+when Claims, Claims History, and Payments need distinct dates. The shared engine
+applies these values to normal updates, propagated Claims History updates, and
+Claim-derived Payment updates.
 
 For a targeted Claim lifecycle instead of seed-selected frequencies, set
 `claim_frequency` on a Claim stream:

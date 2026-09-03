@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from test_data_generator.core.dates import current_ingestion_date
 from test_data_generator.core.identifiers import deterministic_uuid4
 from test_data_generator.entities.claim import generate_record as generate_claim
 from test_data_generator.layouts import project_record
@@ -708,7 +709,7 @@ def _set_source_payment_defaults(
             "GDF_VERSION": claim.get("GDF_VERSION") or "v2.9",
             "DATA_CATEGORY": "CLAIMS_PAYMENT",
             "LOB": claim.get("LOB") or "COMMERCIAL",
-            "INGESTION_DATE": claim.get("INGESTION_DATE") or "20260805",
+            "INGESTION_DATE": claim.get("INGESTION_DATE") or current_ingestion_date(),
             "PUBLISHER_NAME": claim.get("PUBLISHER_NAME") or "test-data-generator",
         }
     )

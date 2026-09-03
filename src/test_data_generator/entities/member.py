@@ -12,6 +12,7 @@ from random import Random
 from faker import Faker
 
 from test_data_generator.configuration.profiles import record_header_values
+from test_data_generator.core.dates import current_ingestion_date
 from test_data_generator.core.identifiers import (
     deterministic_uuid4,
     run_token,
@@ -97,7 +98,7 @@ def generate_record(
             "CM_MEMBER_RECORD_END_DATE": "",
             "CM_MEMBER_SOURCE_RECORD_TAG": "MR Verified" if index % 2 else "834 Provisional",
             "CM_MEMBER_RECORD_STATUS": "Active" if index % 2 else "New",
-            "CM_MEMBER_SOURCE_UPDATED_AT": "20260805",
+            "CM_MEMBER_SOURCE_UPDATED_AT": current_ingestion_date(),
             "CM_MEMBER_ADDRESSES": [
                 _address(
                     index,
@@ -183,7 +184,7 @@ def _transport_headers(
         "GDF_VERSION": "gdf-ppc-v1",
         "FILE_TYPE": "834",
         "DATA_CATEGORY": "member",
-        "INGESTION_DATE": "20260805",
+        "INGESTION_DATE": current_ingestion_date(),
         "INGESTION_EPOCH": 1785888000 + sequence,
     }
     headers.update(record_header_values("member", client_headers or {}))
