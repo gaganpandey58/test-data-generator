@@ -10,6 +10,7 @@ and relationships before generation can begin.
 import json
 import secrets
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from importlib.resources import files
 from pathlib import Path, PureWindowsPath
 from random import Random
@@ -60,6 +61,17 @@ class EntityConfig:
     source_claims: Path | None = None
     scenarios: Mapping[str, int] = field(default_factory=dict)
     claim_lifecycles: tuple[tuple[str, int | None], ...] = ()
+    ingestion_date: str = "20260805"
+    update_ingestion_date: str = "20260805"
+
+
+@dataclass(frozen=True)
+class IngestionDateConfig:
+    """Resolve creation and update ingestion dates for configured entity groups."""
+
+    existing_date: str
+    update_relationship: str
+    overrides: Mapping[str, str]
 
 
 @dataclass(frozen=True)
@@ -129,6 +141,7 @@ def load_config(path: Path) -> RunConfig:
         raise ConfigurationError(f"Invalid configuration: unknown client profile {client!r}")
 
     generation_config = generation if isinstance(generation, dict) else {}
+    ingestion_dates = _ingestion_date_config(generation_config)
     creation_config = generation_config.get("creation", {})
     creation_directory = _output_subdirectory(
         output_directory,
@@ -199,6 +212,8 @@ def load_config(path: Path) -> RunConfig:
                 claim_lifecycles=_claim_lifecycles(
                     name, raw_entity, record_count, seed, raw_entities
                 ),
+                ingestion_date=ingestion_dates.existing_date,
+                update_ingestion_date=_update_ingestion_date(name, ingestion_dates),
             )
         )
     _validate_unique_filenames(entities)
@@ -369,6 +384,8 @@ def _selected_entity(
         result["scenarios"] = selection["scenarios"]
     if "frequencies" in selection:
         result["frequencies"] = selection["frequencies"]
+    if "claim_frequency" in selection:
+        result["claim_frequency"] = selection["claim_frequency"]
     if "layout" in selection:
         result["profile"] = selection["layout"]
     output_order = selection.get("output_order")
@@ -472,6 +489,67 @@ def _payment_requires_claim_source(entity: str, raw_entity: Mapping[str, object]
 
 
 _CLAIM_FREQUENCY_CODES = ("1", "7", "8")
+_INGESTION_RELATIONSHIPS = frozenset({"SAME", "NEWER", "OLDER"})
+_INGESTION_ENTITY_GROUPS = {
+    "member": "member",
+    "provider": "provider",
+    "claim_professional": "claims",
+    "claim_institutional": "claims",
+    "claim_history_professional": "claims_history",
+    "claim_history_institutional": "claims_history",
+    "payment_professional": "payments",
+    "payment_institutional": "payments",
+}
+
+
+def _ingestion_date_config(generation: Mapping[str, object]) -> IngestionDateConfig:
+    """Parse the opt-in existing/update ingestion-date relationship settings."""
+    value = generation.get("ingestion_dates")
+    if value is None:
+        return IngestionDateConfig("20260805", "SAME", {})
+    if not isinstance(value, Mapping):
+        raise ConfigurationError("generation.ingestion_dates must be an object")
+    existing = value.get("existing", "20260805")
+    relationship = value.get("update", "SAME")
+    overrides = value.get("overrides", {})
+    if not isinstance(existing, str):
+        raise ConfigurationError("generation.ingestion_dates.existing must be YYYYMMDD")
+    _parse_ingestion_date(existing)
+    if relationship not in _INGESTION_RELATIONSHIPS:
+        raise ConfigurationError("generation.ingestion_dates.update must be SAME, NEWER, or OLDER")
+    if not isinstance(overrides, Mapping):
+        raise ConfigurationError("generation.ingestion_dates.overrides must be an object")
+    normalized_overrides: dict[str, str] = {}
+    for group, override in overrides.items():
+        if group not in {"member", "provider", "claims", "claims_history", "payments"}:
+            raise ConfigurationError(f"Unsupported ingestion-date entity group {group!r}")
+        if override not in _INGESTION_RELATIONSHIPS:
+            raise ConfigurationError(
+                f"Ingestion-date override for {group!r} must be SAME, NEWER, or OLDER"
+            )
+        normalized_overrides[str(group)] = str(override)
+    return IngestionDateConfig(existing, str(relationship), normalized_overrides)
+
+
+def _update_ingestion_date(entity: str, config: IngestionDateConfig) -> str:
+    """Return the configured incoming date for one internal entity stream."""
+    group = _INGESTION_ENTITY_GROUPS.get(entity)
+    relationship = (
+        config.overrides.get(group, config.update_relationship)
+        if group is not None
+        else config.update_relationship
+    )
+    existing = _parse_ingestion_date(config.existing_date)
+    offset = {"OLDER": -1, "SAME": 0, "NEWER": 1}[relationship]
+    return (existing + timedelta(days=offset)).strftime("%Y%m%d")
+
+
+def _parse_ingestion_date(value: str) -> datetime:
+    """Validate the compact date contract used by all entity schemas."""
+    try:
+        return datetime.strptime(value, "%Y%m%d")
+    except ValueError as error:
+        raise ConfigurationError("INGESTION_DATE must be a valid YYYYMMDD value") from error
 
 
 def _effective_record_count(
@@ -514,14 +592,23 @@ def _claim_lifecycles(
 ) -> tuple[tuple[str, int | None], ...]:
     """Resolve Claim lifecycles with deterministic random default frequencies."""
     value = raw_entity.get("frequencies")
+    explicit_frequency = raw_entity.get("claim_frequency")
     if entity in {"claim_history_professional", "claim_history_institutional"}:
         return ()
     if entity not in {"claim_professional", "claim_institutional"}:
         if value is not None:
             raise ConfigurationError("frequencies is supported only for Claim streams")
+        if explicit_frequency is not None:
+            raise ConfigurationError("claim_frequency is supported only for Claim streams")
         return ()
     if not isinstance(count, int) or isinstance(count, bool) or count < 0:
         raise ConfigurationError(f"Claim count for {entity!r} must be a non-negative integer")
+    if explicit_frequency is not None:
+        if value is not None:
+            raise ConfigurationError("claim_frequency cannot be combined with frequencies")
+        if explicit_frequency not in _CLAIM_FREQUENCY_CODES:
+            raise ConfigurationError("claim_frequency must be 1, 7, or 8")
+        return tuple((str(explicit_frequency), index) for index in range(count))
     if value is None:
         codes = _random_claim_frequencies(entity, count, seed, raw_entities)
     else:

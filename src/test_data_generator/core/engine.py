@@ -117,7 +117,12 @@ def run_records(
 ) -> Path:
     """Validate and atomically publish already-derived records for one entity."""
     return _publish_records(
-        entity, records, output_directory, entity.filename, validate_schema=True
+        entity,
+        records,
+        output_directory,
+        entity.filename,
+        validate_schema=True,
+        ingestion_date=entity.ingestion_date,
     )
 
 
@@ -130,7 +135,14 @@ def run_derived_update_records(
 ) -> Path:
     """Atomically publish records derived from an already-resolved parent update."""
     filename = entity.filename.removesuffix(".jsonl") + ".update.jsonl"
-    return _publish_records(entity, records, output_directory, filename, validate_schema)
+    return _publish_records(
+        entity,
+        records,
+        output_directory,
+        filename,
+        validate_schema,
+        entity.update_ingestion_date,
+    )
 
 
 def _publish_records(
@@ -139,6 +151,7 @@ def _publish_records(
     output_directory: Path,
     filename: str,
     validate_schema: bool,
+    ingestion_date: str,
 ) -> Path:
     """Write one record stream atomically using its declared schema when required."""
     final_path = resolve_output_path(output_directory, filename)
@@ -156,6 +169,7 @@ def _publish_records(
             temporary_path = Path(output_file.name)
             for record in records:
                 normalized = dict(record)
+                normalized["INGESTION_DATE"] = ingestion_date
                 if validate_schema:
                     try:
                         validator.validate(normalized)
@@ -212,6 +226,7 @@ def run_update_records(
                 resolved = resolve_update(base_record, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
                 validate_update_contract(base_record, updated, request, resolved, rules)
+                updated["INGESTION_DATE"] = entity.update_ingestion_date
                 if request.operation not in {
                     OperationType.MISSING,
                     OperationType.EMPTY,

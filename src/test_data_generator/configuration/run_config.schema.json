@@ -54,6 +54,25 @@
               }
             }
           }
+        },
+        "ingestion_dates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existing": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "update": {"enum": ["SAME", "NEWER", "OLDER"]},
+            "overrides": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "member": {"enum": ["SAME", "NEWER", "OLDER"]},
+                "provider": {"enum": ["SAME", "NEWER", "OLDER"]},
+                "claims": {"enum": ["SAME", "NEWER", "OLDER"]},
+                "claims_history": {"enum": ["SAME", "NEWER", "OLDER"]},
+                "payments": {"enum": ["SAME", "NEWER", "OLDER"]}
+              }
+            }
+          }
         }
       }
     },
@@ -185,7 +204,8 @@
             "7": {"type": "integer", "minimum": 0, "maximum": 1000000},
             "8": {"type": "integer", "minimum": 0, "maximum": 1000000}
           }
-        }
+        },
+        "claim_frequency": {"enum": ["1", "7", "8"]}
       }
     }
   }

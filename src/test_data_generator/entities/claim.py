@@ -75,6 +75,10 @@ def generate_record(
     diagnosis_1, diagnosis_2 = _diagnoses(claim_type, patient_index, bool(accident_date))
     place_of_service = randomizer.choice(("11", "22", "23") if claim_type == "P" else ("21", "31"))
     charge = randomizer.randrange(120, 1_201)
+    if frequency == "7":
+        # A replacement must represent a real revision of its original Claim,
+        # not merely a new lifecycle label on identical service detail.
+        charge += 25
     allowed = round(charge * 0.75)
     copay = min(30, allowed)
     deductible = round((allowed - copay) * 0.1)

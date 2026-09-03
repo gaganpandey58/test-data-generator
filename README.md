@@ -206,6 +206,51 @@ type `1`, and emits a zero-paid `VOID` Claim. The generator always creates the
 needed original Claim lineage before a replacement or void. A `frequencies`
 map remains available only for an intentionally targeted lifecycle fixture.
 
+### Ingestion-date relationship scenarios
+
+The default output remains unchanged: both creation and update rows use
+`20260805`. To opt in to date relationship fixtures, configure one existing
+date and the requested relationship for update rows. `NEWER` and `OLDER` are
+one calendar day after or before the existing date; `SAME` reuses it.
+
+```json
+{
+  "generation": {
+    "ingestion_dates": {
+      "existing": "20260820",
+      "update": "NEWER",
+      "overrides": {
+        "member": "SAME",
+        "provider": "OLDER",
+        "claims_history": "SAME",
+        "payments": "OLDER"
+      }
+    }
+  }
+}
+```
+
+The supported override groups are `member`, `provider`, `claims`,
+`claims_history`, and `payments`. The shared engine applies the configured
+creation date to every selected stream and the incoming date to normal updates,
+propagated Claims History updates, and Claim-derived Payment updates.
+
+For a targeted Claim lifecycle instead of seed-selected frequencies, set
+`claim_frequency` on a Claim stream:
+
+```json
+{
+  "claims": {
+    "professional": {"count": 1, "claim_frequency": "7"}
+  }
+}
+```
+
+`claim_frequency` accepts `1`, `7`, or `8` and cannot be combined with the
+existing `frequencies` distribution. Re-running the same seeded Claim from
+frequency `1` to `7` retains its root identity while producing revised claim
+and line charge amounts.
+
 Supported Payment scenarios are `MATCHED`, `REVERSAL`, `REPLACEMENT`, `STALE`,
 and `ORPHAN`. `REPLACEMENT` selects only source Claims whose
 `CH_CLAIM_FREQUENCY_CODE` is `7`; `REVERSAL` sets `CLP02` to `22`; `STALE`
@@ -485,4 +530,3 @@ src/test_data_generator/
 - Data is test and intended for development, integration, and processing exercises; the generator produces matching/survivorship fixtures but is not a production matching or adjudication engine.
 - Provider, member, professional claim, and institutional claim are the currently supported entity streams.
 - Update generation is layered after creation generation; operation rules are reusable across supported entity streams.
-
