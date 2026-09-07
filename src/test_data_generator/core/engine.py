@@ -94,12 +94,7 @@ def build_claim_pair_records(
             claim_entity, seed, index, counts, generate_record, related_records
         )
         current_claim = deepcopy(history_record)
-        blank_identifiers = (
-            ("CH_CLIENT_CLAIM_UNIQUE_ID",)
-            if claim_entity.profile == "claim-professional"
-            else _CLAIM_HISTORY_IDENTIFIER_FIELDS
-        )
-        for field in blank_identifiers:
+        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
             current_claim[field] = ""
         claim_records.append(current_claim)
         # Claims History is the existing-claim (CH) stream. It shares the
@@ -225,6 +220,9 @@ def run_update_records(
                 base_record = dict(base)
                 resolved = resolve_update(base_record, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
+                if entity.name in {"claim_professional", "claim_institutional"}:
+                    for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+                        updated[field] = ""
                 validate_update_contract(base_record, updated, request, resolved, rules)
                 updated["INGESTION_DATE"] = entity.update_ingestion_date
                 if request.operation not in {

@@ -14,9 +14,13 @@ def validate_update_contract(
     rules: EntityRules,
 ) -> None:
     """Ensure an update changes only what its operation allows."""
+    explicitly_updated_keys = set(resolved.changed_fields).intersection(rules.keys)
     if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         for key in rules.keys:
-            if base.get(key) != updated.get(key):
+            if (
+                _find_field(base, key) != _find_field(updated, key)
+                and key not in explicitly_updated_keys
+            ):
                 raise ValueError(f"Update changed protected matching key {key!r}")
     if request.operation == OperationType.MISSING:
         for field in resolved.removed_fields:
@@ -24,7 +28,10 @@ def validate_update_contract(
                 raise ValueError(f"Selected field {field!r} was not removed")
     if resolved.expected_match and not resolved.invalidated_keys:
         for key in rules.keys:
-            if _find_field(base, key) != _find_field(updated, key):
+            if (
+                _find_field(base, key) != _find_field(updated, key)
+                and key not in explicitly_updated_keys
+            ):
                 raise ValueError(f"Update no longer preserves matching key {key!r}")
 
 

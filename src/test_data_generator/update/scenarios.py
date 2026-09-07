@@ -192,13 +192,13 @@ def resolve_fields(
     if any(field not in known for field in selected):
         unknown = next(field for field in selected if field not in known)
         raise ValueError(f"Update selection contains an unknown field {unknown!r}")
-    if any(field in rules.keys for field in selected) and request.operation not in {
-        OperationType.INVALID,
-        OperationType.MISSING,
-    }:
+    if any(field in rules.keys for field in selected) and not (
+        request.operation in {OperationType.INVALID, OperationType.MISSING}
+        or (request.operation == OperationType.UPDATE and explicit_selection)
+    ):
         matching = next(field for field in selected if field in rules.keys)
         raise ValueError(
-            f"Matching key {matching!r} may only be selected by INVALID or MISSING operation"
+            f"Matching key {matching!r} requires an explicit UPDATE, INVALID, or MISSING operation"
         )
     if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         protected = next((field for field in selected if field in _UPDATE_PROTECTED_FIELDS), None)
