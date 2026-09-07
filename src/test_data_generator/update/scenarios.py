@@ -4,8 +4,11 @@ import json
 import re
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
+from functools import lru_cache
+from importlib.resources import files
 from itertools import combinations
 from pathlib import Path
 from random import Random
@@ -37,8 +40,13 @@ _UPDATE_PROTECTED_FIELDS = frozenset(
 )
 
 # The Claim GDF declares this field as an integer even when a source fixture
-# happens to serialize the source tax identifier as text.
-_INTEGER_IDENTIFIER_FIELDS = frozenset({"CH_RENDERING_PROVIDER_FEDERAL_TAX_ID"})
+# happens to serialize the source tax identifier as text.  Payment uses the
+# same logical field name but its 835 schema requires a string, so the rule is
+# profile-specific rather than a global field-name exception.
+_INTEGER_IDENTIFIER_FIELDS_BY_PROFILE = {
+    "claim-professional": frozenset({"CH_RENDERING_PROVIDER_FEDERAL_TAX_ID"}),
+    "claim-institutional": frozenset({"CH_RENDERING_PROVIDER_FEDERAL_TAX_ID"}),
+}
 _STATE_CODES = (
     "AK",
     "AL",
@@ -92,6 +100,36 @@ _STATE_CODES = (
     "WV",
     "WY",
 )
+
+# These are source-domain code sets, not arbitrary text fallbacks.  The GDF
+# schemas intentionally leave many clinical values as ``string`` because they
+# are validated by the receiving application.  Updates must nevertheless keep
+# those values in their healthcare code domains.
+_ICD_DIAGNOSIS_CODES = (
+    "I10",
+    "E119",
+    "E785",
+    "J189",
+    "M5450",
+    "R0602",
+    "S93401A",
+)
+_ICD_EXTERNAL_CAUSE_CODES = ("V892XXA", "W010XXA", "W19XXXA", "X580XXA", "Y92009")
+_PROCEDURE_CODES = ("36415", "93000", "99213", "99214", "99223")
+_REVENUE_CODES = ("0250", "0300", "0450", "0510", "0521")
+_PROCEDURE_MODIFIERS = ("25", "59", "GP", "KX", "LT", "RT")
+_TAXONOMY_CODES = ("207Q00000X", "208D00000X", "261QM2500X", "282N00000X")
+_ADJUSTMENT_GROUP_CODES = ("CO", "CR", "OA", "PI", "PR")
+_ADJUSTMENT_REASON_CODES = ("1", "2", "3", "45", "97")
+
+_PROFILE_SCHEMA_PATHS = {
+    "member": "member/member.schema.json",
+    "provider": "provider/provider.schema.json",
+    "claim-professional": "claim/claim.schema.json",
+    "claim-institutional": "claim/claim.schema.json",
+    "payment-professional": "payment/payment.schema.json",
+    "payment-institutional": "payment/payment.schema.json",
+}
 
 
 def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
@@ -297,7 +335,7 @@ def resolve_update(
         else:
             for field in selected:
                 old = _find_field(result, field)
-                new: object = _changed_value(old, field, randomizer)
+                new: object = _changed_value(old, field, randomizer, rules.profile)
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
@@ -334,13 +372,31 @@ def resolve_update(
     )
 
 
-def _changed_value(value: object, field: str, randomizer: Random) -> object:
+def _changed_value(value: object, field: str, randomizer: Random, profile: str = "") -> object:
+    """Return a changed value without leaving the field's value domain.
+
+    The update engine is used for every layout field, including fields that
+    the JSON Schema represents only as a string.  Schema enums are therefore
+    consulted first, then GDF/835 semantic code families are handled through
+    shared code sets.  Only genuine free text reaches Faker's word fallback.
+    """
     upper_field = field.upper()
-    if upper_field in _INTEGER_IDENTIFIER_FIELDS:
+    # The source schemas accept X for compatibility, but the configured
+    # generator's realistic-data contract intentionally emits only M/F.
+    if "GENDER" in upper_field and isinstance(value, str):
+        values = tuple(candidate for candidate in ("F", "M") if candidate != value)
+        return randomizer.choice(values)
+    enum_candidate = _schema_enum_candidate(profile, field, value, randomizer)
+    if enum_candidate is not None:
+        return enum_candidate
+    if upper_field in _INTEGER_IDENTIFIER_FIELDS_BY_PROFILE.get(profile, frozenset()):
         return int(valid_ein(randomizer))
     if isinstance(value, bool):
         return not value
     if isinstance(value, (int, float)) and not isinstance(value, bool):
+        code_candidate = _semantic_code_candidate(upper_field, str(value), randomizer)
+        if code_candidate is not None and code_candidate.isdigit():
+            return int(code_candidate) if isinstance(value, int) else float(code_candidate)
         if isinstance(value, int):
             int_candidate = randomizer.randrange(max(0, value - 100), value + 101)
             return int_candidate if int_candidate != value else value + 1
@@ -370,6 +426,10 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.name().upper()
         elif upper_field.endswith("CLIENT_ROOT_CLAIM_ID"):
             candidate = _changed_root_claim_id(value, randomizer)
+        elif (
+            coded_candidate := _semantic_code_candidate(upper_field, value, randomizer)
+        ) is not None:
+            candidate = coded_candidate
         elif "PLACE_OF_SERVICE_CODE" in upper_field:
             candidate = randomizer.choice(
                 tuple(code for code in ("11", "21", "22", "23") if code != value)
@@ -384,20 +444,242 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.city().upper()
         elif "STATE" in upper_field:
             candidate = randomizer.choice(tuple(code for code in _STATE_CODES if code != value))
+        elif "ZIP_PLUS_FOUR" in upper_field:
+            candidate = f"{randomizer.randrange(10_000):04d}"
         elif "ZIP" in upper_field:
             candidate = faker.postcode()[:5]
-        elif "DATE" in upper_field and len(value) == 8 and value.isdigit():
-            candidate = faker.date_between(start_date="-10y", end_date="today").strftime("%Y%m%d")
+        elif _is_compact_date_field(upper_field, value):
+            candidate = _changed_compact_date(value, randomizer)
+        elif _is_timestamp_field(upper_field, value):
+            candidate = _changed_timestamp(value, randomizer)
         elif "ID" in upper_field or "NUMBER" in upper_field:
             candidate = _same_shape_identifier(value, randomizer)
         else:
             candidate = faker.word().upper()
         if candidate == value and "GENDER" in upper_field:
             candidate = next(option for option in ("F", "M") if option != value)
+        elif candidate == value and _is_constrained_field(upper_field):
+            candidate = _semantic_code_candidate(upper_field, value, randomizer, force_change=True)
         elif candidate == value:
             candidate = f"{faker.word().upper()}X"
         return candidate
     return randomizer.randrange(1000, 9999)
+
+
+def _semantic_code_candidate(
+    field: str, value: str, randomizer: Random, force_change: bool = False
+) -> str | None:
+    """Choose a valid-looking GDF/healthcare code for a constrained field.
+
+    The schemas do not carry every external code system.  This classifier is
+    intentionally based on stable semantic suffixes/prefixes rather than a
+    list of individual layout fields so new Member, Provider, Claim, History,
+    and Payment fields inherit the safe behavior automatically.
+    """
+    values: tuple[str, ...] | None = None
+    if field.endswith("_POA"):
+        values = ("Y", "N", "U", "W")
+    elif "EXTERNAL_CAUSE_OF_INJURY_CODE" in field:
+        values = _ICD_EXTERNAL_CAUSE_CODES
+    elif "DIAGNOSIS_CODE" in field or "REASON_FOR_VISIT_CODE" in field:
+        values = _ICD_DIAGNOSIS_CODES
+    elif "ICD_VERSION_CODE" in field:
+        values = ("0", "9", "10")
+    elif "DIAGNOSIS_POINTER" in field:
+        values = tuple(str(number) for number in range(1, 13))
+    elif "PROCEDURE_MODIFIER" in field:
+        values = _PROCEDURE_MODIFIERS
+    elif "PROCEDURE_CODE_QUALIFIER" in field:
+        values = ("HCPCS", "CPT")
+    elif "PROCEDURE_CODE" in field:
+        values = _PROCEDURE_CODES
+    elif "REVENUE_CODE" in field:
+        values = _REVENUE_CODES
+    elif "ADJUSTMENT_GROUP_CODE" in field or "REMITTANCE_ADVICE_GROUP_CODE" in field:
+        values = _ADJUSTMENT_GROUP_CODES
+    elif "ADJUSTMENT_REASON_CODE" in field or "REMITTANCE_ADVICE_REASON_CODE" in field:
+        values = _ADJUSTMENT_REASON_CODES
+    elif "TAXONOMY_CODE" in field or "SPECIALTY_CODE" in field:
+        values = _TAXONOMY_CODES
+    elif "STATE" in field:
+        values = _STATE_CODES
+    elif "ADDRESS_TYPE" in field:
+        values = ("HOME", "MAIL", "WORK")
+    elif "LINE_OF_BUSINESS_CODE" in field:
+        values = ("COM", "MCD", "MED")
+    elif "PLACE_OF_SERVICE_CODE" in field:
+        values = ("11", "21", "22", "23", "31")
+    elif "TYPE_OF_BILL_CODE" in field:
+        values = ("111", "131", "851")
+    elif field.endswith("CLAIM_FREQUENCY_CODE"):
+        values = ("1", "7", "8")
+    elif "CMS_CLAIM_ADJUSTMENT_TYPE_CODE" in field:
+        values = ("0", "1", "2")
+    elif "CMS_CLAIM_QUERY_CODE" in field:
+        values = ("0", "3", "5")
+    elif "FILING_INDICATOR_CODE" in field:
+        values = ("CI", "MC", "MB")
+    elif "CREDIT_DEBIT_FLAG_CODE" in field:
+        values = ("C", "D")
+    elif "PAYEE_ID_QUALIFIER" in field:
+        values = ("XX", "FI", "MI")
+    elif "QUALIFIER" in field:
+        values = ("ZZ", "XX")
+    elif "PAYMENT_METHOD" in field:
+        values = ("CHK", "EFT")
+    elif "DISCHARGE_STATUS_CODE" in field:
+        values = ("01", "02", "20")
+    elif "PAYMENT_STATUS" in field or field.endswith("STATUS_CODE"):
+        values = ("PAID", "PENDED", "VOID") if not field.endswith("_CODE") else ("1", "2", "22")
+    elif "ENTITY_TYPE" in field:
+        values = ("P", "E")
+    elif field.endswith("RECORD_TYPE"):
+        # CDF Provider uses P/F while NPPES uses numeric entity codes.  Keep
+        # the stream's established representation instead of crossing them.
+        values = ("P", "F") if value in {"P", "F"} else ("1", "2")
+    elif "RELATIONSHIP" in field:
+        values = ("18", "19")
+    elif "ADMISSION_TYPE" in field:
+        values = ("1", "2", "3")
+    elif "ADMISSION_SOURCE_CODE" in field:
+        values = ("1", "2", "7")
+    elif field.endswith("_HOUR"):
+        values = tuple(f"{hour:02d}" for hour in range(24))
+    elif field.endswith("_MINUTE"):
+        values = tuple(f"{minute:02d}" for minute in range(60))
+    elif field.endswith("_DAYS"):
+        values = tuple(str(day) for day in range(1, 31))
+    elif "UNITS_TYPE" in field:
+        values = ("UN", "ML", "GR")
+    elif "PAYER_ORDER_OF_BENEFITS" in field:
+        values = ("1", "2", "3")
+    elif "INDICATOR" in field or field.endswith("_FLAG"):
+        values = ("Y", "N")
+    elif "GENDER" in field:
+        values = ("F", "M", "X")
+    elif _is_constrained_field(field):
+        # The source documentation identifies this as a code/classification,
+        # but does not provide a code list.  A numeric code token is safer than
+        # inventing prose and is the documented default for such fields.
+        values = ("0", "1", "2", "9")
+
+    if values is None:
+        return None
+    candidates = tuple(candidate for candidate in values if candidate != value)
+    if candidates:
+        return randomizer.choice(candidates)
+    if force_change:
+        if len(values) > 1:
+            return next(candidate for candidate in values if candidate != value)
+        return "0"
+    return value
+
+
+def _is_constrained_field(field: str) -> bool:
+    """Return whether a field name denotes a coded/constrained value domain."""
+    return any(
+        token in field
+        for token in (
+            "_CODE",
+            "_TYPE",
+            "_STATUS",
+            "_INDICATOR",
+            "_QUALIFIER",
+            "_CLASSIFICATION",
+            "_CATEGORY",
+            "_FLAG",
+            "_METHOD",
+            "_POA",
+        )
+    )
+
+
+def _is_compact_date_field(field: str, value: str) -> bool:
+    """Return whether a string is an emitted compact GDF date."""
+    return ("DATE" in field or field.endswith("_AT")) and len(value) == 8 and value.isdigit()
+
+
+def _changed_compact_date(value: str, randomizer: Random) -> str:
+    """Move a valid compact date by a deterministic non-zero number of days."""
+    try:
+        original = datetime.strptime(value, "%Y%m%d").date()
+    except ValueError:
+        original = date(2020, 1, 1) + timedelta(days=randomizer.randrange(3_650))
+    offset = randomizer.choice(tuple(range(-365, 0)) + tuple(range(1, 366)))
+    return (original + timedelta(days=offset)).strftime("%Y%m%d")
+
+
+def _is_timestamp_field(field: str, value: str) -> bool:
+    """Return whether a field carries an ISO-like timestamp rather than free text."""
+    return (field.endswith("_AT") or "TIMESTAMP" in field or "PRODUCED_AT" in field) and bool(value)
+
+
+def _changed_timestamp(value: str, randomizer: Random) -> str:
+    """Move an ISO timestamp while retaining its offset and wire representation."""
+    try:
+        original = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return _changed_compact_date("", randomizer)
+    offset = randomizer.choice(tuple(range(-365, 0)) + tuple(range(1, 366)))
+    updated = original + timedelta(days=offset)
+    return updated.isoformat().replace("+00:00", "Z")
+
+
+def _schema_enum_candidate(
+    profile: str, field: str, value: object, randomizer: Random
+) -> object | None:
+    """Return a different JSON Schema enum member when the schema defines one."""
+    allowed = _schema_enum_values(profile, field)
+    candidates = tuple(candidate for candidate in allowed if candidate != value)
+    return randomizer.choice(candidates) if candidates else None
+
+
+@lru_cache(maxsize=None)
+def _schema_enum_values(profile: str, field: str) -> tuple[object, ...]:
+    """Read enum values for a field from the installed JSON Schema, if any."""
+    schema = _load_profile_schema(profile)
+    if schema is None:
+        return ()
+
+    values: list[object] = []
+
+    def visit(node: object) -> None:
+        if isinstance(node, Mapping):
+            properties = node.get("properties")
+            if isinstance(properties, Mapping):
+                definition = properties.get(field)
+                if isinstance(definition, Mapping):
+                    enum = definition.get("enum")
+                    if isinstance(enum, list):
+                        values.extend(
+                            item for item in enum if isinstance(item, str | int | float | bool)
+                        )
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(schema)
+    return tuple(dict.fromkeys(values))
+
+
+@lru_cache(maxsize=None)
+def _load_profile_schema(profile: str) -> Mapping[str, object] | None:
+    """Load one installed schema once for the update value resolver."""
+    schema_path = _PROFILE_SCHEMA_PATHS.get(profile)
+    if schema_path is None:
+        return None
+    try:
+        resource = files("test_data_generator").joinpath("schema", "json", schema_path)
+        schema = json.loads(resource.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ModuleNotFoundError, OSError, json.JSONDecodeError):
+        path = Path(__file__).resolve().parents[3] / "schema" / "json" / schema_path
+        try:
+            schema = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+    return schema if isinstance(schema, Mapping) else None
 
 
 def _same_shape_identifier(value: str, randomizer: Random) -> str:
