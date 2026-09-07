@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -358,15 +359,27 @@ def generate(config: Path, mode: str = "all") -> None:
                     raise CommandError(f"Claim stream {entity.name!r} has no Claims History stream")
                 try:
                     history_bases = generated_records[history_name]
-                    history_path = run_update_records(
-                        history_entity,
-                        history_bases,
-                        run_config.seed,
-                        run_config.update_directory,
-                        request,
-                        entity_rules,
+                    updated_claims = _read_jsonl_records(output_path)
+                    changed_claim_fields = tuple(
+                        _changed_field_names(base, updated)
+                        for base, updated in zip(
+                            generated_records[entity.name], updated_claims, strict=True
+                        )
                     )
-                    updated_history = _read_jsonl_records(history_path)
+                    updated_history = _derive_claim_history_updates(
+                        updated_claims, history_bases, changed_claim_fields
+                    )
+                    history_path = run_derived_update_records(
+                        history_entity,
+                        updated_history,
+                        run_config.update_directory,
+                        validate_schema=request.operation
+                        not in {
+                            OperationType.MISSING,
+                            OperationType.EMPTY,
+                            OperationType.INVALID,
+                        },
+                    )
                     changed_history_fields = tuple(
                         _changed_field_names(base, updated)
                         for base, updated in zip(history_bases, updated_history, strict=True)
@@ -536,6 +549,40 @@ def _changed_field_names(
         elif old != new:
             changed.add(field)
     return frozenset(changed)
+
+
+_CLAIM_HISTORY_IDENTIFIER_FIELDS = (
+    "CH_CLIENT_CLAIM_UNIQUE_ID",
+    "CH_CLIENT_CLAIM_ID",
+    "CH_CLIENT_ORIGINAL_CLAIM_ID",
+)
+
+
+def _derive_claim_history_updates(
+    updated_claims: tuple[Mapping[str, object], ...],
+    history_bases: tuple[Mapping[str, object], ...],
+    changed_fields: tuple[frozenset[str], ...],
+) -> tuple[Mapping[str, object], ...]:
+    """Derive CH updates from their corresponding 837 updates exactly.
+
+    Claims History is the paired representation of a Claim, not a second
+    independently-randomized update.  History preserves its populated client
+    identifiers when those fields were not part of the Claim update and always
+    keeps the CH envelope discriminator.
+    """
+    if len(updated_claims) != len(history_bases) or len(updated_claims) != len(changed_fields):
+        raise CommandError("Claim and Claims History update record counts differ")
+    records: list[Mapping[str, object]] = []
+    for claim, history_base, changed in zip(
+        updated_claims, history_bases, changed_fields, strict=True
+    ):
+        history = deepcopy(dict(claim))
+        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+            if field not in changed and field in history_base:
+                history[field] = history_base[field]
+        history["FILE_TYPE"] = "CH"
+        records.append(history)
+    return tuple(records)
 
 
 def _payment_claim_history_name(name: str) -> str:

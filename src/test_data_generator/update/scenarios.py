@@ -39,6 +39,59 @@ _UPDATE_PROTECTED_FIELDS = frozenset(
 # The Claim GDF declares this field as an integer even when a source fixture
 # happens to serialize the source tax identifier as text.
 _INTEGER_IDENTIFIER_FIELDS = frozenset({"CH_RENDERING_PROVIDER_FEDERAL_TAX_ID"})
+_STATE_CODES = (
+    "AK",
+    "AL",
+    "AR",
+    "AZ",
+    "CA",
+    "CO",
+    "CT",
+    "DC",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "IA",
+    "ID",
+    "IL",
+    "IN",
+    "KS",
+    "KY",
+    "LA",
+    "MA",
+    "MD",
+    "ME",
+    "MI",
+    "MN",
+    "MO",
+    "MS",
+    "MT",
+    "NC",
+    "ND",
+    "NE",
+    "NH",
+    "NJ",
+    "NM",
+    "NV",
+    "NY",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VA",
+    "VT",
+    "WA",
+    "WI",
+    "WV",
+    "WY",
+)
 
 
 def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
@@ -330,7 +383,7 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
         elif "CITY" in upper_field:
             candidate = faker.city().upper()
         elif "STATE" in upper_field:
-            candidate = faker.state_abbr()
+            candidate = randomizer.choice(tuple(code for code in _STATE_CODES if code != value))
         elif "ZIP" in upper_field:
             candidate = faker.postcode()[:5]
         elif "DATE" in upper_field and len(value) == 8 and value.isdigit():
