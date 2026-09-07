@@ -17,6 +17,12 @@ requirements
 docs/superpowers/specs
 docs/superpowers/plans
 docs
+docs/
+docs/PROJECT_DOCUMENTATION.md
 tests
+tests/
+tests/update/
+tests/update/test_full_field_operation_coverage.py
 tmp-test-output
 samples_files
+TEST_DATA_GENERATOR_COMPREHENSIVE_QA_AUDIT.md

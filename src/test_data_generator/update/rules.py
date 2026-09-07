@@ -6,6 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from test_data_generator.core.errors import ConfigurationError
+from test_data_generator.layouts import load_layout
 
 
 @dataclass(frozen=True)
@@ -65,22 +66,53 @@ def load_rule_catalog(path: Path) -> dict[str, EntityRules]:
         fields = _fields(value.get("fields"), entity)
         keys = _strings(value.get("keys"), f"{entity}.keys")
         source_fields = _strings(value.get("source_fields", []), f"{entity}.source_fields")
-        methods = _methods(value.get("matching_methods"), fields, entity)
         if not keys:
             raise ConfigurationError(f"Update rules for {entity!r} need at least one key")
         if any(field not in source_fields for field in fields):
             raise ConfigurationError(
                 f"Update rules for {entity!r} contain a field missing from source_fields"
             )
+        profile = str(value.get("profile", entity))
+        _add_layout_fields(fields, profile)
+        methods = _methods(value.get("matching_methods"), fields, entity)
         result[entity] = EntityRules(
             entity=entity,
-            profile=str(value.get("profile", entity)),
+            profile=profile,
             keys=keys,
             fields=fields,
             methods=methods,
             catalog_version=str(raw.get("catalog_version", "unknown")),
         )
     return result
+
+
+def _add_layout_fields(fields: dict[str, FieldRule], profile: str) -> None:
+    """Make every emitted business field eligible for explicit update operations.
+
+    The survivorship catalog remains authoritative for matching keys,
+    requiredness, weights, and matching methods.  Layouts are authoritative
+    for the complete emitted field surface.  Adding absent layout fields here
+    prevents the catalog from becoming a partial allowlist whenever the GDF
+    layout grows, while leaving all curated matching semantics intact.
+    """
+    try:
+        layout = load_layout(profile)
+    except ValueError as error:
+        raise ConfigurationError(
+            f"Update rules for profile {profile!r} have no valid layout"
+        ) from error
+    for field in (*layout.root, *(group for fields in layout.groups.values() for group in fields)):
+        if field.name == "otherAttributes" or field.name.startswith("otherAttributes."):
+            continue
+        fields.setdefault(
+            field.name,
+            FieldRule(
+                name=field.name,
+                required=False,
+                weight=Decimal("1"),
+                survivorship="layout_field",
+            ),
+        )
 
 
 def _fields(value: object, entity: str) -> dict[str, FieldRule]:

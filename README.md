@@ -349,7 +349,9 @@ Fields may be omitted to select an eligible field deterministically from the
 configured rule catalog. `MISSING` removes the attribute, while `EMPTY` keeps
 the attribute and assigns its empty model value. `INVALID` reads values from
 `src/test_data_generator/configuration/invalid-values.json`, keyed by the
-actual field name; add a field there without changing generator logic.
+actual field name when a domain-specific invalid form is needed. Every emitted
+layout field supports explicit `UPDATE`, `MISSING`, and `INVALID`; fields not
+listed in the invalid-value catalog use a deliberate generic invalid sentinel.
 Weight conditions are `BELOW_LIMIT`, `AT_LIMIT`, and `ABOVE_LIMIT`. Matching
 keys are excluded from weight changes.
 
@@ -369,10 +371,14 @@ fields take precedence over include/exclude selection.
 Field lists may contain comma-separated values and surrounding whitespace. Names
 are matched case-insensitively after normalization; punctuation such as the `+`
 in `CP+Provider_npi` is normalized to `_`, and `Provider_npi` is an alias for
-`CP_PROVIDER_NPI`. Matching keys may only be selected with `INVALID`, because
-changing them would prevent the update from matching the existing entity. An
-`INVALID` fixture is intentionally allowed to violate the JSON Schema; its
-value must be present in the invalid-value catalog.
+`CP_PROVIDER_NPI`. Matching keys may only be selected with `INVALID` or
+`MISSING`, because changing them would prevent the update from matching the
+existing entity. The structural discriminators `CH_CLAIM_TYPE`, `FILE_TYPE`,
+and `cotiviti.source_format` likewise support `INVALID` and `MISSING` but not
+normal `UPDATE`, because changing them would make the record belong to a
+different stream. An `INVALID` fixture is intentionally allowed to violate the
+JSON Schema; a field-specific catalog value is used when available and a
+generic invalid sentinel is used otherwise.
 
 The default catalog covers format and domain violations for member, provider,
 claim, claim-detail, and payment fields (identifiers, demographic values,

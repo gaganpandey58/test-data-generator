@@ -28,6 +28,15 @@ class OperationType(StrEnum):
     WEIGHT_CHANGE = "WEIGHT_CHANGE"
 
 
+_UPDATE_PROTECTED_FIELDS = frozenset(
+    {
+        "CH_CLAIM_TYPE",
+        "FILE_TYPE",
+        "cotiviti.source_format",
+    }
+)
+
+
 def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
     """Load the field-name keyed invalid-value catalog."""
     try:
@@ -128,6 +137,13 @@ def resolve_fields(
         raise ValueError(
             f"Matching key {matching!r} may only be selected by INVALID or MISSING operation"
         )
+    if request.operation == OperationType.UPDATE:
+        protected = next((field for field in selected if field in _UPDATE_PROTECTED_FIELDS), None)
+        if protected is not None:
+            raise ValueError(
+                f"Structural discriminator {protected!r} may only be selected by INVALID "
+                "or MISSING operation"
+            )
     if not selected:
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
@@ -145,6 +161,10 @@ def _normalize_fields(fields: tuple[str, ...], known: Mapping[str, object]) -> l
         for item in value.split(","):
             raw = item.strip()
             if not raw:
+                continue
+            direct = canonical.get(raw.upper())
+            if direct is not None:
+                result.append(direct)
                 continue
             normalized = re.sub(r"[^A-Za-z0-9]+", "_", raw).strip("_").upper()
             resolved = canonical.get(normalized)
@@ -198,9 +218,7 @@ def resolve_update(
         elif operation == OperationType.INVALID:
             catalog = request.invalid_values or {}
             for field in selected:
-                values = catalog.get(field)
-                if not values:
-                    raise ValueError(f"INVALID field {field!r} has no invalid-value catalog entry")
+                values = catalog.get(field) or (_generic_invalid_value(field),)
                 _replace_field(result, field, randomizer.choice(values))
                 changed.append(field)
                 if field in rules.keys:
@@ -277,6 +295,14 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
             candidate = faker.first_name()[0].upper()
         elif "FULL_NAME" in upper_field:
             candidate = faker.name().upper()
+        elif upper_field.endswith("CLIENT_ROOT_CLAIM_ID"):
+            candidate = _changed_root_claim_id(value, randomizer)
+        elif "PLACE_OF_SERVICE_CODE" in upper_field:
+            candidate = randomizer.choice(
+                tuple(code for code in ("11", "21", "22", "23") if code != value)
+            )
+        elif "INDICATOR" in upper_field and value in {"Y", "N"}:
+            candidate = "N" if value == "Y" else "Y"
         elif "GENDER" in upper_field:
             candidate = randomizer.choice(("F", "M"))
         elif upper_field.endswith("CLAIM_FREQUENCY_CODE"):
@@ -319,6 +345,32 @@ def _same_shape_identifier(value: str, randomizer: Random) -> str:
         replacement = "1" if last != "1" and last.isdigit() else "A" if last != "A" else "B"
         candidate = value[:-1] + replacement
     return candidate
+
+
+def _changed_root_claim_id(value: str, randomizer: Random) -> str:
+    """Change a Claim root ID while retaining its P/I root identifier contract."""
+    match = re.fullmatch(r"([PI]ROOT)([0-9]{8})", value)
+    if match is None:
+        return _same_shape_identifier(value, randomizer)
+    original = match.group(2)
+    replacement = f"{randomizer.randrange(100_000_000):08d}"
+    if replacement == original:
+        replacement = f"{(int(original) + 1) % 100_000_000:08d}"
+    return match.group(1) + replacement
+
+
+def _generic_invalid_value(field: str) -> str:
+    """Return a deliberate type/format violation for an emitted field.
+
+    ``invalid-values.json`` remains the preferred source for field-specific
+    invalid cases.  Layouts can contain hundreds of optional GDF attributes,
+    however, so an explicit INVALID operation must not become unavailable just
+    because a newly emitted field has not yet received a bespoke catalog row.
+    INVALID fixtures intentionally bypass normal schema validation in the
+    engine; the sentinel is therefore safe and unambiguously invalid for
+    downstream validation tests.
+    """
+    return f"__INVALID_{field}__"
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:
