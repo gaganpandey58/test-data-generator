@@ -36,6 +36,10 @@ _UPDATE_PROTECTED_FIELDS = frozenset(
     }
 )
 
+# The Claim GDF declares this field as an integer even when a source fixture
+# happens to serialize the source tax identifier as text.
+_INTEGER_IDENTIFIER_FIELDS = frozenset({"CH_RENDERING_PROVIDER_FEDERAL_TAX_ID"})
+
 
 def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
     """Load the field-name keyed invalid-value catalog."""
@@ -111,14 +115,20 @@ def resolve_fields(
         selected = [
             name
             for name in known
-            if name not in rules.keys and (available_fields is None or name in available_fields)
+            if name not in rules.keys
+            and _is_mutable_for_operation(name, request.operation)
+            and (available_fields is None or name in available_fields)
         ]
         if request.operation == OperationType.MISSING:
             required = [name for name in selected if known[name].required]
             selected = required or selected
         selected = [Random(seed * 1_000_003 + index).choice(selected)] if selected else []
     else:
-        selected = [name for name in known if name not in rules.keys]
+        selected = [
+            name
+            for name in known
+            if name not in rules.keys and _is_mutable_for_operation(name, request.operation)
+        ]
     if available_fields is not None:
         unavailable = [field for field in selected if field not in available_fields]
         if unavailable and explicit_selection:
@@ -137,7 +147,7 @@ def resolve_fields(
         raise ValueError(
             f"Matching key {matching!r} may only be selected by INVALID or MISSING operation"
         )
-    if request.operation == OperationType.UPDATE:
+    if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         protected = next((field for field in selected if field in _UPDATE_PROTECTED_FIELDS), None)
         if protected is not None:
             raise ValueError(
@@ -147,6 +157,14 @@ def resolve_fields(
     if not selected:
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
+
+
+def _is_mutable_for_operation(field: str, operation: OperationType) -> bool:
+    """Return whether a non-key field is safe for the requested mutation."""
+    return (
+        operation in {OperationType.INVALID, OperationType.MISSING}
+        or field not in _UPDATE_PROTECTED_FIELDS
+    )
 
 
 def _normalize_fields(fields: tuple[str, ...], known: Mapping[str, object]) -> list[str]:
@@ -264,6 +282,9 @@ def resolve_update(
 
 
 def _changed_value(value: object, field: str, randomizer: Random) -> object:
+    upper_field = field.upper()
+    if upper_field in _INTEGER_IDENTIFIER_FIELDS:
+        return int(valid_ein(randomizer))
     if isinstance(value, bool):
         return not value
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -275,7 +296,6 @@ def _changed_value(value: object, field: str, randomizer: Random) -> object:
     if isinstance(value, str):
         faker = Faker("en_US")
         faker.seed_instance(randomizer.randrange(1, 2**31 - 1))
-        upper_field = field.upper()
         candidate: object
         if "NPI" in upper_field:
             candidate = valid_npi(randomizer)
@@ -478,7 +498,9 @@ def _select_weight_fields(
     preferred_candidates = tuple(
         name
         for name in method.fields
-        if name not in rules.keys and (available_fields is None or name in available_fields)
+        if name not in rules.keys
+        and name not in _UPDATE_PROTECTED_FIELDS
+        and (available_fields is None or name in available_fields)
     )
     wanted = {"BELOW_LIMIT": "below", "AT_LIMIT": "equal", "ABOVE_LIMIT": "above"}.get(condition)
     if wanted is None:
@@ -495,7 +517,9 @@ def _select_weight_fields(
     candidates = tuple(
         name
         for name in rules.fields
-        if name not in rules.keys and (available_fields is None or name in available_fields)
+        if name not in rules.keys
+        and name not in _UPDATE_PROTECTED_FIELDS
+        and (available_fields is None or name in available_fields)
     )
     fallback = _weight_combination(rules, candidates, threshold, wanted)
     if fallback is not None:

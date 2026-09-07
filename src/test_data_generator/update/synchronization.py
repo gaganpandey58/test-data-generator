@@ -21,7 +21,7 @@ def synchronize_record(
     synchronized.update(_synchronize_names(original, updated, changed))
     synchronized.update(_synchronize_ch_cd_pairs(original, updated, changed))
     synchronized.update(
-        _synchronize_equivalent_pair(
+        _synchronize_provider_npi(
             original, updated, changed, "CP_PROVIDER_NPI", "CP_PRESCRIBING_PROVIDER_NPI"
         )
     )
@@ -106,6 +106,25 @@ def _synchronize_equivalent_pair(
                 if _populated(old_value):
                     parent[key] = _coerce_like(new_value, old_value)
     return {left, right}
+
+
+def _synchronize_provider_npi(
+    original: Mapping[str, object],
+    updated: dict[str, object],
+    changed: set[str],
+    provider_npi: str,
+    prescribing_npi: str,
+) -> set[str]:
+    """Synchronize a matching prescribing NPI without mutating the provider key.
+
+    ``CP_PROVIDER_NPI`` is a matching key.  It may drive the populated
+    prescribing representation when the matching key itself is intentionally
+    invalidated, but a normal update to the prescribing NPI must never flow
+    backward and silently change the matching key.
+    """
+    if provider_npi not in changed:
+        return set()
+    return _synchronize_equivalent_pair(original, updated, changed, provider_npi, prescribing_npi)
 
 
 def _field_names(record: Mapping[str, object]) -> set[str]:
