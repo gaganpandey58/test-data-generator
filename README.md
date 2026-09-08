@@ -92,18 +92,24 @@ To support a new client, add a complete top-level client entry with `headers` an
 
 ## Configuration
 
-[generator.config.json](generator.config.json) is the only run-time file you normally edit. It has four concepts:
+[generator.config.json](generator.config.json) is the small run-time file you
+normally edit. It chooses what to run; checked-in entity files define how each
+stream is shaped, matched, and mutated. It has these concepts:
 
 - `client` — the checked-in client profile to use;
 - optional `seed` — integer used to reproduce a deterministic run; and
 - entity `count` values — the exact number of objects to write; and
-- optional entity `layout` — a compatible checked-in output layout (the current
-  layout is used when omitted).
+- optional entity `scenario` — a reusable mutation intent such as
+  `UPDATE_SINGLE_FIELD`, `UPDATE_REQUIRED_FIELDS`, `INVALID_KEY`, or
+  `DUPLICATE`; and
+- optional entity `method` — a matching method defined for that entity.
 
-`schema`, `module`, and output filenames are internal defaults. Omit an entity
-to skip its output. A supplied layout must be valid for the selected data type:
-for example, `provider` can use only `"provider"`, while professional claims
-can use only `"claim-professional"` today.
+The five entity documents in
+[`src/test_data_generator/configuration/entities`](src/test_data_generator/configuration/entities)
+own schemas, generator modules, filenames, field rules, mandatory/optional
+classification, elasticity, matching methods, and scenario templates:
+`member.json`, `provider.json`, `claims.json`, `claims-history.json`, and
+`payments.json`. Omit an entity from the run file to skip its output.
 
 ```json
 {
@@ -112,9 +118,20 @@ can use only `"claim-professional"` today.
   "output_directory": "./output",
   "provider": {
     "nppes": {"count": 10},
-    "cdf": {"additional_count": 5}
+    "cdf": {"additional_count": 5},
+    "scenario": "UPDATE_SINGLE_FIELD",
+    "method": "deterministic_provider"
   },
-  "member": {"count": 10},
+  "member": {
+    "count": 10,
+    "scenario": "UPDATE_REQUIRED_FIELDS",
+    "method": "member_id_dob_gender",
+    "mr": {
+      "count": 10,
+      "scenario": "DUPLICATE",
+      "method": "member_id_dob_gender"
+    }
+  },
   "claims": {
     "professional": {"count": 10},
     "institutional": {"count": 10}
@@ -126,7 +143,31 @@ can use only `"claim-professional"` today.
 }
 ```
 
-`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
+`member.mr` produces `member_roster.jsonl` by copying the generated 834 Member
+records and changing only `FILE_TYPE` to `MR`; it may have its own scenario and
+focused overrides. Its count cannot exceed the source Member count. A
+`DUPLICATE` scenario is likewise source-derived and preserves matching data;
+the configured ingestion-date relationship determines whether its incoming
+date is the same, newer, or older.
+
+An explicit `updates` object remains the field-level escape hatch and overrides
+the selected template. For example, this targets one field without repeating
+any field catalog in the root file:
+
+```json
+{
+  "member": {
+    "count": 1,
+    "scenario": "UPDATE_SINGLE_FIELD",
+    "method": "member_id_dob_gender",
+    "updates": {
+      "operation": {"type": "UPDATE", "fields": ["CM_MEMBER_SSN"]}
+    }
+  }
+}
+```
+
+`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
 
 An entity with `count: 0` is treated as disabled. It is accepted by the
 configuration schema, skipped by both creation and update generation, and its
@@ -143,11 +184,10 @@ addresses, identifiers, and other Faker-backed values.
 
 Each enabled Claim type produces a paired current Claim and Claims History file.
 They share one standardized overall JSON contract across Institutional and
-Professional Claims. The paired rows are identical except for
+Professional Claims. The paired rows preserve the same populated
 `CH_CLIENT_CLAIM_UNIQUE_ID`, `CH_CLIENT_CLAIM_ID`, and
-`CH_CLIENT_ORIGINAL_CLAIM_ID`: current Claim rows emit those required fields as
-empty strings, while the corresponding Claims History row carries generated
-values. Same-run Payments derive from the History rows so their claim matching
+`CH_CLIENT_ORIGINAL_CLAIM_ID`; Claims History differs through its `FILE_TYPE`
+of `CH`. Same-run Payments derive from the History rows so their claim matching
 identifiers and both provider NPIs remain populated.
 
 Payment P and Payment I are separate 835 streams projected from immutable 837
@@ -371,9 +411,10 @@ fields take precedence over include/exclude selection.
 Field lists may contain comma-separated values and surrounding whitespace. Names
 are matched case-insensitively after normalization; punctuation such as the `+`
 in `CP+Provider_npi` is normalized to `_`, and `Provider_npi` is an alias for
-`CP_PROVIDER_NPI`. Matching keys may only be selected with `INVALID` or
-`MISSING`, because changing them would prevent the update from matching the
-existing entity. The structural discriminators `CH_CLAIM_TYPE`, `FILE_TYPE`,
+`CP_PROVIDER_NPI`. Matching keys remain unchanged unless they are explicitly
+selected by `UPDATE`, `INVALID`, or `MISSING`; the original value remains the
+fixture's lookup identity while related records receive the selected updated
+value. The structural discriminators `CH_CLAIM_TYPE`, `FILE_TYPE`,
 and `cotiviti.source_format` likewise support `INVALID` and `MISSING` but not
 normal `UPDATE`, because changing them would make the record belong to a
 different stream. An `INVALID` fixture is intentionally allowed to violate the
@@ -395,8 +436,8 @@ a schema `oneOf` failure.
 ### Update field reference
 
 The field names below are the currently supported runtime fields from the
-normalized rule catalog. The catalog remains the source of truth:
-[`member-provider-claims-key-survivorship.json`](src/test_data_generator/configuration/member-provider-claims-key-survivorship.json).
+per-entity rule catalogs. The entity files remain the source of truth:
+[`configuration/entities`](src/test_data_generator/configuration/entities).
 
 | Entity | Matching keys | Baseline required update fields | Baseline optional update fields |
 | --- | --- | --- | --- |
@@ -413,8 +454,17 @@ the catalog uses `required_in` and `optional_in` for those overrides, while
 the legacy `required` value remains the fallback. For example,
 `CM_MEMBER_FIRST_NAME` eligibility is controlled by the rule catalog.
 
-| Scenario | Supported fields |
+| Scenario | Default configured selection |
 | --- | --- |
+| `UPDATE` / `UPDATE_SINGLE_FIELD` | One eligible non-key field |
+| `UPDATE_REQUIRED_FIELDS` | All fields mandatory for the selected method |
+| `UPDATE_OPTIONAL_FIELDS` | All optional fields for the selected method |
+| `MISSING_REQUIRED_FIELD` | One required field |
+| `MISSING_MULTIPLE_FIELDS` | Two eligible non-key fields |
+| `MISSING_SELECTED_FIELDS` | Explicit `updates.operation.fields` only |
+| `INVALID_KEY` | One matching key using `invalid-values.json` |
+| `CHANGE_WEIGHT_BELOW_LIMIT` / `CHANGE_WEIGHT_AT_LIMIT` / `POST_MATCH_WEIGHT_LIMIT_EXCEEDED` | The configured weight boundary |
+| `DUPLICATE` | No mutation; copy the original record |
 
 Example for a targeted Member update:
 
@@ -429,12 +479,12 @@ Example for a targeted Member update:
 }
 ```
 
-The normalized catalog at
-`src/test_data_generator/configuration/member-provider-claims-key-survivorship.json`
-records source document revision `0.9`, entity keys, matching methods, field
-classification, elasticity, weights, and survivorship behavior. The DOCX is
-the business source; the JSON catalog is the runtime contract and must be
-regenerated/reviewed when the source document changes.
+The entity JSON files record source document revision `0.9`, entity keys,
+matching methods, field classification, elasticity, weights, and survivorship
+behavior. The DOCX is the business source; the JSON entity configuration is
+the runtime contract and must be regenerated/reviewed when the source document
+changes. The former combined catalog remains a backward-compatible explicit
+`rule_catalog` option, but the standard run configuration no longer uses it.
 
 ### Relationship-aware updates
 

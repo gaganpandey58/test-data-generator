@@ -29,6 +29,7 @@ class OperationType(StrEnum):
     EMPTY = "EMPTY"
     INVALID = "INVALID"
     WEIGHT_CHANGE = "WEIGHT_CHANGE"
+    DUPLICATE = "DUPLICATE"
 
 
 _UPDATE_PROTECTED_FIELDS = frozenset(
@@ -160,6 +161,8 @@ class UpdateRequest:
     threshold: Decimal | None = None
     condition: str | None = None
     invalid_values: Mapping[str, tuple[object, ...]] | None = None
+    selection: str | None = None
+    selection_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -192,11 +195,44 @@ def resolve_fields(
     unrelated nested object and make the result fail schema validation.
     """
     known = rules.fields
+    if request.operation == OperationType.DUPLICATE:
+        return ()
     explicit_selection = bool(request.fields or request.include)
     if request.fields:
         selected = _normalize_fields(request.fields, known)
     elif request.include:
         selected = [field for field in _normalize_fields(request.include, known) if field in known]
+    elif request.selection is not None:
+        selection = request.selection.upper()
+        context = request.matching_method or ""
+        if selection == "KEY":
+            selected = [
+                name for name in rules.keys if available_fields is None or name in available_fields
+            ]
+        elif selection == "EXPLICIT":
+            selected = []
+        else:
+            selected = [
+                name
+                for name, definition in known.items()
+                if name not in rules.keys
+                and _is_mutable_for_operation(name, request.operation)
+                and (available_fields is None or name in available_fields)
+                and (
+                    selection == "ANY"
+                    or (selection == "REQUIRED" and definition.is_required_for(context))
+                    or (selection == "OPTIONAL" and not definition.is_required_for(context))
+                )
+            ]
+        if selection not in {"ANY", "KEY", "REQUIRED", "OPTIONAL", "EXPLICIT"}:
+            raise ValueError(f"Unknown scenario field selection {request.selection!r}")
+        if request.selection_count is not None:
+            if request.selection_count <= 0:
+                raise ValueError("Scenario field count must be positive")
+            if request.selection_count > len(selected):
+                raise ValueError("Scenario field count exceeds eligible fields")
+            randomizer = Random(seed * 1_000_003 + index)
+            selected = randomizer.sample(selected, request.selection_count)
     elif request.operation in {
         OperationType.UPDATE,
         OperationType.MISSING,
@@ -290,8 +326,19 @@ def resolve_update(
     base: Mapping[str, object], request: UpdateRequest, rules: EntityRules, seed: int, index: int
 ) -> ResolvedUpdate:
     """Create one deterministic update from one base record."""
-    selected = resolve_fields(request, rules, seed, index, _field_names(base))
     operation = request.operation
+    if operation == OperationType.DUPLICATE:
+        return ResolvedUpdate(
+            record=deepcopy(dict(base)),
+            changed_fields=(),
+            removed_fields=(),
+            invalidated_keys=(),
+            total_weight=Decimal("0"),
+            threshold_relation="equal",
+            expected_match=True,
+            expected_apply=True,
+        )
+    selected = resolve_fields(request, rules, seed, index, _field_names(base))
     if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
         selection_threshold = _weight_threshold(request, rules)
         condition = request.condition

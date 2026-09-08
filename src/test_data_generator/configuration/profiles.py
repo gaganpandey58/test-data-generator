@@ -15,6 +15,7 @@ from test_data_generator.layouts import load_layout
 _ENTITY_LAYOUTS = {
     "provider": "provider",
     "member": "member",
+    "member_mr": "member",
     "claim_professional": "claim-professional",
     "claim_history_professional": "claim-professional",
     "claim_institutional": "claim-institutional",
@@ -108,6 +109,7 @@ def _section(client: str, section: str, entity: str) -> Mapping[str, object]:
             "payment_institutional": "claim_institutional",
             "claim_history_professional": "claim_professional",
             "claim_history_institutional": "claim_institutional",
+            "member_mr": "member",
         }.get(entity, entity)
         value = profile[section][source_entity]  # type: ignore[index]
     except (KeyError, TypeError) as error:

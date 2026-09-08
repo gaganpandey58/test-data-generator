@@ -3,12 +3,8 @@
   "output_directory": "./output",
   "generation": {
     "output_order": {"headers": "last"},
-    "creation": {"enabled": true, "directory": "new-test-data"},
     "updates": {
-      "enabled": true,
-      "directory": "update-test-data",
-      "rule_catalog": "src/test_data_generator/configuration/member-provider-claims-key-survivorship.json",
-      "operation": {"type": "UPDATE"}
+      "enabled": true
     }
   },
   "provider": {
@@ -18,20 +14,24 @@
     "cdf": {
       "additional_count": 90
     },
-    "updates": {"operation": {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}}
+    "scenario": "UPDATE_SINGLE_FIELD",
+    "method": "deterministic_provider"
   },
   "member": {
     "count": 1,
-    "updates": {"operation": {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]}}
+    "scenario": "UPDATE_SINGLE_FIELD",
+    "method": "member_id_dob_gender"
   },
   "claims": {
     "professional": {
       "count": 7,
-      "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
+      "scenario": "UPDATE_SINGLE_FIELD",
+      "method": "professional_claim_primary"
     },
     "institutional": {
       "count": 7,
-      "updates": {"operation": {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}}
+      "scenario": "UPDATE_SINGLE_FIELD",
+      "method": "institutional_claim_primary"
     }
   },
   "payments": {

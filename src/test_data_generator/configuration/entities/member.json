@@ -1,0 +1,384 @@
+{
+  "catalog_version": "0.9",
+  "source_status": "Draft",
+  "source_revision_date": "2026-06-29",
+  "entity_defaults": {
+    "member": {
+      "updates": {},
+      "header_order": null,
+      "profile": "member",
+      "schema": "member/member.schema.json",
+      "module": "test_data_generator.entities.member",
+      "filename": "members.jsonl",
+      "scenario_definitions": {
+        "UPDATE": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_SINGLE_FIELD": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_REQUIRED_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "REQUIRED",
+            "count": "ALL"
+          }
+        },
+        "UPDATE_OPTIONAL_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "OPTIONAL",
+            "count": "ALL"
+          }
+        },
+        "MISSING_REQUIRED_FIELD": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "MISSING_MULTIPLE_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "ANY",
+            "count": 2
+          }
+        },
+      "MISSING_SELECTED_FIELDS": {
+        "operation": {
+          "type": "MISSING",
+          "selection": "EXPLICIT"
+          }
+        },
+        "INVALID_KEY": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "KEY",
+            "count": 1
+          }
+        },
+        "INVALID": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "MISSING": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "EMPTY": {
+          "operation": {
+            "type": "EMPTY",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "CHANGE_WEIGHT_BELOW_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "BELOW_LIMIT"
+          }
+        },
+        "CHANGE_WEIGHT_AT_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "AT_LIMIT"
+          }
+        },
+        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "ABOVE_LIMIT"
+          }
+        },
+        "DUPLICATE": {
+          "operation": {
+            "type": "DUPLICATE"
+          }
+        }
+      }
+    },
+    "member_mr": {
+      "updates": {},
+      "header_order": null,
+      "profile": "member",
+      "schema": "member/member.schema.json",
+      "module": "test_data_generator.entities.member",
+      "filename": "member_roster.jsonl",
+      "source_entity": "member",
+      "file_type": "MR",
+      "scenario_definitions": {
+        "UPDATE": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_SINGLE_FIELD": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_REQUIRED_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "REQUIRED",
+            "count": "ALL"
+          }
+        },
+        "UPDATE_OPTIONAL_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "OPTIONAL",
+            "count": "ALL"
+          }
+        },
+        "MISSING_REQUIRED_FIELD": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "MISSING_MULTIPLE_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "ANY",
+            "count": 2
+          }
+        },
+        "MISSING_SELECTED_FIELDS": {
+          "operation": {
+            "type": "MISSING"
+          }
+        },
+        "INVALID_KEY": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "KEY",
+            "count": 1
+          }
+        },
+        "INVALID": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "MISSING": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "EMPTY": {
+          "operation": {
+            "type": "EMPTY",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "CHANGE_WEIGHT_BELOW_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "BELOW_LIMIT"
+          }
+        },
+        "CHANGE_WEIGHT_AT_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "AT_LIMIT"
+          }
+        },
+        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "ABOVE_LIMIT"
+          }
+        },
+        "DUPLICATE": {
+          "operation": {
+            "type": "DUPLICATE"
+          }
+        }
+      }
+    }
+  },
+  "entities": {
+    "member": {
+      "profile": "member",
+      "source_fields": [
+        "CM_PAYER_SHORT",
+        "CM_MEMBER_CLIENT_ID",
+        "CM_MEMBER_FIRST_NAME",
+        "CM_MEMBER_MIDDLE_NAME",
+        "CM_MEMBER_LAST_NAME",
+        "CM_SUBSCRIBER_BIRTH_DATE",
+        "CM_SUBSCRIBER_GENDER",
+        "CM_MEMBER_BIRTH_DATE",
+        "CM_MEMBER_GENDER",
+        "CM_MEMBER_SSN",
+        "CM_MEMBER_ADDRESS_01",
+        "CM_MEMBER_ADDRESS_02",
+        "CM_MEMBER_ADDRESS_03",
+        "CM_MEMBER_STATE",
+        "CM_MEMBER_ZIP",
+        "CM_SUBSCRIBER_CLIENT_ID",
+        "CM_SUBSCRIBER_LAST_NAME",
+        "CM_SUBSCRIBER_FIRST_NAME",
+        "CM_SUBSCRIBER_MIDDLE_NAME",
+        "CM_SUBSCRIBER_NAME_SUFFIX",
+        "CM_SUBSCRIBER_ADDRESS_01",
+        "CM_SUBSCRIBER_ADDRESS_02",
+        "CM_SUBSCRIBER_CITY",
+        "CM_SUBSCRIBER_STATE",
+        "CM_SUBSCRIBER_ZIP",
+        "CM_PATIENT_LAST_NAME",
+        "CM_PATIENT_FIRST_NAME",
+        "CM_PATIENT_MIDDLE_NAME",
+        "CM_PATIENT_NAME_SUFFIX",
+        "CM_PATIENT_BIRTH_DATE",
+        "CM_PATIENT_GENDER",
+        "CM_PATIENT_ADDRESS_01",
+        "CM_PATIENT_CITY",
+        "CM_PATIENT_STATE",
+        "CM_PATIENT_ZIP"
+      ],
+      "keys": [
+        "CM_MEMBER_CLIENT_ID"
+      ],
+      "matching_methods": [
+        {
+          "name": "member_id_payer",
+          "needed_weight": 2,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_PAYER_SHORT"
+          ]
+        },
+        {
+          "name": "member_id_dob_gender",
+          "needed_weight": 3,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ]
+        },
+        {
+          "name": "name_dob_gender",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ]
+        },
+        {
+          "name": "configured_weighted",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ]
+        }
+      ],
+      "fields": {
+        "CM_MEMBER_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CM_PAYER_SHORT": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CM_MEMBER_FIRST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "name_dob_gender"
+          ],
+          "optional_in": [
+            "member_id_payer"
+          ]
+        },
+        "CM_MEMBER_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_LAST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_BIRTH_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_GENDER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_SSN": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_STATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_ZIP": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
+      }
+    },
+    "member_mr": {
+      "inherits": "member",
+      "profile": "member"
+    }
+  }
+}

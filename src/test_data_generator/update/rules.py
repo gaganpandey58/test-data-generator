@@ -52,17 +52,23 @@ class EntityRules:
 
 
 def load_rule_catalog(path: Path) -> dict[str, EntityRules]:
-    """Load and validate the normalized catalog generated from the source DOCX."""
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ConfigurationError(f"Could not read update rule catalog {path}") from error
-    if not isinstance(raw, dict) or not isinstance(raw.get("entities"), dict):
-        raise ConfigurationError("Update rule catalog must contain an entities object")
+    """Load matching rules from a legacy catalog or per-entity directory.
+
+    A directory is the normal configuration-driven form.  It merges the five
+    entity documents and resolves a small ``inherits`` declaration so Claims
+    History can reuse Claim field and matching definitions without copying a
+    second large catalog.  A single legacy catalog remains accepted for
+    existing callers and configuration files.
+    """
+    raw, catalog_version = _catalog_document(path)
     result: dict[str, EntityRules] = {}
-    for entity, value in raw["entities"].items():
+    entities = raw.get("entities")
+    if not isinstance(entities, dict):
+        raise ConfigurationError("Update rule catalog must contain an entities object")
+    for entity, value in entities.items():
         if not isinstance(value, dict):
             raise ConfigurationError(f"Update rules for {entity!r} must be an object")
+        value = _resolved_entity_definition(entity, value, entities)
         fields = _fields(value.get("fields"), entity)
         keys = _strings(value.get("keys"), f"{entity}.keys")
         source_fields = _strings(value.get("source_fields", []), f"{entity}.source_fields")
@@ -81,9 +87,82 @@ def load_rule_catalog(path: Path) -> dict[str, EntityRules]:
             keys=keys,
             fields=fields,
             methods=methods,
-            catalog_version=str(raw.get("catalog_version", "unknown")),
+            catalog_version=catalog_version,
         )
     return result
+
+
+def _catalog_document(path: Path) -> tuple[dict[str, object], str]:
+    """Read one legacy catalog or combine all checked-in entity catalogs."""
+    if path.is_dir():
+        documents: list[dict[str, object]] = []
+        for document_path in sorted(path.glob("*.json")):
+            try:
+                document = json.loads(document_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise ConfigurationError(
+                    f"Could not read update entity catalog {document_path}"
+                ) from error
+            if not isinstance(document, dict) or not isinstance(document.get("entities"), dict):
+                raise ConfigurationError(
+                    f"Update entity catalog {document_path.name} must contain an entities object"
+                )
+            documents.append(document)
+        if not documents:
+            raise ConfigurationError(f"Update rule catalog directory {path} is empty")
+        merged: dict[str, object] = {"entities": {}}
+        merged_entities = merged["entities"]
+        assert isinstance(merged_entities, dict)
+        versions: set[str] = set()
+        for document in documents:
+            versions.add(str(document.get("catalog_version", "unknown")))
+            raw_entities = document["entities"]
+            assert isinstance(raw_entities, dict)
+            for name, definition in raw_entities.items():
+                if name in merged_entities:
+                    raise ConfigurationError(f"Update entity {name!r} is defined more than once")
+                merged_entities[name] = definition
+        return merged, ",".join(sorted(versions))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ConfigurationError(f"Could not read update rule catalog {path}") from error
+    if not isinstance(raw, dict) or not isinstance(raw.get("entities"), dict):
+        raise ConfigurationError("Update rule catalog must contain an entities object")
+    return raw, str(raw.get("catalog_version", "unknown"))
+
+
+def _resolved_entity_definition(
+    entity: str, value: dict[str, object], entities: object
+) -> dict[str, object]:
+    """Resolve a one-level-or-more rule inheritance chain safely."""
+    inherited = value.get("inherits")
+    if inherited is None:
+        return value
+    if not isinstance(inherited, str) or not isinstance(entities, dict):
+        raise ConfigurationError(f"Update rules for {entity!r} have an invalid inherits value")
+    seen = {entity}
+    parent_name = inherited
+    merged: dict[str, object] = {}
+    while parent_name:
+        if parent_name in seen:
+            raise ConfigurationError(f"Update rules for {entity!r} have cyclic inheritance")
+        seen.add(parent_name)
+        parent = entities.get(parent_name)
+        if not isinstance(parent, dict):
+            raise ConfigurationError(
+                f"Update rules for {entity!r} inherit unknown entity {parent_name!r}"
+            )
+        merged = {**parent, **merged}
+        next_parent = parent.get("inherits")
+        if next_parent is None:
+            break
+        if not isinstance(next_parent, str):
+            raise ConfigurationError(
+                f"Update rules for {parent_name!r} have an invalid inherits value"
+            )
+        parent_name = next_parent
+    return {**merged, **value, "inherits": inherited}
 
 
 def _add_layout_fields(fields: dict[str, FieldRule], profile: str) -> None:

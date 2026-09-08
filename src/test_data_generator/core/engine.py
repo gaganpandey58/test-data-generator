@@ -18,12 +18,6 @@ from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.scenarios import OperationType, UpdateRequest, resolve_update
 from test_data_generator.update.validation import validate_update_contract
 
-_CLAIM_HISTORY_IDENTIFIER_FIELDS = (
-    "CH_CLIENT_CLAIM_UNIQUE_ID",
-    "CH_CLIENT_CLAIM_ID",
-    "CH_CLIENT_ORIGINAL_CLAIM_ID",
-)
-
 
 def run_entity(
     entity: EntityConfig,
@@ -57,6 +51,32 @@ def build_entity_records(
     ]
 
 
+def build_related_records(
+    entity: EntityConfig, source_records: Iterable[Mapping[str, object]]
+) -> list[dict[str, object]]:
+    """Copy an existing stream into a configured related output variant.
+
+    This is intentionally data-driven: an entity configuration declares its
+    source stream and the envelope value that distinguishes the variant.  The
+    Member Roster (MR) stream is the current use case; the helper avoids a
+    second Member generator and keeps all matching fields identical until a
+    configured MR scenario explicitly changes them.
+    """
+    records = list(source_records)
+    if len(records) < entity.count:
+        raise GenerationError(
+            f"Related entity {entity.name!r} requires {entity.count} source records, "
+            f"but only {len(records)} are available"
+        )
+    result: list[dict[str, object]] = []
+    for source in records[: entity.count]:
+        derived = deepcopy(dict(source))
+        if entity.file_type is not None:
+            derived["FILE_TYPE"] = entity.file_type
+        result.append(_order_headers(project_record(derived, entity.profile), entity))
+    return result
+
+
 def run_claim_pair(
     claim_entity: EntityConfig,
     history_entity: EntityConfig,
@@ -67,9 +87,9 @@ def run_claim_pair(
 ) -> tuple[Path, Path]:
     """Publish paired current Claim and Claims History records from one base row.
 
-    History retains the generated client claim identifiers. The corresponding
-    current Claim retains the same complete record but exposes those three
-    declared identifiers as empty values.
+    Current Claim and Claims History retain the same generated client claim
+    identifiers. The CH envelope remains the only deliberate difference at
+    creation time.
     """
     claim_records, history_records = build_claim_pair_records(
         claim_entity, seed, counts, related_records
@@ -93,10 +113,7 @@ def build_claim_pair_records(
         history_record = _build_record(
             claim_entity, seed, index, counts, generate_record, related_records
         )
-        current_claim = deepcopy(history_record)
-        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
-            current_claim[field] = ""
-        claim_records.append(current_claim)
+        claim_records.append(deepcopy(history_record))
         # Claims History is the existing-claim (CH) stream. It shares the
         # Claim layout and business attributes with its paired 837 record but
         # has its own envelope file type.
@@ -220,9 +237,6 @@ def run_update_records(
                 base_record = dict(base)
                 resolved = resolve_update(base_record, request, rules, seed, index)
                 updated = _order_headers(project_record(resolved.record, entity.profile), entity)
-                if entity.name in {"claim_professional", "claim_institutional"}:
-                    for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
-                        updated[field] = ""
                 validate_update_contract(base_record, updated, request, resolved, rules)
                 updated["INGESTION_DATE"] = entity.update_ingestion_date
                 if request.operation not in {
