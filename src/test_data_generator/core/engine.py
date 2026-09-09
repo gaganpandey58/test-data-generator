@@ -235,7 +235,6 @@ def run_update_records(
     update_filename = entity.filename.removesuffix(".jsonl") + ".update.jsonl"
     final_path = resolve_output_path(output_directory, update_filename)
     temporary_path: Path | None = None
-    match_plans: list[dict[str, object]] = []
     try:
         validator = _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -274,59 +273,9 @@ def run_update_records(
                         validator.validate(updated)
                     except ValidationError as error:
                         raise GenerationError(_validation_detail(error)) from error
-                if resolved.expected_outcome is not None:
-                    match_plans.append(
-                        {
-                            "domain": entity.name,
-                            "method_id": resolved.method_id,
-                            "expected_outcome": resolved.expected_outcome.value,
-                            "failure_mode": (
-                                resolved.failure_mode.value
-                                if resolved.failure_mode is not None
-                                else None
-                            ),
-                            "matched_methods": list(resolved.matched_methods),
-                            "unexpected_methods": list(resolved.unexpected_methods),
-                            "modification_plan": [
-                                {
-                                    "type": modification.operation.value,
-                                    "fields": list(modification.fields),
-                                }
-                                for modification in resolved.modification_plan
-                            ],
-                            "existing_record": base_record,
-                            "new_record": updated,
-                        }
-                    )
                 output_file.write(orjson.dumps(updated))
                 output_file.write(b"\n")
-        published_path = temporary_path.replace(final_path)
-        if match_plans:
-            _write_match_plans(final_path, match_plans)
-        return published_path
-    except Exception:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
-        raise
-
-
-def _write_match_plans(update_path: Path, plans: list[dict[str, object]]) -> None:
-    """Publish schema-neutral paired-record metadata beside match fixtures."""
-    plan_path = update_path.with_name(update_path.stem + ".match-plan.jsonl")
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=f".{plan_path.name}.",
-            suffix=".tmp",
-            dir=plan_path.parent,
-            delete=False,
-        ) as output_file:
-            temporary_path = Path(output_file.name)
-            for plan in plans:
-                output_file.write(orjson.dumps(plan))
-                output_file.write(b"\n")
-        temporary_path.replace(plan_path)
+        return temporary_path.replace(final_path)
     except Exception:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)

@@ -19,7 +19,7 @@ from test_data_generator.update.scenarios import (
     UpdateRequest,
     _changed_value,
     _field_names,
-    _generic_invalid_value,
+    _invalid_values_for,
     _normalize_fields,
 )
 from test_data_generator.update.synchronization import synchronize_record
@@ -140,7 +140,7 @@ def resolve_match_fixture(
     )
     applied_plan = plan
     if changed:
-        applied_plan += (FieldModification(OperationType.UPDATE, tuple(dict.fromkeys(changed))),)
+        applied_plan += (FieldModification(OperationType.DIFFERENT, tuple(dict.fromkeys(changed))),)
     if removed:
         applied_plan += (FieldModification(OperationType.MISSING, tuple(dict.fromkeys(removed))),)
     return ResolvedUpdate(
@@ -214,9 +214,7 @@ def _apply_modifications(
             if old is _MISSING:
                 raise ValueError(f"Modification field {field!r} is not present in generated record")
             if modification.operation == OperationType.INVALID:
-                value = randomizer.choice(
-                    invalid_values.get(field, (_generic_invalid_value(field),))
-                )
+                value = randomizer.choice(_invalid_values_for(invalid_values, field, profile))
             elif modification.operation == OperationType.EMPTY:
                 value = "" if isinstance(old, str) else 0
             else:
@@ -275,9 +273,7 @@ def _apply_failure(
             result,
             failure_field,
             randomizer.choice(
-                (request.invalid_values or {}).get(
-                    failure_field, (_generic_invalid_value(failure_field),)
-                )
+                _invalid_values_for(request.invalid_values or {}, failure_field, rules.profile)
             ),
         )
         changed.append(failure_field)

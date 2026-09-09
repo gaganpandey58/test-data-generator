@@ -125,7 +125,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
+        "type": {"enum": ["UPDATE", "DIFFERENT", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
         "fields": {"type": "array", "items": {"type": "string"}},
         "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
       }
@@ -135,7 +135,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "DUPLICATE"]},
+        "type": {"enum": ["UPDATE", "DIFFERENT", "MISSING", "EMPTY", "INVALID", "DUPLICATE"]},
         "fields": {"type": "array", "items": {"type": "string"}}
       }
     },

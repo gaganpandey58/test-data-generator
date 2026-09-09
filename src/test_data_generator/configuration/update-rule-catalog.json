@@ -4,7 +4,6 @@
     "rules/member.json",
     "rules/provider.json",
     "rules/claims.json",
-    "rules/history.json",
     "rules/payments.json"
   ]
 }

@@ -3,6 +3,10 @@
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
   "domain": "claims",
+  "aliases": {
+    "claim_history_professional": "claim_professional",
+    "claim_history_institutional": "claim_institutional"
+  },
   "entities": {
     "claim_professional": {
       "profile": "claim-professional",

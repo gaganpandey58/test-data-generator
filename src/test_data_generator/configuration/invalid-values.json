@@ -97,6 +97,12 @@
     "CH_CHECK_DATE": ["20241340", "20240230", "not-a-date"],
     "CH_CHECK_NUMBER": ["", "CHECK NUMBER WITH SPACES", "CHECK/INVALID"],
     "CH_PAYMENT_CHECK_NUMBER": ["", "CHECK NUMBER WITH SPACES", "CHECK/INVALID"],
-    "CLP02": ["0", "99", "PAID", ""]
+    "CLP02": ["0", "99", "PAID", ""],
+    "CODE": ["__INVALID_CODE__"],
+    "STRING": ["__INVALID_{field}__"],
+    "NUMBER": ["not-a-number"],
+    "INTEGER": ["not-an-integer"],
+    "BOOLEAN": ["not-a-boolean"],
+    "DEFAULT": ["__INVALID_{field}__"]
   }
 }

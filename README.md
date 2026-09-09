@@ -477,24 +477,22 @@ Example for a targeted Member update:
 
 The normalized catalog manifest at
 `src/test_data_generator/configuration/update-rule-catalog.json` composes
-isolated Member, Provider, Claims, History, and Payments configurations under
+isolated Member, Provider, Claims, and Payments configurations under
 `src/test_data_generator/configuration/rules/`. It records source document
 revision `0.9`, entity keys, matching methods, field classification,
-elasticity, weights, and survivorship behavior. History explicitly aliases
-the Claim rules because a CH record is a paired Claim representation, not an
-independent matching model. The legacy combined catalog remains supported for
-existing run configurations. The DOCX is the business source; the JSON
-catalog is the runtime contract and must be regenerated/reviewed when the
-source document changes.
+elasticity, weights, and survivorship behavior. Claims History aliases are
+defined directly by the Claims domain because CH is a paired Claim
+representation, not an independent matching model. The legacy combined
+catalog remains supported for existing run configurations. The DOCX is the
+business source; the JSON catalog is the runtime contract and must be
+regenerated/reviewed when the source document changes.
 
 - [`rules/member.json`](src/test_data_generator/configuration/rules/member.json)
   owns Member rules.
 - [`rules/provider.json`](src/test_data_generator/configuration/rules/provider.json)
   owns Provider rules.
 - [`rules/claims.json`](src/test_data_generator/configuration/rules/claims.json)
-  owns Professional and Institutional Claim rules.
-- [`rules/history.json`](src/test_data_generator/configuration/rules/history.json)
-  maps Claims History to its paired Claim rules.
+  owns Professional and Institutional Claim rules and Claims History aliases.
 - [`rules/payments.json`](src/test_data_generator/configuration/rules/payments.json)
   owns Professional and Institutional Payment rules.
 
@@ -516,10 +514,10 @@ independent fields whose original values differ are not synchronized.
 
 ### Verified match fixtures
 
-An update request can opt into a paired matching fixture. The generated update
-remains schema-shaped, while a sibling `*.update.match-plan.jsonl` file records
-the existing and incoming records, target method, expected outcome, applied
-field modifications, and any other methods that matched.
+An update request can opt into a paired matching fixture. The normal creation
+JSONL is the existing record set and the normal update JSONL is the incoming
+record set; no auxiliary metadata file is written. The generator verifies the
+requested outcome and cross-method collisions before it publishes the update.
 
 ```json
 {
@@ -548,6 +546,12 @@ anchor, `collision_method` for an intended cross-method collision, and
 `INVALID`, `MISSING`, and `EMPTY` cannot modify a mandatory target anchor in a
 positive fixture. Independent non-anchor operations are declared through
 `modifications`; each entry has a `type` and optional `fields` list.
+Use `DIFFERENT` when a field only needs a valid value different from the
+existing record. `UPDATE` remains supported for existing configurations.
+`INVALID` values are always read from the shared
+[`invalid-values.json`](src/test_data_generator/configuration/invalid-values.json)
+catalog, first by exact field and then by configured field type; no invalid
+value is fabricated by the generator.
 For a weighted method, `include` keeps only the selected optional anchors
 matched and deliberately varies the remaining optional anchors; `exclude`
 forces the named optional anchors to differ. The evaluator then verifies that

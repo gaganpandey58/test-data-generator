@@ -28,6 +28,7 @@ class OperationType(StrEnum):
     MISSING = "MISSING"
     EMPTY = "EMPTY"
     INVALID = "INVALID"
+    DIFFERENT = "DIFFERENT"
     WEIGHT_CHANGE = "WEIGHT_CHANGE"
     DUPLICATE = "DUPLICATE"
 
@@ -152,7 +153,7 @@ _PROFILE_SCHEMA_PATHS = {
 
 
 def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
-    """Load the field-name keyed invalid-value catalog."""
+    """Load the shared field-name and field-type invalid-value catalog."""
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -165,6 +166,48 @@ def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
         for field, items in values.items()
         if isinstance(items, list) and items
     }
+
+
+def _invalid_values_for(
+    catalog: Mapping[str, tuple[object, ...]], field: str, profile: str
+) -> tuple[object, ...]:
+    """Resolve a catalog-only invalid value for a field.
+
+    Exact field entries take precedence. When a field has no bespoke entry,
+    a documented field-type entry in ``invalid-values.json`` is used. There
+    is deliberately no inline/synthetic invalid-value fallback.
+    """
+    for key in (field, *_invalid_catalog_keys(field, profile)):
+        values = catalog.get(key)
+        if values:
+            return tuple(
+                value.replace("{field}", field) if isinstance(value, str) else value
+                for value in values
+            )
+    raise ValueError(f"INVALID field {field!r} has no invalid-value catalog entry")
+
+
+def _invalid_catalog_keys(field: str, profile: str) -> tuple[str, ...]:
+    """Return catalog type keys ordered from business type to schema type."""
+    upper = field.upper()
+    keys: list[str] = []
+    for marker, catalog_key in (
+        ("NPI", "NPI"),
+        ("SSN", "SSN"),
+        ("HICN", "HICN"),
+        ("EMAIL", "EMAIL"),
+        ("PHONE", "PHONE"),
+        ("ZIP", "ZIP"),
+        ("DATE", "DATE"),
+        ("AMOUNT", "AMOUNT"),
+    ):
+        if marker in upper:
+            keys.append(catalog_key)
+    if any(marker in upper for marker in ("CODE", "TYPE", "STATUS", "INDICATOR", "QUALIFIER")):
+        keys.append("CODE")
+    keys.extend(schema_type.upper() for schema_type in _schema_field_types(profile, field))
+    keys.append("DEFAULT")
+    return tuple(dict.fromkeys(keys))
 
 
 @dataclass(frozen=True)
@@ -238,6 +281,7 @@ def resolve_fields(
         selected = [field for field in _normalize_fields(request.include, known) if field in known]
     elif request.operation in {
         OperationType.UPDATE,
+        OperationType.DIFFERENT,
         OperationType.MISSING,
         OperationType.EMPTY,
         OperationType.INVALID,
@@ -271,7 +315,10 @@ def resolve_fields(
         raise ValueError(f"Update selection contains an unknown field {unknown!r}")
     if any(field in rules.keys for field in selected) and not (
         request.operation in {OperationType.INVALID, OperationType.MISSING}
-        or (request.operation == OperationType.UPDATE and explicit_selection)
+        or (
+            request.operation in {OperationType.UPDATE, OperationType.DIFFERENT}
+            and explicit_selection
+        )
     ):
         matching = next(field for field in selected if field in rules.keys)
         raise ValueError(
@@ -390,7 +437,7 @@ def resolve_update(
         elif operation == OperationType.INVALID:
             catalog = request.invalid_values or {}
             for field in selected:
-                values = catalog.get(field) or (_generic_invalid_value(field),)
+                values = _invalid_values_for(catalog, field, rules.profile)
                 _replace_field(result, field, randomizer.choice(values))
                 changed.append(field)
                 if field in rules.keys:
@@ -727,6 +774,34 @@ def _schema_enum_values(profile: str, field: str) -> tuple[object, ...]:
     return tuple(dict.fromkeys(values))
 
 
+def _schema_field_types(profile: str, field: str) -> tuple[str, ...]:
+    """Read declared JSON-Schema types for a field to select catalog values."""
+    schema = _load_profile_schema(profile)
+    if schema is None:
+        return ()
+    values: list[str] = []
+
+    def visit(node: object) -> None:
+        if isinstance(node, Mapping):
+            properties = node.get("properties")
+            if isinstance(properties, Mapping):
+                definition = properties.get(field)
+                if isinstance(definition, Mapping):
+                    declared = definition.get("type")
+                    if isinstance(declared, str):
+                        values.append(declared)
+                    elif isinstance(declared, list):
+                        values.extend(item for item in declared if isinstance(item, str))
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(schema)
+    return tuple(dict.fromkeys(values))
+
+
 @lru_cache(maxsize=None)
 def _load_profile_schema(profile: str) -> Mapping[str, object] | None:
     """Load one installed schema once for the update value resolver."""
@@ -775,20 +850,6 @@ def _changed_root_claim_id(value: str, randomizer: Random) -> str:
     if replacement == original:
         replacement = f"{(int(original) + 1) % 100_000_000:08d}"
     return match.group(1) + replacement
-
-
-def _generic_invalid_value(field: str) -> str:
-    """Return a deliberate type/format violation for an emitted field.
-
-    ``invalid-values.json`` remains the preferred source for field-specific
-    invalid cases.  Layouts can contain hundreds of optional GDF attributes,
-    however, so an explicit INVALID operation must not become unavailable just
-    because a newly emitted field has not yet received a bespoke catalog row.
-    INVALID fixtures intentionally bypass normal schema validation in the
-    engine; the sentinel is therefore safe and unambiguously invalid for
-    downstream validation tests.
-    """
-    return f"__INVALID_{field}__"
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:

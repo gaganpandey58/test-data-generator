@@ -282,7 +282,6 @@ def generate(config: Path, mode: str = "all") -> None:
             )
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
-        _remove_stale_match_plans(run_config)
         _materialize_update_bases(run_config, entity_counts, generated_records)
         entities_by_name = {entity.name: entity for entity in run_config.entities}
         propagated_payment_updates: set[str] = set()
@@ -776,15 +775,6 @@ def _field_modifications(raw: Mapping[str, object]) -> tuple[FieldModification, 
             raise CommandError("WEIGHT_CHANGE is configured through the top-level operation")
         result.append(FieldModification(operation, _string_tuple(definition, "fields")))
     return tuple(result)
-
-
-def _remove_stale_match_plans(run_config: RunConfig) -> None:
-    """Remove only generated match-plan sidecars before publishing this update run."""
-    for entity in run_config.entities:
-        update_name = entity.filename.removesuffix(".jsonl") + ".update.match-plan.jsonl"
-        path = run_config.update_directory / update_name
-        if path.is_file() or path.is_symlink():
-            path.unlink()
 
 
 def _string_tuple(values: Mapping[str, object], key: str) -> tuple[str, ...]:
