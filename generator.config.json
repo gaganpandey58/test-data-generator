@@ -14,28 +14,23 @@
     "cdf": {
       "additional_count": 90
     },
-    "scenario": "UPDATE",
+    "scenario": "UPDATE_SINGLE_FIELD",
     "method": "deterministic_provider"
   },
   "member": {
     "count": 1,
-    "scenario": "UPDATE",
-    "method": "member_id_dob_gender",
-    "mr": {
-      "count": 1,
-      "scenario": "UPDATE",
-      "method": "member_id_dob_gender"
-    }
+    "scenario": "UPDATE_SINGLE_FIELD",
+    "method": "member_id_dob_gender"
   },
   "claims": {
     "professional": {
       "count": 7,
-      "scenario": "UPDATE",
+      "scenario": "UPDATE_SINGLE_FIELD",
       "method": "professional_claim_primary"
     },
     "institutional": {
       "count": 7,
-      "scenario": "UPDATE",
+      "scenario": "UPDATE_SINGLE_FIELD",
       "method": "institutional_claim_primary"
     }
   },

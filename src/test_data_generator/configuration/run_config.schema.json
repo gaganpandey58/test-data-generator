@@ -115,14 +115,9 @@
   },
   "$defs": {
     "operation": {
-      "allOf": [
-        {"$ref": "#/$defs/operation_override"},
-        {"required": ["type"]}
-      ]
-    },
-    "operation_override": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["type"],
       "properties": {
         "type": {
           "enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]
@@ -247,7 +242,7 @@
             "exclude": {"type": "array", "items": {"type": "string"}},
             "matching_method": {"type": "string", "minLength": 1},
             "threshold": {"type": "number"},
-            "operation": {"$ref": "#/$defs/operation_override"}
+            "operation": {"$ref": "#/$defs/operation"}
           }
     }
   }

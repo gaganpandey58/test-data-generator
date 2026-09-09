@@ -99,8 +99,9 @@ stream is shaped, matched, and mutated. It has these concepts:
 - `client` — the checked-in client profile to use;
 - optional `seed` — integer used to reproduce a deterministic run; and
 - entity `count` values — the exact number of objects to write; and
-- optional entity `scenario` — a reusable mutation intent such as `UPDATE`,
-  `INVALID`, `MISSING`, `WEIGHT_CHANGE`, or `DUPLICATE`; and
+- optional entity `scenario` — a reusable mutation intent such as
+  `UPDATE_SINGLE_FIELD`, `UPDATE_REQUIRED_FIELDS`, `INVALID_KEY`, or
+  `DUPLICATE`; and
 - optional entity `method` — a matching method defined for that entity.
 
 The five entity documents in
@@ -118,16 +119,16 @@ classification, elasticity, matching methods, and scenario templates:
   "provider": {
     "nppes": {"count": 10},
     "cdf": {"additional_count": 5},
-    "scenario": "UPDATE",
+    "scenario": "UPDATE_SINGLE_FIELD",
     "method": "deterministic_provider"
   },
   "member": {
     "count": 10,
-    "scenario": "UPDATE",
+    "scenario": "UPDATE_REQUIRED_FIELDS",
     "method": "member_id_dob_gender",
     "mr": {
       "count": 10,
-      "scenario": "UPDATE",
+      "scenario": "DUPLICATE",
       "method": "member_id_dob_gender"
     }
   },
@@ -157,40 +158,14 @@ any field catalog in the root file:
 {
   "member": {
     "count": 1,
-    "scenario": "UPDATE",
+    "scenario": "UPDATE_SINGLE_FIELD",
     "method": "member_id_dob_gender",
     "updates": {
-      "operation": {"fields": ["CM_MEMBER_SSN"]}
+      "operation": {"type": "UPDATE", "fields": ["CM_MEMBER_SSN"]}
     }
   }
 }
 ```
-
-The scenario template supplies the operation type, so a focused override only
-needs the parts that differ. This applies uniformly to every entity:
-
-```json
-{
-  "claims": {
-    "professional": {
-      "count": 7,
-      "scenario": "WEIGHT_CHANGE",
-      "method": "professional_claim_primary",
-      "updates": {
-        "operation": {
-          "condition": "AT_LIMIT",
-          "fields": ["CH_CHARGE_AMOUNT", "CD_CHARGE_AMOUNT"]
-        }
-      }
-    }
-  }
-}
-```
-
-`UPDATE`, `INVALID`, and `MISSING` accept the same optional
-`updates.operation.fields` list. `DUPLICATE` intentionally ignores fields and
-copies the original record. The more specific scenario aliases remain
-available when their automatic field selection is useful.
 
 `count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
 

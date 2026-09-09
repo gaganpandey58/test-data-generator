@@ -430,16 +430,10 @@ def _selected_entity(
         result["updates"] = updates
     if isinstance(selection.get("updates"), dict):
         updates = cast(dict[str, object], selection["updates"])
-        template_updates = dict(cast(Mapping[str, object], result.get("updates", {})))
-        configured_updates = {str(key): value for key, value in updates.items()}
-        template_operation = template_updates.get("operation")
-        configured_operation = configured_updates.get("operation")
-        if isinstance(template_operation, Mapping) and isinstance(configured_operation, Mapping):
-            configured_updates["operation"] = {
-                **template_operation,
-                **configured_operation,
-            }
-        result["updates"] = {**template_updates, **configured_updates}
+        result["updates"] = {
+            **cast(Mapping[str, object], result.get("updates", {})),
+            **{str(key): value for key, value in updates.items()},
+        }
     if "source_claims" in selection:
         result["source_claims"] = selection["source_claims"]
     if "scenarios" in selection:
