@@ -35,7 +35,7 @@ flowchart LR
     G --> H["Generic nested-field deduplication<br/>keep only declared relationship references"]
     H --> I["Schema validation"]
     I --> J["Separate JSONL outputs"]
-    K["generator.config.json<br/>client + happy path + counts"] --> F
+    K["config/*.json<br/>global + domain settings"] --> F
 ```
 
 ### GDF fields and schemas
@@ -93,42 +93,48 @@ To support a new client, add a complete top-level client entry with `headers` an
 
 ## Configuration
 
-[generator.config.json](generator.config.json) is the only run-time file you normally edit. It has four concepts:
+The checked-in configuration is composed from small, focused JSON files:
 
-- `client` — the checked-in client profile to use;
-- optional `seed` — integer used to reproduce a deterministic run; and
-- entity `count` values — the exact number of objects to write; and
-- optional entity `layout` — a compatible checked-in output layout (the current
-  layout is used when omitted).
+```text
+runconfig.json                         # execution scope: config, domains, phases
+config/
+├── generator.config.json              # client, output, global enablement, references
+├── provider.config.json               # CDF/NPPES and Provider updates
+├── member.config.json                 # 834/MR and Member updates
+├── claims.config.json                 # professional/institutional Claims updates
+├── payments.config.json               # professional/institutional 835 scenarios
+└── common/
+    ├── operations.json                # named UPDATE, DIFFERENT, INVALID, etc.
+    ├── update-profiles.json           # reusable outcome/failure profiles
+    └── ingestion.json                 # shared optional ingestion defaults
+```
 
-`schema`, `module`, and output filenames are internal defaults. Omit an entity
-to skip its output. A supplied layout must be valid for the selected data type:
-for example, `provider` can use only `"provider"`, while professional claims
-can use only `"claim-professional"` today.
+The root [`generator.config.json`](generator.config.json) remains as a
+backwards-compatible execution wrapper. New runs should use
+[`runconfig.json`](runconfig.json).
+
+`config/generator.config.json` owns only global settings and references. Each
+domain file owns its count, fields, matching method, or payment scenario data.
+The loader resolves named profiles and operations into the existing validated
+internal configuration before generation, so schemas, generator modules, and
+output names remain internal defaults.
+
+For example, this entity update uses a reusable profile while declaring only
+the field that differs:
 
 ```json
 {
-  "client": "chc",
-  "seed": 20260805,
-  "output_directory": "./output",
-  "provider": {
-    "nppes": {"count": 10},
-    "cdf": {"additional_count": 5}
-  },
-  "member": {
-    "count": 10,
-    "mr": {"count": 10}
-  },
-  "claims": {
-    "professional": {"count": 10},
-    "institutional": {"count": 10}
-  },
-  "payments": {
-    "professional": {"count": 10},
-    "institutional": {"count": 10}
+  "updates": {
+    "profile": "standard_update",
+    "operation": {"fields": ["CH_PATIENT_FIRST_NAME"]}
   }
 }
 ```
+
+To add a scenario, add or reuse an operation in `common/operations.json`, add
+an outcome profile in `common/update-profiles.json` when needed, then reference
+that profile from the relevant entity config. No entity generator code is
+needed unless the new scenario requires genuinely new record semantics.
 
 `member.mr` is optional. When enabled, the generator creates each roster row
 from the corresponding emitted 834 Member row instead of invoking a second
@@ -344,8 +350,8 @@ from the matching creation record using the same seed and row index.
 Run only one side of the workflow when needed:
 
 ```sh
-uv run python -m test_data_generator generate --config generator.config.json --mode creation
-uv run python -m test_data_generator generate --config generator.config.json --mode updates
+uv run python -m test_data_generator generate --config runconfig.json --mode creation
+uv run python -m test_data_generator generate --config runconfig.json --mode updates
 ```
 
 ### Provider NPPES/CDF fixtures
@@ -643,7 +649,8 @@ make verify
 ## Project layout
 
 ```text
-generator.config.json                         # One simple generation request
+runconfig.json                                 # Execution scope and selected phases
+config/                                        # Modular global, domain, and common settings
 schema/
 ├── gdf/                                      # Replaceable GDF Excel source
 ├── json/                                     # Complete GDF-aware JSON Schemas

@@ -9,7 +9,8 @@
     {"required": ["provider_nppes"]},
     {"required": ["member"]},
     {"required": ["claims"]},
-    {"required": ["payments"]}
+    {"required": ["payments"]},
+    {"required": ["entity_configs"]}
   ],
   "properties": {
     "client": {"type": "string", "minLength": 1},
@@ -42,6 +43,7 @@
             "directory": {"type": "string", "minLength": 1},
             "rule_catalog": {"type": "string", "minLength": 1},
             "invalid_values_catalog": {"type": "string", "minLength": 1},
+            "profile": {"type": "string", "minLength": 1},
             "matching_method": {"type": "string", "minLength": 1},
             "threshold": {"type": "number"},
             "operation": {"$ref": "#/$defs/operation"},
@@ -80,6 +82,27 @@
             }
           }
         }
+      }
+    },
+    "entity_configs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "member", "claims", "payments"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "member": {"type": "string", "minLength": 1},
+        "claims": {"type": "string", "minLength": 1},
+        "payments": {"type": "string", "minLength": 1}
+      }
+    },
+    "common": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operations", "update_profiles", "ingestion"],
+      "properties": {
+        "operations": {"type": "string", "minLength": 1},
+        "update_profiles": {"type": "string", "minLength": 1},
+        "ingestion": {"type": "string", "minLength": 1}
       }
     },
     "provider": {

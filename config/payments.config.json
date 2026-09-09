@@ -1,0 +1,19 @@
+{
+  "payments": {
+    "defaults": {
+      "scenarios": {
+        "MATCHED": 4,
+        "REVERSAL": 1,
+        "REPLACEMENT": 1,
+        "STALE": 1,
+        "ORPHAN": 0
+      }
+    },
+    "professional": {
+      "count": 7
+    },
+    "institutional": {
+      "count": 7
+    }
+  }
+}

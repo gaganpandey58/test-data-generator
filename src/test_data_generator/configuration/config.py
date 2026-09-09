@@ -9,7 +9,8 @@ and relationships before generation can begin.
 
 import json
 import secrets
-from dataclasses import dataclass, field
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from importlib.resources import files
 from pathlib import Path, PureWindowsPath
@@ -118,6 +119,83 @@ class RunConfig:
     provider_linked: bool = False
 
 
+@dataclass(frozen=True)
+class ExecutionConfig:
+    """Describe a run request without embedding generation business rules."""
+
+    config_path: Path
+    entities: tuple[str, ...] = ()
+    operations: tuple[str, ...] = ("creation", "updates")
+
+
+_EXECUTION_ENTITY_GROUPS = {
+    "provider": frozenset({"provider"}),
+    "member": frozenset({"member", "member_mr"}),
+    "claims": frozenset(
+        {
+            "claim_professional",
+            "claim_history_professional",
+            "claim_institutional",
+            "claim_history_institutional",
+        }
+    ),
+    "payments": frozenset({"payment_professional", "payment_institutional"}),
+}
+_EXECUTION_OPERATIONS = frozenset({"creation", "updates"})
+
+
+def load_execution_config(path: Path) -> ExecutionConfig:
+    """Load a focused ``runconfig.json`` execution request.
+
+    A normal generator configuration remains accepted for backwards
+    compatibility and implicitly selects every entity and both phases.
+    """
+    request_path = path.resolve()
+    raw = _load_json(request_path, "execution configuration")
+    if "config" not in raw:
+        return ExecutionConfig(request_path)
+    _validate_execution_schema(raw)
+    config_value = raw["config"]
+    assert isinstance(config_value, str)
+    config_path = _resolve_path(config_value, request_path.parent)
+    if config_path == request_path:
+        raise ConfigurationError("Execution configuration cannot reference itself")
+    entities = tuple(raw.get("entities", ()))
+    operations = tuple(raw.get("operations", ("creation", "updates")))
+    return ExecutionConfig(config_path, entities, operations)
+
+
+def select_execution_entities(run_config: RunConfig, execution: ExecutionConfig) -> RunConfig:
+    """Restrict one resolved run to requested high-level entity groups."""
+    if not execution.entities:
+        return run_config
+    unknown = sorted(set(execution.entities).difference(_EXECUTION_ENTITY_GROUPS))
+    if unknown:
+        raise ConfigurationError(f"Unknown execution entity group {unknown[0]!r}")
+    selected_names = set().union(*(_EXECUTION_ENTITY_GROUPS[name] for name in execution.entities))
+    return replace(
+        run_config,
+        entities=tuple(entity for entity in run_config.entities if entity.name in selected_names),
+        # A selectively scoped run must never clean outputs owned by omitted domains.
+        disabled_filenames=(),
+    )
+
+
+def resolve_execution_mode(mode: str, execution: ExecutionConfig) -> str:
+    """Apply runconfig phase restrictions to the requested CLI mode."""
+    allowed = set(execution.operations)
+    unknown = sorted(allowed.difference(_EXECUTION_OPERATIONS))
+    if unknown:
+        raise ConfigurationError(f"Unknown execution operation {unknown[0]!r}")
+    if not allowed:
+        raise ConfigurationError("Execution configuration must select an operation")
+    if mode == "all":
+        return "all" if allowed == _EXECUTION_OPERATIONS else next(iter(allowed))
+    if mode not in allowed:
+        raise ConfigurationError(f"Execution configuration does not permit requested mode {mode!r}")
+    return mode
+
+
 def load_config(path: Path) -> RunConfig:
     """Load one simple generation configuration from disk.
 
@@ -134,7 +212,13 @@ def load_config(path: Path) -> RunConfig:
     """
     config_path = path.resolve()
     raw_config = _load_json(config_path, "configuration")
+    if "config" in raw_config:
+        execution = load_execution_config(config_path)
+        return select_execution_entities(load_config(execution.config_path), execution)
     _validate_schema(raw_config)
+    if "entity_configs" in raw_config:
+        raw_config = _compose_modular_config(raw_config, config_path)
+        _validate_schema(raw_config)
     provider_linked = isinstance(raw_config.get("provider"), dict) and (
         isinstance(raw_config["provider"].get("nppes"), dict)
         or isinstance(raw_config["provider"].get("cdf"), dict)
@@ -278,6 +362,207 @@ def load_config(path: Path) -> RunConfig:
         nppes_organizational_count=nppes_organizational_count,
         provider_linked=provider_linked,
     )
+
+
+def _compose_modular_config(global_config: dict[str, Any], config_path: Path) -> dict[str, Any]:
+    """Resolve global, entity, and common configuration documents once."""
+    entity_references = global_config.get("entity_configs")
+    common_references = global_config.get("common")
+    if not isinstance(entity_references, Mapping) or not isinstance(common_references, Mapping):
+        raise ConfigurationError("Modular configuration requires entity_configs and common objects")
+    expected_entities = ("provider", "member", "claims", "payments")
+    if set(entity_references) != set(expected_entities):
+        raise ConfigurationError(
+            "entity_configs must contain provider, member, claims, and payments references"
+        )
+    expected_common = ("operations", "update_profiles", "ingestion")
+    if set(common_references) != set(expected_common):
+        raise ConfigurationError(
+            "common must contain operations, update_profiles, and ingestion references"
+        )
+
+    composed: dict[str, Any] = {
+        key: deepcopy(value)
+        for key, value in global_config.items()
+        if key not in {"entity_configs", "common"}
+    }
+    for entity_name in expected_entities:
+        reference = entity_references[entity_name]
+        if not isinstance(reference, str):
+            raise ConfigurationError(f"entity_configs.{entity_name} must be a path string")
+        entity_path = _resolve_path(reference, config_path.parent)
+        document = _load_json(entity_path, f"{entity_name} entity configuration")
+        if set(document) != {entity_name} or not isinstance(document[entity_name], dict):
+            raise ConfigurationError(f"{entity_path} must contain only a {entity_name!r} object")
+        composed[entity_name] = _expand_domain_defaults(entity_name, document[entity_name])
+
+    operations = _load_common_operations(common_references["operations"], config_path.parent)
+    profiles = _load_update_profiles(common_references["update_profiles"], config_path.parent)
+    ingestion = _load_common_ingestion(common_references["ingestion"], config_path.parent)
+    generation = composed.setdefault("generation", {})
+    if not isinstance(generation, dict):
+        raise ConfigurationError("generation must be an object")
+    if "ingestion_dates" in generation and ingestion:
+        raise ConfigurationError(
+            "Define ingestion_dates in common/ingestion.json, not generator config"
+        )
+    if ingestion:
+        generation["ingestion_dates"] = ingestion
+    _resolve_configured_updates(composed, profiles, operations)
+    return composed
+
+
+def _load_common_operations(
+    reference: object, base_directory: Path
+) -> Mapping[str, Mapping[str, object]]:
+    """Load named reusable operation definitions."""
+    if not isinstance(reference, str):
+        raise ConfigurationError("common.operations must be a path string")
+    document = _load_json(_resolve_path(reference, base_directory), "common operations")
+    operations = document.get("operations") if set(document) == {"operations"} else None
+    if not isinstance(operations, dict) or not operations:
+        raise ConfigurationError("common operations must contain a non-empty operations object")
+    if not all(
+        isinstance(name, str) and isinstance(value, dict) for name, value in operations.items()
+    ):
+        raise ConfigurationError("Each common operation must be an object")
+    return cast(Mapping[str, Mapping[str, object]], operations)
+
+
+def _expand_domain_defaults(entity_name: str, document: Mapping[str, object]) -> dict[str, object]:
+    """Apply optional shared Professional/Institutional domain settings once."""
+    result = deepcopy(dict(document))
+    if entity_name not in {"claims", "payments"}:
+        return result
+    defaults = result.pop("defaults", {})
+    if not isinstance(defaults, Mapping):
+        raise ConfigurationError(f"{entity_name}.defaults must be an object")
+    for stream in ("professional", "institutional"):
+        configured = result.get(stream)
+        if configured is None:
+            continue
+        if not isinstance(configured, Mapping):
+            raise ConfigurationError(f"{entity_name}.{stream} must be an object")
+        result[stream] = _merge_configuration(dict(defaults), dict(configured))
+    return result
+
+
+def _merge_configuration(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
+    """Merge nested config values while keeping stream-specific overrides explicit."""
+    merged = deepcopy(base)
+    for key, value in override.items():
+        current = merged.get(key)
+        if isinstance(current, Mapping) and isinstance(value, Mapping):
+            merged[key] = _merge_configuration(dict(current), dict(value))
+        else:
+            merged[key] = deepcopy(value)
+    return merged
+
+
+def _load_update_profiles(
+    reference: object, base_directory: Path
+) -> Mapping[str, Mapping[str, object]]:
+    """Load reusable update scenario profiles."""
+    if not isinstance(reference, str):
+        raise ConfigurationError("common.update_profiles must be a path string")
+    document = _load_json(_resolve_path(reference, base_directory), "common update profiles")
+    profiles = document.get("profiles") if set(document) == {"profiles"} else None
+    if not isinstance(profiles, dict) or not profiles:
+        raise ConfigurationError("common update profiles must contain a non-empty profiles object")
+    if not all(
+        isinstance(name, str) and isinstance(value, dict) for name, value in profiles.items()
+    ):
+        raise ConfigurationError("Each update profile must be an object")
+    return cast(Mapping[str, Mapping[str, object]], profiles)
+
+
+def _load_common_ingestion(reference: object, base_directory: Path) -> dict[str, object]:
+    """Load the optional reusable ingestion-date defaults."""
+    if not isinstance(reference, str):
+        raise ConfigurationError("common.ingestion must be a path string")
+    document = _load_json(_resolve_path(reference, base_directory), "common ingestion")
+    value = document.get("ingestion_dates") if set(document) == {"ingestion_dates"} else None
+    if not isinstance(value, dict):
+        raise ConfigurationError("common ingestion must contain an ingestion_dates object")
+    return deepcopy(value)
+
+
+def _resolve_configured_updates(
+    config: dict[str, Any],
+    profiles: Mapping[str, Mapping[str, object]],
+    operations: Mapping[str, Mapping[str, object]],
+) -> None:
+    """Expand named profile and operation references before normal validation."""
+    generation = config.get("generation")
+    if isinstance(generation, dict) and isinstance(generation.get("updates"), dict):
+        generation["updates"] = _resolve_update_reference(
+            generation["updates"], profiles, operations
+        )
+    for entity_name in ("provider", "member"):
+        entity = config.get(entity_name)
+        if not isinstance(entity, dict):
+            continue
+        if isinstance(entity.get("updates"), dict):
+            entity["updates"] = _resolve_update_reference(entity["updates"], profiles, operations)
+        member_roster = entity.get("mr")
+        if isinstance(member_roster, dict) and isinstance(member_roster.get("updates"), dict):
+            member_roster["updates"] = _resolve_update_reference(
+                member_roster["updates"], profiles, operations
+            )
+    for domain_name in ("claims", "payments"):
+        domain = config.get(domain_name)
+        if not isinstance(domain, dict):
+            continue
+        for stream in ("professional", "institutional"):
+            entity = domain.get(stream)
+            if isinstance(entity, dict) and isinstance(entity.get("updates"), dict):
+                entity["updates"] = _resolve_update_reference(
+                    entity["updates"], profiles, operations
+                )
+
+
+def _resolve_update_reference(
+    configured: Mapping[str, object],
+    profiles: Mapping[str, Mapping[str, object]],
+    operations: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    """Merge one named profile and named operation into the legacy update shape."""
+    profile_name = configured.get("profile")
+    if profile_name is not None and not isinstance(profile_name, str):
+        raise ConfigurationError("Update profile must be a string")
+    profile = profiles.get(profile_name, {}) if profile_name is not None else {}
+    if profile_name is not None and not profile:
+        raise ConfigurationError(f"Unknown update profile {profile_name!r}")
+    result = deepcopy(dict(profile))
+    result.update({key: deepcopy(value) for key, value in configured.items() if key != "profile"})
+    profile_operation = profile.get("operation")
+    configured_operation = configured.get("operation")
+    base_operation = _resolve_operation_reference(profile_operation, operations)
+    override_operation = _resolve_operation_reference(configured_operation, operations)
+    if base_operation is not None and override_operation is not None:
+        base_operation.update(override_operation)
+        result["operation"] = base_operation
+    elif override_operation is not None:
+        result["operation"] = override_operation
+    elif base_operation is not None:
+        result["operation"] = base_operation
+    return result
+
+
+def _resolve_operation_reference(
+    configured: object, operations: Mapping[str, Mapping[str, object]]
+) -> dict[str, object] | None:
+    """Resolve either a named common operation or an inline operation override."""
+    if configured is None:
+        return None
+    if isinstance(configured, str):
+        operation = operations.get(configured)
+        if operation is None:
+            raise ConfigurationError(f"Unknown common operation {configured!r}")
+        return deepcopy(dict(operation))
+    if isinstance(configured, Mapping):
+        return deepcopy(dict(configured))
+    raise ConfigurationError("Update operation must be an object or a common operation name")
 
 
 def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
@@ -983,6 +1268,15 @@ def _validate_schema(raw_config: dict[str, Any]) -> None:
         raise ConfigurationError(f"Invalid configuration: {details}")
 
 
+def _validate_execution_schema(raw_config: dict[str, Any]) -> None:
+    """Validate a focused execution request before resolving its generator path."""
+    schema = _load_execution_schema()
+    errors = sorted(Draft202012Validator(schema).iter_errors(raw_config), key=str)
+    if errors:
+        details = "; ".join(_safe_validation_detail(error) for error in errors)
+        raise ConfigurationError(f"Invalid execution configuration: {details}")
+
+
 def _load_packaged_schema() -> dict[str, Any]:
     """Load the run configuration schema bundled with the Python package.
 
@@ -1002,6 +1296,26 @@ def _load_packaged_schema() -> dict[str, Any]:
         raise ConfigurationError("Could not decode packaged run configuration schema") from error
     if not isinstance(value, dict):
         raise ConfigurationError("The packaged run configuration schema must contain a JSON object")
+    return value
+
+
+def _load_execution_schema() -> dict[str, Any]:
+    """Load the bundled schema for ``runconfig.json`` requests."""
+    resource = files(__package__).joinpath("execution_config.schema.json")
+    try:
+        value = json.loads(resource.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise ConfigurationError(
+            "Could not read packaged execution configuration schema"
+        ) from error
+    except json.JSONDecodeError as error:
+        raise ConfigurationError(
+            "Could not decode packaged execution configuration schema"
+        ) from error
+    if not isinstance(value, dict):
+        raise ConfigurationError(
+            "The packaged execution configuration schema must contain a JSON object"
+        )
     return value
 
 

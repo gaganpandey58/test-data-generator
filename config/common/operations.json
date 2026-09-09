@@ -1,0 +1,13 @@
+{
+  "operations": {
+    "update": {"type": "UPDATE"},
+    "different": {"type": "DIFFERENT"},
+    "invalid": {"type": "INVALID"},
+    "missing": {"type": "MISSING"},
+    "empty": {"type": "EMPTY"},
+    "duplicate": {"type": "DUPLICATE"},
+    "weight_below_limit": {"type": "WEIGHT_CHANGE", "condition": "BELOW_LIMIT"},
+    "weight_at_limit": {"type": "WEIGHT_CHANGE", "condition": "AT_LIMIT"},
+    "weight_above_limit": {"type": "WEIGHT_CHANGE", "condition": "ABOVE_LIMIT"}
+  }
+}

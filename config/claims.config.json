@@ -1,0 +1,16 @@
+{
+  "claims": {
+    "defaults": {
+      "updates": {
+        "profile": "standard_update",
+        "operation": {"fields": ["CH_PATIENT_FIRST_NAME"]}
+      }
+    },
+    "professional": {
+      "count": 7
+    },
+    "institutional": {
+      "count": 7
+    }
+  }
+}

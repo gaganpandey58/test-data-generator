@@ -18,7 +18,13 @@ from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from test_data_generator.configuration.config import RunConfig, load_config
+from test_data_generator.configuration.config import (
+    RunConfig,
+    load_config,
+    load_execution_config,
+    resolve_execution_mode,
+    select_execution_entities,
+)
 from test_data_generator.core.engine import (
     build_claim_pair_records,
     build_entity_records,
@@ -82,7 +88,9 @@ def generate(config: Path, mode: str = "all") -> None:
         raise CommandError(f"Unknown generation mode {mode!r}")
     _refresh_gdf_schemas()
     try:
-        run_config = load_config(config)
+        execution = load_execution_config(config)
+        run_config = select_execution_entities(load_config(execution.config_path), execution)
+        mode = resolve_execution_mode(mode, execution)
     except ConfigurationError as error:
         raise CommandError(f"Configuration failed for {config.resolve()}: {error}") from error
 
@@ -887,14 +895,14 @@ def main() -> int:
 
 
 def run_default() -> int:
-    """Generate using the repository's standard ``generator.config.json`` file.
+    """Generate using the repository's standard ``runconfig.json`` file.
 
     This is the short console command installed as ``generate-data``. It keeps
     normal use to one command while ``main`` remains available for an optional
     alternate configuration path.
     """
     try:
-        generate(Path("generator.config.json"))
+        generate(Path("runconfig.json"))
     except CommandError as error:
         print(error, file=sys.stderr)
         return 2
