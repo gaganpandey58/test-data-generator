@@ -1,5 +1,5 @@
 {
-  "catalog_version": "0.9",
+  "catalog_version": "1.0",
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
   "entity_defaults": {
@@ -9,113 +9,7 @@
       "profile": "provider",
       "schema": "provider/provider.schema.json",
       "module": "test_data_generator.entities.provider",
-      "filename": "provider_cdf.jsonl",
-      "scenario_definitions": {
-        "UPDATE": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "WEIGHT_CHANGE": {
-          "operation": {
-            "type": "WEIGHT_CHANGE"
-          }
-        },
-        "UPDATE_SINGLE_FIELD": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "UPDATE_REQUIRED_FIELDS": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "REQUIRED",
-            "count": "ALL"
-          }
-        },
-        "UPDATE_OPTIONAL_FIELDS": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "OPTIONAL",
-            "count": "ALL"
-          }
-        },
-        "MISSING_REQUIRED_FIELD": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "REQUIRED",
-            "count": 1
-          }
-        },
-        "MISSING_MULTIPLE_FIELDS": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "ANY",
-            "count": 2
-          }
-        },
-        "MISSING_SELECTED_FIELDS": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "EXPLICIT"
-          }
-        },
-        "INVALID_KEY": {
-          "operation": {
-            "type": "INVALID",
-            "selection": "KEY",
-            "count": 1
-          }
-        },
-        "INVALID": {
-          "operation": {
-            "type": "INVALID",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "MISSING": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "REQUIRED",
-            "count": 1
-          }
-        },
-        "EMPTY": {
-          "operation": {
-            "type": "EMPTY",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "CHANGE_WEIGHT_BELOW_LIMIT": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "BELOW_LIMIT"
-          }
-        },
-        "CHANGE_WEIGHT_AT_LIMIT": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "AT_LIMIT"
-          }
-        },
-        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "ABOVE_LIMIT"
-          }
-        },
-        "DUPLICATE": {
-          "operation": {
-            "type": "DUPLICATE"
-          }
-        }
-      }
+      "filename": "provider_cdf.jsonl"
     }
   },
   "entities": {
@@ -172,6 +66,184 @@
             "CP_PROVIDER_TAXONOMY_CODE",
             "CP_PROVIDER_ZIP"
           ]
+        },
+        {
+          "name": "provider_method_1_provider_id",
+          "needed_weight": 1,
+          "fields": [
+            "CP_PROVIDER_CLIENT_ID"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_1_npi_name",
+          "needed_weight": 3,
+          "fields": [
+            "CP_PROVIDER_NPI",
+            "CP_PROVIDER_FIRST_NAME",
+            "CP_PROVIDER_LAST_NAME"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_1_npi_last_name",
+          "needed_weight": 2,
+          "fields": [
+            "CP_PROVIDER_NPI",
+            "CP_PROVIDER_LAST_NAME"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_1_npi_address",
+          "needed_weight": 2,
+          "fields": [
+            "CP_PROVIDER_NPI",
+            "CP_PROVIDER_ADDRESS_01"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_1_org_tin",
+          "needed_weight": 2,
+          "fields": [
+            "CP_PROVIDER_BILLING_GROUP_NAME",
+            "CP_PROVIDER_FEDERAL_TAX_ID"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_2_individual",
+          "needed_weight": 4,
+          "fields": [
+            "CP_PROVIDER_FIRST_NAME",
+            "CP_PROVIDER_LAST_NAME",
+            "CP_PROVIDER_PRIMARY_SPECIALTY_CODE",
+            "CP_PROVIDER_ADDRESS_01"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_2_organizational",
+          "needed_weight": 3,
+          "fields": [
+            "CP_PROVIDER_BILLING_GROUP_NAME",
+            "CP_PROVIDER_ADDRESS_01",
+            "CP_PROVIDER_ZIP"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_2_a",
+          "needed_weight": 3,
+          "fields": [
+            "CP_PROVIDER_LAST_NAME",
+            "CP_PROVIDER_FIRST_NAME",
+            "CP_PROVIDER_ADDRESS_01",
+            "CP_PROVIDER_ZIP"
+          ],
+          "field_rules": {
+            "CP_PROVIDER_ADDRESS_01": {
+              "requirement": "OPTIONAL"
+            },
+            "CP_PROVIDER_ZIP": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_2_b",
+          "needed_weight": 2,
+          "fields": [
+            "CP_PROVIDER_BILLING_GROUP_NAME",
+            "CP_PROVIDER_ADDRESS_01",
+            "CP_PROVIDER_ZIP"
+          ],
+          "field_rules": {
+            "CP_PROVIDER_ADDRESS_01": {
+              "requirement": "OPTIONAL"
+            },
+            "CP_PROVIDER_ZIP": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "provider_method_2_c",
+          "needed_weight": 3,
+          "fields": [
+            "CP_PROVIDER_LAST_NAME",
+            "CP_PROVIDER_FIRST_NAME",
+            "CP_PROVIDER_BILLING_GROUP_NAME",
+            "CP_PROVIDER_NPI",
+            "CP_PROVIDER_ADDRESS_01",
+            "CP_PROVIDER_ZIP"
+          ],
+          "field_rules": {
+            "CP_PROVIDER_LAST_NAME": {
+              "requirement": "OPTIONAL"
+            },
+            "CP_PROVIDER_FIRST_NAME": {
+              "requirement": "OPTIONAL",
+              "elasticity": "3"
+            },
+            "CP_PROVIDER_BILLING_GROUP_NAME": {
+              "requirement": "OPTIONAL",
+              "elasticity": "3"
+            },
+            "CP_PROVIDER_ADDRESS_01": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "alternatives": [
+            [
+              "CP_PROVIDER_FIRST_NAME",
+              "CP_PROVIDER_BILLING_GROUP_NAME"
+            ]
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
         }
       ],
       "fields": {
@@ -235,6 +307,138 @@
           "elasticity": "0",
           "survivorship": "source_driven"
         }
+      },
+      "field_defaults": {
+        "requirement": "OPTIONAL",
+        "weight": 1,
+        "elasticity": "0",
+        "survivorship": "layout_field"
+      }
+    }
+  },
+  "scenario_definitions": {
+    "UPDATE": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "LOW_PRIORITY",
+        "count": 1
+      }
+    },
+    "INVALID": {
+      "operation": {
+        "type": "INVALID",
+        "selection": "HIGH_PRIORITY",
+        "count": 1
+      }
+    },
+    "MISSING": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "HIGH_PRIORITY",
+        "count": 1
+      }
+    },
+    "WEIGHT_CHANGE": {
+      "operation": {
+        "type": "WEIGHT_CHANGE"
+      }
+    },
+    "DUPLICATE": {
+      "operation": {
+        "type": "DUPLICATE"
+      },
+      "ingestion_date": "SAME"
+    },
+    "ELASTIC_VARIATION": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "ELASTIC",
+        "count": 1
+      }
+    },
+    "OVERRIDE": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "EXPLICIT"
+      }
+    },
+    "REMOVE": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "EXPLICIT"
+      }
+    },
+    "UPDATE_SINGLE_FIELD": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "ANY",
+        "count": 1
+      }
+    },
+    "UPDATE_REQUIRED_FIELDS": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "REQUIRED",
+        "count": "ALL"
+      }
+    },
+    "UPDATE_OPTIONAL_FIELDS": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "OPTIONAL",
+        "count": "ALL"
+      }
+    },
+    "MISSING_REQUIRED_FIELD": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "REQUIRED",
+        "count": 1
+      }
+    },
+    "MISSING_MULTIPLE_FIELDS": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "ANY",
+        "count": 2
+      }
+    },
+    "MISSING_SELECTED_FIELDS": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "EXPLICIT"
+      }
+    },
+    "INVALID_KEY": {
+      "operation": {
+        "type": "INVALID",
+        "selection": "KEY",
+        "count": 1
+      }
+    },
+    "EMPTY": {
+      "operation": {
+        "type": "EMPTY",
+        "selection": "ANY",
+        "count": 1
+      }
+    },
+    "CHANGE_WEIGHT_BELOW_LIMIT": {
+      "operation": {
+        "type": "WEIGHT_CHANGE",
+        "condition": "BELOW_LIMIT"
+      }
+    },
+    "CHANGE_WEIGHT_AT_LIMIT": {
+      "operation": {
+        "type": "WEIGHT_CHANGE",
+        "condition": "AT_LIMIT"
+      }
+    },
+    "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+      "operation": {
+        "type": "WEIGHT_CHANGE",
+        "condition": "ABOVE_LIMIT"
       }
     }
   }

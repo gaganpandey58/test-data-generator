@@ -128,8 +128,20 @@
           "enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]
         },
         "fields": {"type": "array", "items": {"type": "string"}},
+        "values": {"type": "object"},
         "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]},
-        "selection": {"enum": ["ANY", "KEY", "REQUIRED", "OPTIONAL", "EXPLICIT"]},
+        "selection": {
+          "enum": [
+            "ANY",
+            "KEY",
+            "REQUIRED",
+            "OPTIONAL",
+            "EXPLICIT",
+            "HIGH_PRIORITY",
+            "LOW_PRIORITY",
+            "ELASTIC"
+          ]
+        },
         "count": {
           "oneOf": [
             {"type": "integer", "minimum": 1},
@@ -198,6 +210,12 @@
         "layout": {"type": "string", "minLength": 1},
         "scenario": {"type": "string", "minLength": 1},
         "method": {"type": "string", "minLength": 1},
+        "fields": {"type": "array", "items": {"type": "string"}},
+        "values": {"type": "object"},
+        "include": {"type": "array", "items": {"type": "string"}},
+        "exclude": {"type": "array", "items": {"type": "string"}},
+        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]},
+        "ingestion_date": {"enum": ["SAME", "NEWER", "OLDER"]},
         "mr": {
           "type": "object",
           "additionalProperties": false,
@@ -206,6 +224,12 @@
             "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
             "scenario": {"type": "string", "minLength": 1},
             "method": {"type": "string", "minLength": 1},
+            "fields": {"type": "array", "items": {"type": "string"}},
+            "values": {"type": "object"},
+            "include": {"type": "array", "items": {"type": "string"}},
+            "exclude": {"type": "array", "items": {"type": "string"}},
+            "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]},
+            "ingestion_date": {"enum": ["SAME", "NEWER", "OLDER"]},
             "updates": {"$ref": "#/$defs/update_selection"}
           }
         },
@@ -243,6 +267,7 @@
           "additionalProperties": false,
           "properties": {
             "fields": {"type": "array", "items": {"type": "string"}},
+            "values": {"type": "object"},
             "include": {"type": "array", "items": {"type": "string"}},
             "exclude": {"type": "array", "items": {"type": "string"}},
             "matching_method": {"type": "string", "minLength": 1},

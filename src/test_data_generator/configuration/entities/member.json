@@ -1,5 +1,5 @@
 {
-  "catalog_version": "0.9",
+  "catalog_version": "1.0",
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
   "entity_defaults": {
@@ -9,113 +9,7 @@
       "profile": "member",
       "schema": "member/member.schema.json",
       "module": "test_data_generator.entities.member",
-      "filename": "members.jsonl",
-      "scenario_definitions": {
-        "UPDATE": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "WEIGHT_CHANGE": {
-          "operation": {
-            "type": "WEIGHT_CHANGE"
-          }
-        },
-        "UPDATE_SINGLE_FIELD": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "UPDATE_REQUIRED_FIELDS": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "REQUIRED",
-            "count": "ALL"
-          }
-        },
-        "UPDATE_OPTIONAL_FIELDS": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "OPTIONAL",
-            "count": "ALL"
-          }
-        },
-        "MISSING_REQUIRED_FIELD": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "REQUIRED",
-            "count": 1
-          }
-        },
-        "MISSING_MULTIPLE_FIELDS": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "ANY",
-            "count": 2
-          }
-        },
-        "MISSING_SELECTED_FIELDS": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "EXPLICIT"
-          }
-        },
-        "INVALID_KEY": {
-          "operation": {
-            "type": "INVALID",
-            "selection": "KEY",
-            "count": 1
-          }
-        },
-        "INVALID": {
-          "operation": {
-            "type": "INVALID",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "MISSING": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "REQUIRED",
-            "count": 1
-          }
-        },
-        "EMPTY": {
-          "operation": {
-            "type": "EMPTY",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "CHANGE_WEIGHT_BELOW_LIMIT": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "BELOW_LIMIT"
-          }
-        },
-        "CHANGE_WEIGHT_AT_LIMIT": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "AT_LIMIT"
-          }
-        },
-        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "ABOVE_LIMIT"
-          }
-        },
-        "DUPLICATE": {
-          "operation": {
-            "type": "DUPLICATE"
-          }
-        }
-      }
+      "filename": "members.jsonl"
     },
     "member_mr": {
       "updates": {},
@@ -125,112 +19,7 @@
       "module": "test_data_generator.entities.member",
       "filename": "member_roster.jsonl",
       "source_entity": "member",
-      "file_type": "MR",
-      "scenario_definitions": {
-        "UPDATE": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "WEIGHT_CHANGE": {
-          "operation": {
-            "type": "WEIGHT_CHANGE"
-          }
-        },
-        "UPDATE_SINGLE_FIELD": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "UPDATE_REQUIRED_FIELDS": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "REQUIRED",
-            "count": "ALL"
-          }
-        },
-        "UPDATE_OPTIONAL_FIELDS": {
-          "operation": {
-            "type": "UPDATE",
-            "selection": "OPTIONAL",
-            "count": "ALL"
-          }
-        },
-        "MISSING_REQUIRED_FIELD": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "REQUIRED",
-            "count": 1
-          }
-        },
-        "MISSING_MULTIPLE_FIELDS": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "ANY",
-            "count": 2
-          }
-        },
-        "MISSING_SELECTED_FIELDS": {
-          "operation": {
-            "type": "MISSING"
-          }
-        },
-        "INVALID_KEY": {
-          "operation": {
-            "type": "INVALID",
-            "selection": "KEY",
-            "count": 1
-          }
-        },
-        "INVALID": {
-          "operation": {
-            "type": "INVALID",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "MISSING": {
-          "operation": {
-            "type": "MISSING",
-            "selection": "REQUIRED",
-            "count": 1
-          }
-        },
-        "EMPTY": {
-          "operation": {
-            "type": "EMPTY",
-            "selection": "ANY",
-            "count": 1
-          }
-        },
-        "CHANGE_WEIGHT_BELOW_LIMIT": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "BELOW_LIMIT"
-          }
-        },
-        "CHANGE_WEIGHT_AT_LIMIT": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "AT_LIMIT"
-          }
-        },
-        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
-          "operation": {
-            "type": "WEIGHT_CHANGE",
-            "condition": "ABOVE_LIMIT"
-          }
-        },
-        "DUPLICATE": {
-          "operation": {
-            "type": "DUPLICATE"
-          }
-        }
-      }
+      "file_type": "MR"
     }
   },
   "entities": {
@@ -292,7 +81,12 @@
             "CM_MEMBER_CLIENT_ID",
             "CM_MEMBER_BIRTH_DATE",
             "CM_MEMBER_GENDER"
-          ]
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
         },
         {
           "name": "name_dob_gender",
@@ -302,7 +96,12 @@
             "CM_MEMBER_LAST_NAME",
             "CM_MEMBER_BIRTH_DATE",
             "CM_MEMBER_GENDER"
-          ]
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
         },
         {
           "name": "configured_weighted",
@@ -315,6 +114,223 @@
             "CM_MEMBER_STATE",
             "CM_MEMBER_ZIP"
           ]
+        },
+        {
+          "name": "member_method_1",
+          "needed_weight": 1,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_2",
+          "needed_weight": 3,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_3",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_a",
+          "needed_weight": 5,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_GROUP_NUMBER"
+          ],
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_b",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "field_rules": {
+            "CM_MEMBER_SSN": {
+              "elasticity": "1"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_c",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "field_rules": {
+            "CM_MEMBER_STATE": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_ZIP": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_d",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "field_rules": {
+            "CM_MEMBER_FIRST_NAME": {
+              "requirement": "OPTIONAL",
+              "elasticity": "3"
+            },
+            "CM_MEMBER_LAST_NAME": {
+              "requirement": "OPTIONAL",
+              "elasticity": "3"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_e",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "field_rules": {
+            "CM_MEMBER_ADDRESS_01": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_STATE": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_ZIP": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_f",
+          "needed_weight": 5,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "field_rules": {
+            "CM_MEMBER_BIRTH_DATE": {
+              "elasticity": "Less than a Month"
+            },
+            "CM_MEMBER_ADDRESS_01": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_STATE": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_ZIP": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
+        },
+        {
+          "name": "member_method_4_g",
+          "needed_weight": 5,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "field_rules": {
+            "CM_MEMBER_BIRTH_DATE": {
+              "elasticity": "Less than a Month"
+            },
+            "CM_MEMBER_ADDRESS_01": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_STATE": {
+              "requirement": "OPTIONAL"
+            },
+            "CM_MEMBER_ZIP": {
+              "requirement": "OPTIONAL"
+            }
+          },
+          "field_defaults": {
+            "requirement": "MANDATORY",
+            "elasticity": "0",
+            "weight": 1
+          }
         }
       ],
       "fields": {
@@ -384,11 +400,143 @@
           "elasticity": "0",
           "survivorship": "source_driven"
         }
+      },
+      "field_defaults": {
+        "requirement": "OPTIONAL",
+        "weight": 1,
+        "elasticity": "0",
+        "survivorship": "layout_field"
       }
     },
     "member_mr": {
       "inherits": "member",
       "profile": "member"
+    }
+  },
+  "scenario_definitions": {
+    "UPDATE": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "LOW_PRIORITY",
+        "count": 1
+      }
+    },
+    "INVALID": {
+      "operation": {
+        "type": "INVALID",
+        "selection": "HIGH_PRIORITY",
+        "count": 1
+      }
+    },
+    "MISSING": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "HIGH_PRIORITY",
+        "count": 1
+      }
+    },
+    "WEIGHT_CHANGE": {
+      "operation": {
+        "type": "WEIGHT_CHANGE"
+      }
+    },
+    "DUPLICATE": {
+      "operation": {
+        "type": "DUPLICATE"
+      },
+      "ingestion_date": "SAME"
+    },
+    "ELASTIC_VARIATION": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "ELASTIC",
+        "count": 1
+      }
+    },
+    "OVERRIDE": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "EXPLICIT"
+      }
+    },
+    "REMOVE": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "EXPLICIT"
+      }
+    },
+    "UPDATE_SINGLE_FIELD": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "ANY",
+        "count": 1
+      }
+    },
+    "UPDATE_REQUIRED_FIELDS": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "REQUIRED",
+        "count": "ALL"
+      }
+    },
+    "UPDATE_OPTIONAL_FIELDS": {
+      "operation": {
+        "type": "UPDATE",
+        "selection": "OPTIONAL",
+        "count": "ALL"
+      }
+    },
+    "MISSING_REQUIRED_FIELD": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "REQUIRED",
+        "count": 1
+      }
+    },
+    "MISSING_MULTIPLE_FIELDS": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "ANY",
+        "count": 2
+      }
+    },
+    "MISSING_SELECTED_FIELDS": {
+      "operation": {
+        "type": "MISSING",
+        "selection": "EXPLICIT"
+      }
+    },
+    "INVALID_KEY": {
+      "operation": {
+        "type": "INVALID",
+        "selection": "KEY",
+        "count": 1
+      }
+    },
+    "EMPTY": {
+      "operation": {
+        "type": "EMPTY",
+        "selection": "ANY",
+        "count": 1
+      }
+    },
+    "CHANGE_WEIGHT_BELOW_LIMIT": {
+      "operation": {
+        "type": "WEIGHT_CHANGE",
+        "condition": "BELOW_LIMIT"
+      }
+    },
+    "CHANGE_WEIGHT_AT_LIMIT": {
+      "operation": {
+        "type": "WEIGHT_CHANGE",
+        "condition": "AT_LIMIT"
+      }
+    },
+    "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+      "operation": {
+        "type": "WEIGHT_CHANGE",
+        "condition": "ABOVE_LIMIT"
+      }
     }
   }
 }
