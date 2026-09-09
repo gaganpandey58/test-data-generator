@@ -224,15 +224,7 @@ def load_config(path: Path) -> RunConfig:
                     name, raw_entity, record_count, seed, raw_entities
                 ),
                 ingestion_date=_creation_ingestion_date(name, ingestion_dates),
-                update_ingestion_date=_update_ingestion_date(
-                    name,
-                    ingestion_dates,
-                    (
-                        str(raw_entity["ingestion_date_relationship"])
-                        if "ingestion_date_relationship" in raw_entity
-                        else None
-                    ),
-                ),
+                update_ingestion_date=_update_ingestion_date(name, ingestion_dates),
                 source_entity=(
                     str(raw_entity["source_entity"])
                     if isinstance(raw_entity.get("source_entity"), str)
@@ -428,13 +420,7 @@ def _selected_entity(
             raise ConfigurationError(
                 f"Unknown scenario {selected_scenario!r} for configured entity"
             )
-        result["updates"] = {
-            key: value
-            for key, value in template.items()
-            if isinstance(key, str) and key != "ingestion_date"
-        }
-        if "ingestion_date" in template:
-            result["ingestion_date_relationship"] = template["ingestion_date"]
+        result["updates"] = {key: value for key, value in template.items() if isinstance(key, str)}
     selected_method = selection.get("method")
     if selected_method is not None:
         if not isinstance(selected_method, str) or not selected_method.strip():
@@ -454,27 +440,6 @@ def _selected_entity(
                 **configured_operation,
             }
         result["updates"] = {**template_updates, **configured_updates}
-    concise_fields = selection.get("fields")
-    concise_values = selection.get("values")
-    concise_condition = selection.get("condition")
-    if concise_fields is not None or concise_values is not None or concise_condition is not None:
-        updates = dict(cast(Mapping[str, object], result.get("updates", {})))
-        operation = dict(cast(Mapping[str, object], updates.get("operation", {})))
-        if concise_fields is not None:
-            operation["fields"] = concise_fields
-        if concise_values is not None:
-            operation["values"] = concise_values
-        if concise_condition is not None:
-            operation["condition"] = concise_condition
-        updates["operation"] = operation
-        result["updates"] = updates
-    for key in ("include", "exclude"):
-        if key in selection:
-            updates = dict(cast(Mapping[str, object], result.get("updates", {})))
-            updates[key] = selection[key]
-            result["updates"] = updates
-    if "ingestion_date" in selection:
-        result["ingestion_date_relationship"] = selection["ingestion_date"]
     if "source_claims" in selection:
         result["source_claims"] = selection["source_claims"]
     if "scenarios" in selection:
@@ -654,11 +619,7 @@ def _ingestion_date_config(generation: Mapping[str, object]) -> IngestionDateCon
     return IngestionDateConfig(existing, str(relationship), normalized_overrides)
 
 
-def _update_ingestion_date(
-    entity: str,
-    config: IngestionDateConfig,
-    entity_relationship: str | None = None,
-) -> str:
+def _update_ingestion_date(entity: str, config: IngestionDateConfig) -> str:
     """Return the configured incoming date for one internal entity stream."""
     group = _INGESTION_ENTITY_GROUPS.get(entity)
     override = config.overrides.get(group) if group is not None else None
@@ -667,12 +628,7 @@ def _update_ingestion_date(
         override.existing_date if override and override.existing_date else config.existing_date
     )
     existing = _parse_ingestion_date(existing_value)
-    selected_relationship = entity_relationship or relationship or config.update_relationship
-    if selected_relationship not in _INGESTION_RELATIONSHIPS:
-        raise ConfigurationError(
-            f"Entity {entity!r} has invalid ingestion date relationship {selected_relationship!r}"
-        )
-    offset = {"OLDER": -1, "SAME": 0, "NEWER": 1}[selected_relationship]
+    offset = {"OLDER": -1, "SAME": 0, "NEWER": 1}[relationship or config.update_relationship]
     return (existing + timedelta(days=offset)).strftime("%Y%m%d")
 
 
@@ -846,11 +802,6 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
     defaults: dict[str, dict[str, object]] = {}
     for path in sorted(_entity_config_directory().glob("*.json")):
         document = _load_json(path, "entity configuration")
-        shared_scenarios = document.get("scenario_definitions", {})
-        if not isinstance(shared_scenarios, dict):
-            raise ConfigurationError(
-                f"Entity configuration {path.name} has invalid scenario_definitions"
-            )
         definitions = document.get("entity_defaults")
         if not isinstance(definitions, dict):
             raise ConfigurationError(f"Entity configuration {path.name} needs entity_defaults")
@@ -870,12 +821,8 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             schema = Path(str(definition["schema"]))
             if schema.is_absolute() or ".." in schema.parts:
                 raise ConfigurationError(f"Entity {name!r} has an unsafe schema path")
-            entity_scenarios = definition.get("scenario_definitions", {})
-            if not isinstance(entity_scenarios, dict):
-                raise ConfigurationError(f"Entity {name!r} has invalid scenario_definitions")
             defaults[name] = {
                 **definition,
-                "scenario_definitions": {**shared_scenarios, **entity_scenarios},
                 "enabled": False,
                 "count": 0,
                 "schema": str(schema_root / schema),

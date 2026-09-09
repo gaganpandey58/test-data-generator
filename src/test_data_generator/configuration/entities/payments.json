@@ -1,5 +1,5 @@
 {
-  "catalog_version": "1.0",
+  "catalog_version": "0.9",
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
   "entity_defaults": {
@@ -10,7 +10,113 @@
       "schema": "payment/payment.schema.json",
       "module": "test_data_generator.entities.payment",
       "filename": "payments_professional.jsonl",
-      "source_entity": "claim_history_professional"
+      "source_entity": "claim_history_professional",
+      "scenario_definitions": {
+        "UPDATE": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "WEIGHT_CHANGE": {
+          "operation": {
+            "type": "WEIGHT_CHANGE"
+          }
+        },
+        "UPDATE_SINGLE_FIELD": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_REQUIRED_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "REQUIRED",
+            "count": "ALL"
+          }
+        },
+        "UPDATE_OPTIONAL_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "OPTIONAL",
+            "count": "ALL"
+          }
+        },
+        "MISSING_REQUIRED_FIELD": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "MISSING_MULTIPLE_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "ANY",
+            "count": 2
+          }
+        },
+        "MISSING_SELECTED_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "EXPLICIT"
+          }
+        },
+        "INVALID_KEY": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "KEY",
+            "count": 1
+          }
+        },
+        "INVALID": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "MISSING": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "EMPTY": {
+          "operation": {
+            "type": "EMPTY",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "CHANGE_WEIGHT_BELOW_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "BELOW_LIMIT"
+          }
+        },
+        "CHANGE_WEIGHT_AT_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "AT_LIMIT"
+          }
+        },
+        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "ABOVE_LIMIT"
+          }
+        },
+        "DUPLICATE": {
+          "operation": {
+            "type": "DUPLICATE"
+          }
+        }
+      }
     },
     "payment_institutional": {
       "updates": {},
@@ -19,7 +125,112 @@
       "schema": "payment/payment.schema.json",
       "module": "test_data_generator.entities.payment",
       "filename": "payments_institutional.jsonl",
-      "source_entity": "claim_history_institutional"
+      "source_entity": "claim_history_institutional",
+      "scenario_definitions": {
+        "UPDATE": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "WEIGHT_CHANGE": {
+          "operation": {
+            "type": "WEIGHT_CHANGE"
+          }
+        },
+        "UPDATE_SINGLE_FIELD": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_REQUIRED_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "REQUIRED",
+            "count": "ALL"
+          }
+        },
+        "UPDATE_OPTIONAL_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "OPTIONAL",
+            "count": "ALL"
+          }
+        },
+        "MISSING_REQUIRED_FIELD": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "MISSING_MULTIPLE_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "ANY",
+            "count": 2
+          }
+        },
+        "MISSING_SELECTED_FIELDS": {
+          "operation": {
+            "type": "MISSING"
+          }
+        },
+        "INVALID_KEY": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "KEY",
+            "count": 1
+          }
+        },
+        "INVALID": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "MISSING": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "EMPTY": {
+          "operation": {
+            "type": "EMPTY",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "CHANGE_WEIGHT_BELOW_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "BELOW_LIMIT"
+          }
+        },
+        "CHANGE_WEIGHT_AT_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "AT_LIMIT"
+          }
+        },
+        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "ABOVE_LIMIT"
+          }
+        },
+        "DUPLICATE": {
+          "operation": {
+            "type": "DUPLICATE"
+          }
+        }
+      }
     }
   },
   "entities": {
@@ -130,86 +341,6 @@
             "CH_PLACE_OF_SERVICE_CODE",
             "CH_DIAGNOSIS_CODE_01"
           ]
-        },
-        {
-          "name": "professional_payment_method_1",
-          "needed_weight": 20,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CH_PLACE_OF_SERVICE_CODE",
-            "CH_TYPE_OF_BILL_CODE",
-            "CH_CLAIM_FREQUENCY_CODE",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CD_SERVICE_FROM_DATE",
-            "CD_SERVICE_TO_DATE",
-            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-            "CD_SUBMITTED_PROCEDURE_CODE",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
-            "CD_SUBMITTED_REVENUE_CODE",
-            "CD_CHARGE_AMOUNT",
-            "CH_CHARGE_AMOUNT",
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          },
-          "field_rules": {
-            "CH_TYPE_OF_BILL_CODE": {
-              "requirement": "OPTIONAL"
-            },
-            "CD_SUBMITTED_REVENUE_CODE": {
-              "requirement": "OPTIONAL"
-            }
-          }
-        },
-        {
-          "name": "professional_payment_method_2",
-          "needed_weight": 18,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CH_PLACE_OF_SERVICE_CODE",
-            "CH_TYPE_OF_BILL_CODE",
-            "CH_CLAIM_FREQUENCY_CODE",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CD_SERVICE_FROM_DATE",
-            "CD_SERVICE_TO_DATE",
-            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-            "CD_SUBMITTED_PROCEDURE_CODE",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
-            "CD_SUBMITTED_REVENUE_CODE",
-            "CD_CHARGE_AMOUNT"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          },
-          "field_rules": {
-            "CH_TYPE_OF_BILL_CODE": {
-              "requirement": "OPTIONAL"
-            },
-            "CD_SUBMITTED_REVENUE_CODE": {
-              "requirement": "OPTIONAL"
-            }
-          }
         }
       ],
       "fields": {
@@ -489,12 +620,6 @@
           "elasticity": "0",
           "survivorship": "source_driven"
         }
-      },
-      "field_defaults": {
-        "requirement": "OPTIONAL",
-        "weight": 1,
-        "elasticity": "0",
-        "survivorship": "layout_field"
       }
     },
     "payment_institutional": {
@@ -604,80 +729,6 @@
             "CH_TYPE_OF_BILL_CODE",
             "CD_SUBMITTED_REVENUE_CODE"
           ]
-        },
-        {
-          "name": "institutional_payment_method_1",
-          "needed_weight": 21,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CH_PLACE_OF_SERVICE_CODE",
-            "CH_TYPE_OF_BILL_CODE",
-            "CH_CLAIM_FREQUENCY_CODE",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CD_SERVICE_FROM_DATE",
-            "CD_SERVICE_TO_DATE",
-            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-            "CD_SUBMITTED_PROCEDURE_CODE",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
-            "CD_SUBMITTED_REVENUE_CODE",
-            "CD_CHARGE_AMOUNT",
-            "CH_CHARGE_AMOUNT",
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          },
-          "field_rules": {
-            "CH_PLACE_OF_SERVICE_CODE": {
-              "requirement": "OPTIONAL"
-            }
-          }
-        },
-        {
-          "name": "institutional_payment_method_2",
-          "needed_weight": 19,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CH_PLACE_OF_SERVICE_CODE",
-            "CH_TYPE_OF_BILL_CODE",
-            "CH_CLAIM_FREQUENCY_CODE",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_FEDERAL_TAX_ID",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CD_SERVICE_FROM_DATE",
-            "CD_SERVICE_TO_DATE",
-            "CD_SUBMITTED_PROCEDURE_CODE_QUALIFIER",
-            "CD_SUBMITTED_PROCEDURE_CODE",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_01",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_02",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_03",
-            "CD_SUBMITTED_PROCEDURE_MODIFIER_04",
-            "CD_SUBMITTED_REVENUE_CODE",
-            "CD_CHARGE_AMOUNT"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          },
-          "field_rules": {
-            "CH_PLACE_OF_SERVICE_CODE": {
-              "requirement": "OPTIONAL"
-            }
-          }
         }
       ],
       "fields": {
@@ -957,138 +1008,6 @@
           "elasticity": "0",
           "survivorship": "source_driven"
         }
-      },
-      "field_defaults": {
-        "requirement": "OPTIONAL",
-        "weight": 1,
-        "elasticity": "0",
-        "survivorship": "layout_field"
-      }
-    }
-  },
-  "scenario_definitions": {
-    "UPDATE": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "LOW_PRIORITY",
-        "count": 1
-      }
-    },
-    "INVALID": {
-      "operation": {
-        "type": "INVALID",
-        "selection": "HIGH_PRIORITY",
-        "count": 1
-      }
-    },
-    "MISSING": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "HIGH_PRIORITY",
-        "count": 1
-      }
-    },
-    "WEIGHT_CHANGE": {
-      "operation": {
-        "type": "WEIGHT_CHANGE"
-      }
-    },
-    "DUPLICATE": {
-      "operation": {
-        "type": "DUPLICATE"
-      },
-      "ingestion_date": "SAME"
-    },
-    "ELASTIC_VARIATION": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "ELASTIC",
-        "count": 1
-      }
-    },
-    "OVERRIDE": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "EXPLICIT"
-      }
-    },
-    "REMOVE": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "EXPLICIT"
-      }
-    },
-    "UPDATE_SINGLE_FIELD": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "ANY",
-        "count": 1
-      }
-    },
-    "UPDATE_REQUIRED_FIELDS": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "REQUIRED",
-        "count": "ALL"
-      }
-    },
-    "UPDATE_OPTIONAL_FIELDS": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "OPTIONAL",
-        "count": "ALL"
-      }
-    },
-    "MISSING_REQUIRED_FIELD": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "REQUIRED",
-        "count": 1
-      }
-    },
-    "MISSING_MULTIPLE_FIELDS": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "ANY",
-        "count": 2
-      }
-    },
-    "MISSING_SELECTED_FIELDS": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "EXPLICIT"
-      }
-    },
-    "INVALID_KEY": {
-      "operation": {
-        "type": "INVALID",
-        "selection": "KEY",
-        "count": 1
-      }
-    },
-    "EMPTY": {
-      "operation": {
-        "type": "EMPTY",
-        "selection": "ANY",
-        "count": 1
-      }
-    },
-    "CHANGE_WEIGHT_BELOW_LIMIT": {
-      "operation": {
-        "type": "WEIGHT_CHANGE",
-        "condition": "BELOW_LIMIT"
-      }
-    },
-    "CHANGE_WEIGHT_AT_LIMIT": {
-      "operation": {
-        "type": "WEIGHT_CHANGE",
-        "condition": "AT_LIMIT"
-      }
-    },
-    "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
-      "operation": {
-        "type": "WEIGHT_CHANGE",
-        "condition": "ABOVE_LIMIT"
       }
     }
   }

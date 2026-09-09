@@ -9,6 +9,7 @@ from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
 from importlib.resources import files
+from itertools import combinations
 from pathlib import Path
 from random import Random
 from typing import Mapping
@@ -16,7 +17,7 @@ from typing import Mapping
 from faker import Faker
 
 from test_data_generator.core.identifiers import valid_ein, valid_npi, valid_phone_number, valid_ssn
-from test_data_generator.update.rules import EntityRules, MatchingMethod, MethodFieldRule
+from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.synchronization import synchronize_record
 
 
@@ -162,7 +163,6 @@ class UpdateRequest:
     invalid_values: Mapping[str, tuple[object, ...]] | None = None
     selection: str | None = None
     selection_count: int | None = None
-    overrides: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -204,40 +204,13 @@ def resolve_fields(
         selected = [field for field in _normalize_fields(request.include, known) if field in known]
     elif request.selection is not None:
         selection = request.selection.upper()
-        method = _matching_method(rules, request.matching_method)
-        context = method.name
+        context = request.matching_method or ""
         if selection == "KEY":
             selected = [
                 name for name in rules.keys if available_fields is None or name in available_fields
             ]
         elif selection == "EXPLICIT":
             selected = []
-        elif selection in {"HIGH_PRIORITY", "ELASTIC"}:
-            selected = [
-                name
-                for name in method.fields
-                if _is_mutable_for_operation(name, request.operation)
-                and (available_fields is None or name in available_fields)
-                and (
-                    selection == "HIGH_PRIORITY" or _is_elastic(method.field_rules[name].elasticity)
-                )
-            ]
-            if selection == "HIGH_PRIORITY" and request.operation in {
-                OperationType.INVALID,
-                OperationType.MISSING,
-            }:
-                mandatory = [name for name in selected if method.field_rules[name].required]
-                selected = mandatory or selected
-        elif selection == "LOW_PRIORITY":
-            high_priority = set(method.fields)
-            selected = [
-                name
-                for name in known
-                if name not in high_priority
-                and name not in rules.keys
-                and _is_mutable_for_operation(name, request.operation)
-                and (available_fields is None or name in available_fields)
-            ]
         else:
             selected = [
                 name
@@ -247,28 +220,11 @@ def resolve_fields(
                 and (available_fields is None or name in available_fields)
                 and (
                     selection == "ANY"
-                    or (
-                        selection == "REQUIRED"
-                        and _method_field_rule(method, name, definition.is_required_for(context))
-                    )
-                    or (
-                        selection == "OPTIONAL"
-                        and not _method_field_rule(
-                            method, name, definition.is_required_for(context)
-                        )
-                    )
+                    or (selection == "REQUIRED" and definition.is_required_for(context))
+                    or (selection == "OPTIONAL" and not definition.is_required_for(context))
                 )
             ]
-        if selection not in {
-            "ANY",
-            "KEY",
-            "REQUIRED",
-            "OPTIONAL",
-            "EXPLICIT",
-            "HIGH_PRIORITY",
-            "LOW_PRIORITY",
-            "ELASTIC",
-        }:
+        if selection not in {"ANY", "KEY", "REQUIRED", "OPTIONAL", "EXPLICIT"}:
             raise ValueError(f"Unknown scenario field selection {request.selection!r}")
         if request.selection_count is not None:
             if request.selection_count <= 0:
@@ -318,18 +274,6 @@ def resolve_fields(
         raise ValueError(
             f"Matching key {matching!r} requires an explicit UPDATE, INVALID, or MISSING operation"
         )
-    if request.selection is not None and request.selection.upper() == "ELASTIC":
-        method = _matching_method(rules, request.matching_method)
-        non_elastic = [
-            name
-            for name in selected
-            if name not in method.field_rules
-            or not _is_elastic(method.field_rules[name].elasticity)
-        ]
-        if non_elastic:
-            raise ValueError(
-                f"Field {non_elastic[0]!r} has no elasticity in matching method {method.name!r}"
-            )
     if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         protected = next((field for field in selected if field in _UPDATE_PROTECTED_FIELDS), None)
         if protected is not None:
@@ -340,27 +284,6 @@ def resolve_fields(
     if not selected:
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
-
-
-def _matching_method(rules: EntityRules, name: str | None) -> MatchingMethod:
-    """Return the explicitly selected method, or the entity's default method."""
-    if name is None:
-        return rules.methods[0]
-    method = next((candidate for candidate in rules.methods if candidate.name == name), None)
-    if method is None:
-        raise ValueError(f"Unknown matching method {name!r} for entity {rules.entity!r}")
-    return method
-
-
-def _method_field_rule(method: MatchingMethod, field: str, catalog_required: bool) -> bool:
-    """Return method-specific requiredness with catalog fallback."""
-    rule = method.field_rules.get(field)
-    return rule.required if rule is not None else catalog_required
-
-
-def _is_elastic(value: str) -> bool:
-    """Return whether a method permits a non-exact value for one field."""
-    return value.strip().upper() not in {"", "0", "EXACT", "NONE"}
 
 
 def _is_mutable_for_operation(field: str, operation: OperationType) -> bool:
@@ -434,10 +357,6 @@ def resolve_update(
     removed: list[str] = []
     invalidated: list[str] = []
     randomizer = Random(seed * 1_000_003 + index * 97 + 41)
-    overrides = {
-        _normalize_fields((name,), rules.fields)[0]: value
-        for name, value in (request.overrides or {}).items()
-    }
     if operation == OperationType.MISSING:
         for field in selected:
             if _remove_field(result, field):
@@ -463,38 +382,12 @@ def resolve_update(
         else:
             for field in selected:
                 old = _find_field(result, field)
-                new: object
-                if request.selection is not None and request.selection.upper() == "ELASTIC":
-                    method = _matching_method(rules, request.matching_method)
-                    method_rule = method.field_rules[field]
-                    new = _elastic_changed_value(
-                        old,
-                        field,
-                        method_rule,
-                        randomizer,
-                        rules.profile,
-                    )
-                else:
-                    new = (
-                        deepcopy(overrides[field])
-                        if field in overrides
-                        else _changed_value(old, field, randomizer, rules.profile)
-                    )
+                new: object = _changed_value(old, field, randomizer, rules.profile)
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
     synchronized = synchronize_record(original, result, tuple(changed + removed))
-    selected_method = _matching_method(rules, request.matching_method)
-    total = sum((_field_weight(rules, selected_method, field) for field in changed), Decimal("0"))
-    invalidated_method_field = operation in {
-        OperationType.MISSING,
-        OperationType.EMPTY,
-        OperationType.INVALID,
-    } and any(
-        selected_method.field_rules[field].required
-        for field in selected
-        if field in selected_method.field_rules
-    )
+    total = sum((rules.fields[field].weight for field in changed), Decimal("0"))
     threshold = _weight_threshold(request, rules)
     relation = _relation(total, threshold)
     condition = request.condition
@@ -519,75 +412,11 @@ def resolve_update(
         invalidated_keys=tuple(invalidated),
         total_weight=total,
         threshold_relation=relation,
-        expected_match=not invalidated and not invalidated_method_field,
+        expected_match=not invalidated,
         expected_apply=not (operation == OperationType.WEIGHT_CHANGE and condition == "ABOVE_LIMIT")
-        and not invalidated
-        and not invalidated_method_field,
+        and not invalidated,
         synchronized_fields=synchronized,
     )
-
-
-def _elastic_changed_value(
-    value: object,
-    field: str,
-    rule: MethodFieldRule,
-    randomizer: Random,
-    profile: str,
-) -> object:
-    """Change a value within one method's configured elasticity boundary."""
-    elasticity = rule.elasticity.strip()
-    if not _is_elastic(elasticity):
-        raise ValueError(f"Field {field!r} has no configured elasticity")
-    if elasticity.upper() == "LESS THAN A MONTH":
-        if not isinstance(value, str) or not _is_compact_date_field(field.upper(), value):
-            raise ValueError(
-                f"Field {field!r} requires a populated YYYYMMDD value for date elasticity"
-            )
-        original = datetime.strptime(value, "%Y%m%d").date()
-        offset = randomizer.choice(tuple(range(-27, 0)) + tuple(range(1, 28)))
-        return (original + timedelta(days=offset)).strftime("%Y%m%d")
-    try:
-        distance = int(elasticity)
-    except ValueError as error:
-        raise ValueError(
-            f"Field {field!r} has unsupported elasticity {rule.elasticity!r}"
-        ) from error
-    if distance <= 0:
-        raise ValueError(f"Field {field!r} has no configured elasticity")
-    if isinstance(value, bool):
-        return not value
-    if isinstance(value, int):
-        offset = randomizer.choice(tuple(range(-distance, 0)) + tuple(range(1, distance + 1)))
-        return max(0, value + offset)
-    if isinstance(value, float):
-        offset = randomizer.choice(tuple(range(-distance, 0)) + tuple(range(1, distance + 1)))
-        return round(max(0.0, value + offset), 2)
-    if isinstance(value, str) and value:
-        return _change_characters(value, min(distance, len(value)), randomizer)
-    return _changed_value(value, field, randomizer, profile)
-
-
-def _change_characters(value: str, maximum: int, randomizer: Random) -> str:
-    """Change one to ``maximum`` characters while preserving observed shape."""
-    mutable = [index for index, character in enumerate(value) if character.isalnum()]
-    if not mutable:
-        return value
-    count = randomizer.randint(1, min(maximum, len(mutable)))
-    result = list(value)
-    for index in randomizer.sample(mutable, count):
-        character = result[index]
-        if character.isdigit():
-            choices = tuple(str(number) for number in range(10) if str(number) != character)
-        elif character.isupper():
-            choices = tuple(
-                chr(number) for number in range(ord("A"), ord("Z") + 1) if chr(number) != character
-            )
-        else:
-            choices = tuple(
-                chr(number) for number in range(ord("a"), ord("z") + 1) if chr(number) != character
-            )
-        result[index] = randomizer.choice(choices)
-    return "".join(result)
 
 
 def _changed_value(value: object, field: str, randomizer: Random, profile: str = "") -> object:
@@ -1021,12 +850,15 @@ def _weight_threshold(request: UpdateRequest, rules: EntityRules) -> Decimal:
     """Resolve a usable threshold, including a default below-limit boundary."""
     if request.threshold is not None:
         return request.threshold
-    method = _matching_method(rules, request.matching_method)
+    method = next(
+        (method for method in rules.methods if method.name == request.matching_method),
+        rules.methods[0],
+    )
     if request.operation == OperationType.WEIGHT_CHANGE and request.condition == "BELOW_LIMIT":
         weights = [
-            _field_weight(rules, method, name)
+            rules.fields[name].weight
             for name in method.fields
-            if name not in rules.keys and _field_weight(rules, method, name) > 0
+            if name not in rules.keys and rules.fields[name].weight > 0
         ]
         if weights:
             return method.needed_weight + min(weights)
@@ -1041,7 +873,10 @@ def _select_weight_fields(
     matching_method: str | None = None,
 ) -> tuple[str, ...]:
     """Choose the smallest deterministic field combination for a weight boundary."""
-    method = _matching_method(rules, matching_method)
+    method = next(
+        (method for method in rules.methods if method.name == matching_method),
+        rules.methods[0],
+    )
     preferred_candidates = tuple(
         name
         for name in method.fields
@@ -1053,12 +888,7 @@ def _select_weight_fields(
     if wanted is None:
         raise ValueError(f"Unknown WEIGHT_CHANGE condition {condition!r}")
 
-    preferred = _weight_combination(
-        preferred_candidates,
-        {_field: _field_weight(rules, method, _field) for _field in preferred_candidates},
-        threshold,
-        wanted,
-    )
+    preferred = _weight_combination(rules, preferred_candidates, threshold, wanted)
     if preferred is not None:
         return preferred
 
@@ -1073,45 +903,24 @@ def _select_weight_fields(
         and name not in _UPDATE_PROTECTED_FIELDS
         and (available_fields is None or name in available_fields)
     )
-    fallback = _weight_combination(
-        candidates,
-        {field: rules.fields[field].weight for field in candidates},
-        threshold,
-        wanted,
-    )
+    fallback = _weight_combination(rules, candidates, threshold, wanted)
     if fallback is not None:
         return fallback
     raise ValueError(f"No field combination can produce a {wanted}-threshold update")
 
 
 def _weight_combination(
+    rules: EntityRules,
     candidates: tuple[str, ...],
-    weights: Mapping[str, Decimal],
     threshold: Decimal,
     wanted: str,
 ) -> tuple[str, ...] | None:
     """Return the smallest candidate combination for one threshold relation."""
     if _relation(Decimal("0"), threshold) == wanted:
         return ()
-    combinations_by_total: dict[Decimal, tuple[str, ...]] = {Decimal("0"): ()}
-    for field in candidates:
-        additions = {
-            total + weights[field]: combination + (field,)
-            for total, combination in combinations_by_total.items()
-        }
-        for total, combination in additions.items():
-            current = combinations_by_total.get(total)
-            if current is None or (len(combination), combination) < (len(current), current):
-                combinations_by_total[total] = combination
-    matches = [
-        combination
-        for total, combination in combinations_by_total.items()
-        if combination and _relation(total, threshold) == wanted
-    ]
-    return min(matches, key=lambda combination: (len(combination), combination), default=None)
-
-
-def _field_weight(rules: EntityRules, method: MatchingMethod, field: str) -> Decimal:
-    """Return method-specific weight with the entity field weight as fallback."""
-    method_rule = method.field_rules.get(field)
-    return method_rule.weight if method_rule is not None else rules.fields[field].weight
+    for size in range(1, len(candidates) + 1):
+        for combination in combinations(candidates, size):
+            total = sum((rules.fields[name].weight for name in combination), Decimal("0"))
+            if _relation(total, threshold) == wanted:
+                return combination
+    return None

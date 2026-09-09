@@ -1,5 +1,5 @@
 {
-  "catalog_version": "1.0",
+  "catalog_version": "0.9",
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
   "entity_defaults": {
@@ -9,7 +9,113 @@
       "profile": "claim-professional",
       "schema": "claim/claim.schema.json",
       "module": "test_data_generator.entities.claim",
-      "filename": "claims_professional.jsonl"
+      "filename": "claims_professional.jsonl",
+      "scenario_definitions": {
+        "UPDATE": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "WEIGHT_CHANGE": {
+          "operation": {
+            "type": "WEIGHT_CHANGE"
+          }
+        },
+        "UPDATE_SINGLE_FIELD": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_REQUIRED_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "REQUIRED",
+            "count": "ALL"
+          }
+        },
+        "UPDATE_OPTIONAL_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "OPTIONAL",
+            "count": "ALL"
+          }
+        },
+        "MISSING_REQUIRED_FIELD": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "MISSING_MULTIPLE_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "ANY",
+            "count": 2
+          }
+        },
+        "MISSING_SELECTED_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "EXPLICIT"
+          }
+        },
+        "INVALID_KEY": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "KEY",
+            "count": 1
+          }
+        },
+        "INVALID": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "MISSING": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "EMPTY": {
+          "operation": {
+            "type": "EMPTY",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "CHANGE_WEIGHT_BELOW_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "BELOW_LIMIT"
+          }
+        },
+        "CHANGE_WEIGHT_AT_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "AT_LIMIT"
+          }
+        },
+        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "ABOVE_LIMIT"
+          }
+        },
+        "DUPLICATE": {
+          "operation": {
+            "type": "DUPLICATE"
+          }
+        }
+      }
     },
     "claim_institutional": {
       "updates": {},
@@ -17,7 +123,112 @@
       "profile": "claim-institutional",
       "schema": "claim/claim.schema.json",
       "module": "test_data_generator.entities.claim",
-      "filename": "claims_institutional.jsonl"
+      "filename": "claims_institutional.jsonl",
+      "scenario_definitions": {
+        "UPDATE": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "WEIGHT_CHANGE": {
+          "operation": {
+            "type": "WEIGHT_CHANGE"
+          }
+        },
+        "UPDATE_SINGLE_FIELD": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "UPDATE_REQUIRED_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "REQUIRED",
+            "count": "ALL"
+          }
+        },
+        "UPDATE_OPTIONAL_FIELDS": {
+          "operation": {
+            "type": "UPDATE",
+            "selection": "OPTIONAL",
+            "count": "ALL"
+          }
+        },
+        "MISSING_REQUIRED_FIELD": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "MISSING_MULTIPLE_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "ANY",
+            "count": 2
+          }
+        },
+        "MISSING_SELECTED_FIELDS": {
+          "operation": {
+            "type": "MISSING"
+          }
+        },
+        "INVALID_KEY": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "KEY",
+            "count": 1
+          }
+        },
+        "INVALID": {
+          "operation": {
+            "type": "INVALID",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "MISSING": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "REQUIRED",
+            "count": 1
+          }
+        },
+        "EMPTY": {
+          "operation": {
+            "type": "EMPTY",
+            "selection": "ANY",
+            "count": 1
+          }
+        },
+        "CHANGE_WEIGHT_BELOW_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "BELOW_LIMIT"
+          }
+        },
+        "CHANGE_WEIGHT_AT_LIMIT": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "AT_LIMIT"
+          }
+        },
+        "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
+          "operation": {
+            "type": "WEIGHT_CHANGE",
+            "condition": "ABOVE_LIMIT"
+          }
+        },
+        "DUPLICATE": {
+          "operation": {
+            "type": "DUPLICATE"
+          }
+        }
+      }
     }
   },
   "entities": {
@@ -126,48 +337,6 @@
             "CH_BILLING_PROVIDER_NPI",
             "CH_CLAIM_FREQUENCY_CODE"
           ]
-        },
-        {
-          "name": "professional_claim_method_1",
-          "needed_weight": 11,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CD_SERVICE_FROM_DATE",
-            "CD_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_PLACE_OF_SERVICE_CODE",
-            "CH_DIAGNOSIS_CODE_01",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CH_CLAIM_FREQUENCY_CODE",
-            "CH_CHARGE_AMOUNT",
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          }
-        },
-        {
-          "name": "professional_claim_method_2",
-          "needed_weight": 9,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CD_SERVICE_FROM_DATE",
-            "CD_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_PLACE_OF_SERVICE_CODE",
-            "CH_DIAGNOSIS_CODE_01",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CH_CLAIM_FREQUENCY_CODE"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          }
         }
       ],
       "fields": {
@@ -315,12 +484,6 @@
           "elasticity": "0",
           "survivorship": "replace"
         }
-      },
-      "field_defaults": {
-        "requirement": "OPTIONAL",
-        "weight": 1,
-        "elasticity": "0",
-        "survivorship": "layout_field"
       }
     },
     "claim_institutional": {
@@ -426,50 +589,6 @@
             "CH_CLAIM_SERVICE_FROM_DATE",
             "CH_BILLING_PROVIDER_NPI"
           ]
-        },
-        {
-          "name": "institutional_claim_method_1",
-          "needed_weight": 12,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_DIAGNOSIS_CODE_01",
-            "CD_SUBMITTED_REVENUE_CODE",
-            "CH_TYPE_OF_BILL_CODE",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CH_CLAIM_FREQUENCY_CODE",
-            "CH_CHARGE_AMOUNT",
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          }
-        },
-        {
-          "name": "institutional_claim_method_2",
-          "needed_weight": 10,
-          "fields": [
-            "CH_PATIENT_CLIENT_ID",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
-            "CH_BILLING_PROVIDER_NPI",
-            "CH_RENDERING_PROVIDER_NPI",
-            "CH_DIAGNOSIS_CODE_01",
-            "CD_SUBMITTED_REVENUE_CODE",
-            "CH_TYPE_OF_BILL_CODE",
-            "CH_SUBSCRIBER_CLIENT_ID",
-            "CH_CLAIM_FREQUENCY_CODE"
-          ],
-          "field_defaults": {
-            "requirement": "MANDATORY",
-            "elasticity": "0",
-            "weight": 1
-          }
         }
       ],
       "fields": {
@@ -617,138 +736,6 @@
           "elasticity": "0",
           "survivorship": "replace"
         }
-      },
-      "field_defaults": {
-        "requirement": "OPTIONAL",
-        "weight": 1,
-        "elasticity": "0",
-        "survivorship": "layout_field"
-      }
-    }
-  },
-  "scenario_definitions": {
-    "UPDATE": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "LOW_PRIORITY",
-        "count": 1
-      }
-    },
-    "INVALID": {
-      "operation": {
-        "type": "INVALID",
-        "selection": "HIGH_PRIORITY",
-        "count": 1
-      }
-    },
-    "MISSING": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "HIGH_PRIORITY",
-        "count": 1
-      }
-    },
-    "WEIGHT_CHANGE": {
-      "operation": {
-        "type": "WEIGHT_CHANGE"
-      }
-    },
-    "DUPLICATE": {
-      "operation": {
-        "type": "DUPLICATE"
-      },
-      "ingestion_date": "SAME"
-    },
-    "ELASTIC_VARIATION": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "ELASTIC",
-        "count": 1
-      }
-    },
-    "OVERRIDE": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "EXPLICIT"
-      }
-    },
-    "REMOVE": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "EXPLICIT"
-      }
-    },
-    "UPDATE_SINGLE_FIELD": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "ANY",
-        "count": 1
-      }
-    },
-    "UPDATE_REQUIRED_FIELDS": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "REQUIRED",
-        "count": "ALL"
-      }
-    },
-    "UPDATE_OPTIONAL_FIELDS": {
-      "operation": {
-        "type": "UPDATE",
-        "selection": "OPTIONAL",
-        "count": "ALL"
-      }
-    },
-    "MISSING_REQUIRED_FIELD": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "REQUIRED",
-        "count": 1
-      }
-    },
-    "MISSING_MULTIPLE_FIELDS": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "ANY",
-        "count": 2
-      }
-    },
-    "MISSING_SELECTED_FIELDS": {
-      "operation": {
-        "type": "MISSING",
-        "selection": "EXPLICIT"
-      }
-    },
-    "INVALID_KEY": {
-      "operation": {
-        "type": "INVALID",
-        "selection": "KEY",
-        "count": 1
-      }
-    },
-    "EMPTY": {
-      "operation": {
-        "type": "EMPTY",
-        "selection": "ANY",
-        "count": 1
-      }
-    },
-    "CHANGE_WEIGHT_BELOW_LIMIT": {
-      "operation": {
-        "type": "WEIGHT_CHANGE",
-        "condition": "BELOW_LIMIT"
-      }
-    },
-    "CHANGE_WEIGHT_AT_LIMIT": {
-      "operation": {
-        "type": "WEIGHT_CHANGE",
-        "condition": "AT_LIMIT"
-      }
-    },
-    "POST_MATCH_WEIGHT_LIMIT_EXCEEDED": {
-      "operation": {
-        "type": "WEIGHT_CHANGE",
-        "condition": "ABOVE_LIMIT"
       }
     }
   }

@@ -1,9 +1,7 @@
 """Normalized matching and survivorship rules for update generation."""
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
-from dataclasses import field as dataclass_field
 from decimal import Decimal
 from pathlib import Path
 
@@ -39,17 +37,6 @@ class MatchingMethod:
     name: str
     needed_weight: Decimal
     fields: tuple[str, ...]
-    field_rules: Mapping[str, "MethodFieldRule"] = dataclass_field(default_factory=dict)
-    alternatives: tuple[tuple[str, ...], ...] = ()
-
-
-@dataclass(frozen=True)
-class MethodFieldRule:
-    """Describe one field's behavior inside a specific matching method."""
-
-    required: bool
-    elasticity: str
-    weight: Decimal
 
 
 @dataclass(frozen=True)
@@ -92,7 +79,7 @@ def load_rule_catalog(path: Path) -> dict[str, EntityRules]:
                 f"Update rules for {entity!r} contain a field missing from source_fields"
             )
         profile = str(value.get("profile", entity))
-        _add_layout_fields(fields, profile, _field_defaults(value.get("field_defaults"), entity))
+        _add_layout_fields(fields, profile)
         methods = _methods(value.get("matching_methods"), fields, entity)
         result[entity] = EntityRules(
             entity=entity,
@@ -178,7 +165,7 @@ def _resolved_entity_definition(
     return {**merged, **value, "inherits": inherited}
 
 
-def _add_layout_fields(fields: dict[str, FieldRule], profile: str, defaults: FieldRule) -> None:
+def _add_layout_fields(fields: dict[str, FieldRule], profile: str) -> None:
     """Make every emitted business field eligible for explicit update operations.
 
     The survivorship catalog remains authoritative for matching keys,
@@ -200,49 +187,11 @@ def _add_layout_fields(fields: dict[str, FieldRule], profile: str, defaults: Fie
             field.name,
             FieldRule(
                 name=field.name,
-                required=defaults.required,
-                weight=defaults.weight,
-                elasticity=defaults.elasticity,
-                survivorship=defaults.survivorship,
+                required=False,
+                weight=Decimal("1"),
+                survivorship="layout_field",
             ),
         )
-
-
-def _field_defaults(value: object, entity: str) -> FieldRule:
-    """Load the fallback policy for layout fields not explicitly classified."""
-    if value is None:
-        # Legacy combined catalogs predate configuration-owned field defaults.
-        return FieldRule(
-            name="*",
-            required=False,
-            weight=Decimal("1"),
-            elasticity="0",
-            survivorship="layout_field",
-        )
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"Update rules for {entity!r} need field_defaults")
-    requirement = str(value.get("requirement", "")).upper()
-    if requirement not in {"MANDATORY", "OPTIONAL"}:
-        raise ConfigurationError(
-            f"Update rules for {entity!r} have an invalid default field requirement"
-        )
-    try:
-        weight = Decimal(str(value["weight"]))
-    except (KeyError, ValueError, ArithmeticError) as error:
-        raise ConfigurationError(
-            f"Update rules for {entity!r} have an invalid default field weight"
-        ) from error
-    if weight < 0:
-        raise ConfigurationError(
-            f"Update rules for {entity!r} have a negative default field weight"
-        )
-    return FieldRule(
-        name="*",
-        required=requirement == "MANDATORY",
-        weight=weight,
-        elasticity=str(value.get("elasticity", "0")),
-        survivorship=str(value.get("survivorship", "layout_field")),
-    )
 
 
 def _fields(value: object, entity: str) -> dict[str, FieldRule]:
@@ -298,88 +247,7 @@ def _methods(
             needed = Decimal(str(definition["needed_weight"]))
         except (KeyError, ValueError, ArithmeticError) as error:
             raise ConfigurationError(f"Matching method {entity}.{name} is incomplete") from error
-        method_rules = _method_field_rules(
-            definition.get("field_rules", {}),
-            definition.get("field_defaults", {}),
-            method_fields,
-            fields,
-            entity,
-            name,
-        )
-        alternatives = _method_alternatives(
-            definition.get("alternatives", []), method_fields, entity, name
-        )
-        result.append(MatchingMethod(name, needed, method_fields, method_rules, alternatives))
-    return tuple(result)
-
-
-def _method_field_rules(
-    value: object,
-    default_value: object,
-    method_fields: tuple[str, ...],
-    fields: Mapping[str, FieldRule],
-    entity: str,
-    method: str,
-) -> Mapping[str, MethodFieldRule]:
-    """Normalize method-specific requirement, elasticity, and weight rules."""
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"Matching method {entity}.{method}.field_rules must be an object")
-    if not isinstance(default_value, dict):
-        raise ConfigurationError(
-            f"Matching method {entity}.{method}.field_defaults must be an object"
-        )
-    unknown = set(value).difference(method_fields)
-    if unknown:
-        field = sorted(unknown)[0]
-        raise ConfigurationError(
-            f"Matching method {entity}.{method} has rules for unknown field {field!r}"
-        )
-    result: dict[str, MethodFieldRule] = {}
-    for field in method_fields:
-        field_override = value.get(field, {})
-        if not isinstance(field_override, dict):
-            raise ConfigurationError(
-                f"Matching method rule {entity}.{method}.{field} must be an object"
-            )
-        override = {**default_value, **field_override}
-        requirement = str(override.get("requirement", "")).upper()
-        if requirement not in {"", "MANDATORY", "OPTIONAL"}:
-            raise ConfigurationError(
-                f"Matching method rule {entity}.{method}.{field} has invalid requirement"
-            )
-        base = fields[field]
-        try:
-            weight = Decimal(str(override.get("weight", base.weight)))
-        except (ValueError, ArithmeticError) as error:
-            raise ConfigurationError(
-                f"Matching method rule {entity}.{method}.{field} has invalid weight"
-            ) from error
-        if weight < 0:
-            raise ConfigurationError(
-                f"Matching method rule {entity}.{method}.{field} has negative weight"
-            )
-        result[field] = MethodFieldRule(
-            required=(requirement == "MANDATORY" if requirement else base.is_required_for(method)),
-            elasticity=str(override.get("elasticity", base.elasticity)),
-            weight=weight,
-        )
-    return result
-
-
-def _method_alternatives(
-    value: object, method_fields: tuple[str, ...], entity: str, method: str
-) -> tuple[tuple[str, ...], ...]:
-    """Normalize alternative field groups such as first-name OR organization-name."""
-    if not isinstance(value, list):
-        raise ConfigurationError(f"Matching method {entity}.{method}.alternatives must be an array")
-    result: list[tuple[str, ...]] = []
-    for index, group in enumerate(value):
-        alternatives = _strings(group, f"{entity}.{method}.alternatives[{index}]")
-        if not alternatives or any(field not in method_fields for field in alternatives):
-            raise ConfigurationError(
-                f"Matching method {entity}.{method} has an invalid alternative field group"
-            )
-        result.append(alternatives)
+        result.append(MatchingMethod(name, needed, method_fields))
     return tuple(result)
 
 

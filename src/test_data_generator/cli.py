@@ -692,16 +692,7 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         operation_type = OperationType(str(operation_config.get("type", "")))
     except ValueError as error:
         raise CommandError("Unknown update operation") from error
-    override_values = operation_config.get("values", raw.get("values", {}))
-    if not isinstance(override_values, dict):
-        raise CommandError("Update override values must be an object")
-    if override_values and operation_type != OperationType.UPDATE:
-        raise CommandError("Exact override values may only be used with UPDATE")
-    fields = (
-        _string_tuple(operation_config, "fields")
-        or _string_tuple(raw, "fields")
-        or tuple(str(field) for field in override_values)
-    )
+    fields = _string_tuple(operation_config, "fields") or _string_tuple(raw, "fields")
     operation_condition = (
         str(operation_config["condition"]) if "condition" in operation_config else None
     )
@@ -730,7 +721,6 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         condition=operation_condition,
         selection=selection,
         selection_count=selection_count,
-        overrides={str(field): value for field, value in override_values.items()},
         invalid_values=(
             load_invalid_values(run_config.invalid_values_catalog)
             if operation_type == OperationType.INVALID

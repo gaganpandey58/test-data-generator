@@ -110,12 +110,6 @@ classification, elasticity, matching methods, and scenario templates:
 `member.json`, `provider.json`, `claims.json`, `claims-history.json`, and
 `payments.json`. Omit an entity from the run file to skip its output.
 
-Each entity's `field_defaults` controls the fallback classification, weight,
-elasticity, and survivorship policy for its complete layout. The explicit
-`fields` entries only override that policy where the source rules define
-stronger semantics. This keeps the full field inventory in the existing layout
-instead of copying hundreds of field names into a second catalog.
-
 ```json
 {
   "client": "chc",
@@ -155,9 +149,9 @@ focused overrides. Its count cannot exceed the source Member count. A
 the configured ingestion-date relationship determines whether its incoming
 date is the same, newer, or older.
 
-`fields`, `include`, and `exclude` are concise field-level overrides. For
-example, this targets one field without repeating any field catalog in the
-root file:
+An explicit `updates` object remains the field-level escape hatch and overrides
+the selected template. For example, this targets one field without repeating
+any field catalog in the root file:
 
 ```json
 {
@@ -165,14 +159,15 @@ root file:
     "count": 1,
     "scenario": "UPDATE",
     "method": "member_id_dob_gender",
-    "fields": ["CM_MEMBER_SSN"]
+    "updates": {
+      "operation": {"fields": ["CM_MEMBER_SSN"]}
+    }
   }
 }
 ```
 
 The scenario template supplies the operation type, so a focused override only
-needs the parts that differ. The earlier nested `updates` object remains
-supported for backward compatibility. This applies uniformly to every entity:
+needs the parts that differ. This applies uniformly to every entity:
 
 ```json
 {
@@ -181,58 +176,21 @@ supported for backward compatibility. This applies uniformly to every entity:
       "count": 7,
       "scenario": "WEIGHT_CHANGE",
       "method": "professional_claim_primary",
-      "condition": "AT_LIMIT",
-      "fields": ["CH_CHARGE_AMOUNT", "CD_CHARGE_AMOUNT"]
+      "updates": {
+        "operation": {
+          "condition": "AT_LIMIT",
+          "fields": ["CH_CHARGE_AMOUNT", "CD_CHARGE_AMOUNT"]
+        }
+      }
     }
   }
 }
 ```
 
-`UPDATE`, `INVALID`, and `MISSING` accept the same optional `fields` list.
-Without it, the selected matching method drives automatic field selection:
-`UPDATE` changes a low-priority field, while `INVALID` and `MISSING` target a
-high-priority method field. `DUPLICATE` intentionally ignores fields and copies
-the original record. Set entity `ingestion_date` to `SAME`, `NEWER`, or `OLDER`
-to override the related record's date; `DUPLICATE` defaults to `SAME`.
-`ELASTIC_VARIATION` changes only a method field with non-zero configured
-elasticity. The more specific scenario aliases remain available for backward
-compatibility.
-
-Use `scenario: "OVERRIDE"` with a `values` object when the related record must
-contain exact values instead of generated replacements:
-
-```json
-{
-  "member": {
-    "count": 1,
-    "scenario": "OVERRIDE",
-    "method": "member_method_2",
-    "values": {"CM_MEMBER_EMAIL": "updated.member@example.test"}
-  }
-}
-```
-
-The value keys become the selected fields automatically and still pass through
-normal layout projection, synchronization, and schema validation.
-
-The configuration names for the full matching catalog are:
-
-| Entity | Methods |
-| --- | --- |
-| Member | `member_method_1`, `member_method_2`, `member_method_3`, `member_method_4_a` through `member_method_4_g` |
-| Provider | `provider_method_1_provider_id`, `provider_method_1_npi_name`, `provider_method_1_npi_last_name`, `provider_method_1_npi_address`, `provider_method_1_org_tin`, `provider_method_2_individual`, `provider_method_2_organizational`, `provider_method_2_a` through `provider_method_2_c` |
-| Professional Claim | `professional_claim_method_1`, `professional_claim_method_2` |
-| Institutional Claim | `institutional_claim_method_1`, `institutional_claim_method_2` |
-| Professional Claims History | `professional_claim_history_method_1`, `professional_claim_history_method_2` |
-| Institutional Claims History | `institutional_claim_history_method_1`, `institutional_claim_history_method_2` |
-| Professional Payment | `professional_payment_method_1`, `professional_payment_method_2` |
-| Institutional Payment | `institutional_payment_method_1`, `institutional_payment_method_2` |
-
-The established names used by older run files, including
-`member_id_dob_gender`, `professional_claim_primary`, and
-`deterministic_provider`, remain valid. Method 4's Member “Group Ind” anchor is
-represented by the emitted `CM_GROUP_NUMBER` field because the Member layout
-does not define a separate `CM_MEMBER_GROUP_INDICATOR` field.
+`UPDATE`, `INVALID`, and `MISSING` accept the same optional
+`updates.operation.fields` list. `DUPLICATE` intentionally ignores fields and
+copies the original record. The more specific scenario aliases remain
+available when their automatic field selection is useful.
 
 `count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
 
@@ -523,10 +481,7 @@ the legacy `required` value remains the fallback. For example,
 
 | Scenario | Default configured selection |
 | --- | --- |
-| `UPDATE` | One low-priority field outside the selected matching method |
-| `INVALID` / `MISSING` | One high-priority field in the selected matching method |
-| `ELASTIC_VARIATION` | One method field with non-zero elasticity |
-| `UPDATE_SINGLE_FIELD` | One eligible non-key field (legacy behavior) |
+| `UPDATE` / `UPDATE_SINGLE_FIELD` | One eligible non-key field |
 | `UPDATE_REQUIRED_FIELDS` | All fields mandatory for the selected method |
 | `UPDATE_OPTIONAL_FIELDS` | All optional fields for the selected method |
 | `MISSING_REQUIRED_FIELD` | One required field |
@@ -549,7 +504,7 @@ Example for a targeted Member update:
 }
 ```
 
-The entity JSON files record catalog version `1.0`, entity keys,
+The entity JSON files record source document revision `0.9`, entity keys,
 matching methods, field classification, elasticity, weights, and survivorship
 behavior. The DOCX is the business source; the JSON entity configuration is
 the runtime contract and must be regenerated/reviewed when the source document
