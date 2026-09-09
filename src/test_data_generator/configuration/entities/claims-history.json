@@ -20,6 +20,11 @@
             "count": 1
           }
         },
+        "WEIGHT_CHANGE": {
+          "operation": {
+            "type": "WEIGHT_CHANGE"
+          }
+        },
         "UPDATE_SINGLE_FIELD": {
           "operation": {
             "type": "UPDATE",
@@ -55,10 +60,10 @@
             "count": 2
           }
         },
-      "MISSING_SELECTED_FIELDS": {
-        "operation": {
-          "type": "MISSING",
-          "selection": "EXPLICIT"
+        "MISSING_SELECTED_FIELDS": {
+          "operation": {
+            "type": "MISSING",
+            "selection": "EXPLICIT"
           }
         },
         "INVALID_KEY": {
@@ -129,6 +134,11 @@
             "type": "UPDATE",
             "selection": "ANY",
             "count": 1
+          }
+        },
+        "WEIGHT_CHANGE": {
+          "operation": {
+            "type": "WEIGHT_CHANGE"
           }
         },
         "UPDATE_SINGLE_FIELD": {

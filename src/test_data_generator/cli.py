@@ -296,6 +296,13 @@ def generate(config: Path, mode: str = "all") -> None:
             if entity_rules is None:
                 raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
             request = _update_request(run_config, entity)
+            if request.matching_method is not None and not any(
+                method.name == request.matching_method for method in entity_rules.methods
+            ):
+                raise CommandError(
+                    f"Unknown matching method {request.matching_method!r} for entity "
+                    f"{entity.name!r}"
+                )
             try:
                 if entity.name in generated_records:
                     output_path = run_update_records(
@@ -685,7 +692,7 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         operation_type = OperationType(str(operation_config.get("type", "")))
     except ValueError as error:
         raise CommandError("Unknown update operation") from error
-    fields = _string_tuple(operation_config, "fields")
+    fields = _string_tuple(operation_config, "fields") or _string_tuple(raw, "fields")
     operation_condition = (
         str(operation_config["condition"]) if "condition" in operation_config else None
     )
