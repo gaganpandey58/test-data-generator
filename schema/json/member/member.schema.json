@@ -37,7 +37,7 @@
       "type": "integer"
     },
     "FILE_TYPE": {
-      "const": "834"
+      "enum": ["834", "MR"]
     },
     "DATA_CATEGORY": {
       "const": "member"

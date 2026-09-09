@@ -57,6 +57,30 @@ def build_entity_records(
     ]
 
 
+def build_related_records(
+    entity: EntityConfig, source_records: Iterable[Mapping[str, object]]
+) -> list[dict[str, object]]:
+    """Derive a configured related stream from already-generated source rows.
+
+    The Member Roster stream uses this path to reuse the exact emitted 834
+    Member rows.  It changes only the configured file-type discriminator before
+    any separately configured update operation is applied.
+    """
+    records = list(source_records)
+    if len(records) < entity.count:
+        raise GenerationError(
+            f"Related entity {entity.name!r} requires {entity.count} source records, "
+            f"but only {len(records)} are available"
+        )
+    result: list[dict[str, object]] = []
+    for source in records[: entity.count]:
+        derived = deepcopy(dict(source))
+        if entity.file_type is not None:
+            derived["FILE_TYPE"] = entity.file_type
+        result.append(_order_headers(project_record(derived, entity.profile), entity))
+    return result
+
+
 def run_claim_pair(
     claim_entity: EntityConfig,
     history_entity: EntityConfig,

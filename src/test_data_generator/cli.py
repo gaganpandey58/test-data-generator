@@ -22,6 +22,7 @@ from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import (
     build_claim_pair_records,
     build_entity_records,
+    build_related_records,
     run_claim_pair,
     run_derived_update_records,
     run_entity,
@@ -103,6 +104,26 @@ def generate(config: Path, mode: str = "all") -> None:
         }
         for entity in run_config.entities:
             if entity.name in histories:
+                continue
+            if entity.source_entity is not None:
+                source_records = generated_records.get(entity.source_entity)
+                if source_records is None:
+                    raise CommandError(
+                        f"Related entity {entity.name!r} requires source entity "
+                        f"{entity.source_entity!r}"
+                    )
+                try:
+                    records = build_related_records(entity, source_records)
+                    output_path = run_records(entity, records, run_config.creation_directory)
+                except GenerationError as error:
+                    raise CommandError(
+                        f"Related generation failed for entity {entity.name!r}: {error}"
+                    ) from error
+                print(
+                    f"{entity.name}: {entity.count} records -> "
+                    f"{transaction.final_path(output_path)}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(output_path)
                 continue
             history_entity_name = {
                 "claim_professional": "claim_history_professional",
@@ -264,6 +285,11 @@ def generate(config: Path, mode: str = "all") -> None:
         for entity in run_config.entities:
             if entity.name in {"claim_history_professional", "claim_history_institutional"}:
                 continue
+            # Related streams are identical to their source by default. They
+            # receive an update fixture only when that stream explicitly asks
+            # for an operation.
+            if entity.source_entity is not None and "operation" not in entity.update:
+                continue
             # A Claim update derives its related Payment update below. A direct
             # Payment operation remains an independent adjudication fixture.
             if (
@@ -271,9 +297,10 @@ def generate(config: Path, mode: str = "all") -> None:
                 and "operation" not in entity.update
             ):
                 continue
-            entity_rules = rules.get(entity.name)
+            rules_entity = entity.source_entity or entity.name
+            entity_rules = rules.get(rules_entity)
             if entity_rules is None:
-                raise CommandError(f"Update rule catalog has no rules for {entity.name!r}")
+                raise CommandError(f"Update rule catalog has no rules for {rules_entity!r}")
             request = _update_request(run_config, entity)
             try:
                 if entity.name in generated_records:
@@ -421,6 +448,7 @@ def generate(config: Path, mode: str = "all") -> None:
                     f"{transaction.final_path(payment_path)}"
                 )
         _remove_unrequested_payment_updates(run_config, propagated_payment_updates)
+        _remove_unrequested_related_updates(run_config)
     _remove_disabled_outputs(run_config)
     transaction.commit()
 
@@ -607,6 +635,15 @@ def _materialize_update_bases(
     for entity in run_config.entities:
         if entity.name in generated_records or entity.name in histories:
             continue
+        if entity.source_entity is not None:
+            source_records = generated_records.get(entity.source_entity)
+            if source_records is None:
+                raise CommandError(
+                    f"Related entity {entity.name!r} requires source entity "
+                    f"{entity.source_entity!r}"
+                )
+            generated_records[entity.name] = tuple(build_related_records(entity, source_records))
+            continue
         if entity.name in {"payment_professional", "payment_institutional"}:
             continue
         if entity.name == "provider" and run_config.provider_linked:
@@ -699,6 +736,17 @@ def _remove_unrequested_payment_updates(run_config: RunConfig, propagated: set[s
         if entity.name not in {"payment_professional", "payment_institutional"}:
             continue
         if "operation" in entity.update or entity.name in propagated:
+            continue
+        path = run_config.update_directory / entity.filename.removesuffix(".jsonl")
+        path = path.with_suffix(".update.jsonl")
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+
+
+def _remove_unrequested_related_updates(run_config: RunConfig) -> None:
+    """Remove stale related-stream updates unless that stream requests one."""
+    for entity in run_config.entities:
+        if entity.source_entity is None or "operation" in entity.update:
             continue
         path = run_config.update_directory / entity.filename.removesuffix(".jsonl")
         path = path.with_suffix(".update.jsonl")

@@ -93,7 +93,7 @@
         "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000}
       }
     },
-    "member": {"$ref": "#/$defs/counted_entity"},
+    "member": {"$ref": "#/$defs/member_entity"},
     "claims": {
       "type": "object",
       "minProperties": 1,
@@ -127,6 +127,7 @@
     "provider_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
+        {"not": {"required": ["mr"]}},
         {"anyOf": [{"required": ["count"]}, {"required": ["nppes"]}, {"required": ["cdf"]}]}
       ]
     },
@@ -145,10 +146,24 @@
       ]
     },
     "counted_entity": {
-      "allOf": [{"$ref": "#/$defs/entity"}, {"required": ["count"]}]
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"required": ["count"]},
+        {"not": {"required": ["mr"]}}
+      ]
     },
     "claim_entity": {
-      "allOf": [{"$ref": "#/$defs/entity"}, {"required": ["count"]}]
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"required": ["count"]},
+        {"not": {"required": ["mr"]}}
+      ]
+    },
+    "member_entity": {
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"required": ["count"]}
+      ]
     },
     "entity": {
       "type": "object",
@@ -182,6 +197,33 @@
           }
         },
         "layout": {"type": "string", "minLength": 1},
+        "mr": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count"],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+            "output_order": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "headers": {"enum": ["source", "first", "last"]}
+              }
+            },
+            "updates": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fields": {"type": "array", "items": {"type": "string"}},
+                "include": {"type": "array", "items": {"type": "string"}},
+                "exclude": {"type": "array", "items": {"type": "string"}},
+                "matching_method": {"type": "string", "minLength": 1},
+                "threshold": {"type": "number"},
+                "operation": {"$ref": "#/$defs/operation"}
+              }
+            }
+          }
+        },
         "output_order": {
           "type": "object",
           "additionalProperties": false,

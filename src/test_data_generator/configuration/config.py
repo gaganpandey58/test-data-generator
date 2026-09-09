@@ -64,6 +64,8 @@ class EntityConfig:
     claim_lifecycles: tuple[tuple[str, int | None], ...] = ()
     ingestion_date: str = field(default_factory=current_ingestion_date)
     update_ingestion_date: str = field(default_factory=current_ingestion_date)
+    source_entity: str | None = None
+    file_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -198,12 +200,18 @@ def load_config(path: Path) -> RunConfig:
         filename = raw_entity["filename"]
         _validate_filename(name, filename, output_directory)
         record_count = _effective_record_count(name, raw_entity, raw_entities)
+        source_entity = (
+            str(raw_entity["source_entity"])
+            if isinstance(raw_entity.get("source_entity"), str)
+            else None
+        )
+        profile_entity = source_entity or name
         entities.append(
             EntityConfig(
                 name=name,
                 count=record_count,
-                client_headers=load_client_headers(client, name),
-                client_values=load_client_values(client, name),
+                client_headers=load_client_headers(client, profile_entity),
+                client_values=load_client_values(client, profile_entity),
                 profile=profile,
                 schema=schema,
                 module=raw_entity["module"],
@@ -223,6 +231,12 @@ def load_config(path: Path) -> RunConfig:
                 ),
                 ingestion_date=_creation_ingestion_date(name, ingestion_dates),
                 update_ingestion_date=_update_ingestion_date(name, ingestion_dates),
+                source_entity=source_entity,
+                file_type=(
+                    str(raw_entity["file_type"])
+                    if isinstance(raw_entity.get("file_type"), str)
+                    else None
+                ),
             )
         )
     _validate_unique_filenames(entities)
@@ -312,7 +326,21 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 }
                 raw_config["provider_nppes"] = normalized_nppes
                 continue
-            entities[name] = _selected_entity(entities[name], value)
+            selection = {key: item for key, item in value.items() if key != "mr"}
+            entities[name] = _selected_entity(entities[name], selection)
+            if name == "member" and isinstance(value.get("mr"), dict):
+                mr_selection = cast(Mapping[str, object], value["mr"])
+                mr_count = mr_selection.get("count")
+                member_count = selection.get("count")
+                if not isinstance(mr_count, int) or isinstance(mr_count, bool):
+                    raise ConfigurationError("Member Roster selection count must be an integer")
+                if not isinstance(member_count, int) or isinstance(member_count, bool):
+                    raise ConfigurationError("Member selection count must be an integer")
+                if mr_count > member_count:
+                    raise ConfigurationError(
+                        "Member Roster count cannot exceed its source Member count"
+                    )
+                entities["member_mr"] = _selected_entity(entities["member_mr"], mr_selection)
 
     claims = raw_config.get("claims")
     if isinstance(claims, dict):
@@ -501,6 +529,7 @@ _CLAIM_FREQUENCY_CODES = ("1", "7", "8")
 _INGESTION_RELATIONSHIPS = frozenset({"SAME", "NEWER", "OLDER"})
 _INGESTION_ENTITY_GROUPS = {
     "member": "member",
+    "member_mr": "member",
     "provider": "provider",
     "claim_professional": "claims",
     "claim_institutional": "claims",
@@ -773,6 +802,18 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "updates": {},
             "header_order": None,
         },
+        "member_mr": {
+            "enabled": False,
+            "count": 0,
+            "profile": "member",
+            "schema": str(schema_root / "member/member.schema.json"),
+            "module": "test_data_generator.entities.member",
+            "filename": "member_roster.jsonl",
+            "updates": {},
+            "header_order": None,
+            "source_entity": "member",
+            "file_type": "MR",
+        },
         "claim_professional": {
             "enabled": False,
             "count": 0,
@@ -880,6 +921,7 @@ def _validate_profile(entity: str, profile: object) -> None:
     permitted_profiles = {
         "provider": frozenset({"provider"}),
         "member": frozenset({"member"}),
+        "member_mr": frozenset({"member"}),
         "claim_professional": frozenset({"claim-professional"}),
         "claim_institutional": frozenset({"claim-institutional"}),
         "claim_history_professional": frozenset({"claim-professional"}),

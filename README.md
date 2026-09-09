@@ -10,7 +10,8 @@ The generator creates deterministic new records and can derive update fixtures f
 | --- | --- | --- |
 | Provider CDF | `provider_cdf.jsonl` | Provider identity, address, and network data. |
 | Provider NPPES | `provider_nppes.jsonl` | Code-defined NPPES provider entities and nested provider data. |
-| Member | `members.jsonl` | Member, address, enrollment, and coordination-of-benefits data. |
+| Member 834 | `members.jsonl` | Member, address, enrollment, and coordination-of-benefits data. |
+| Member Roster | `member_roster.jsonl` | Source-derived Member data with `FILE_TYPE` set to `MR`. |
 | Professional claim | `claims_professional.jsonl` | Professional claim headers, details, and embedded payment fields. |
 | Professional claims history | `claims_history_professional.jsonl` | The corresponding professional claim history record. |
 | Institutional claim | `claims_institutional.jsonl` | Institutional claim headers, details, and embedded payment fields. |
@@ -114,7 +115,10 @@ can use only `"claim-professional"` today.
     "nppes": {"count": 10},
     "cdf": {"additional_count": 5}
   },
-  "member": {"count": 10},
+  "member": {
+    "count": 10,
+    "mr": {"count": 10}
+  },
   "claims": {
     "professional": {"count": 10},
     "institutional": {"count": 10}
@@ -125,6 +129,48 @@ can use only `"claim-professional"` today.
   }
 }
 ```
+
+`member.mr` is optional. When enabled, the generator creates each roster row
+from the corresponding emitted 834 Member row instead of invoking a second
+Member generator. By default, the records are identical except that
+`members.jsonl` has `FILE_TYPE: "834"` and `member_roster.jsonl` has
+`FILE_TYPE: "MR"`. The roster count may be smaller than the Member count, but
+it cannot exceed the number of source Member rows.
+
+MR-specific operations use the same shared update engine and Member rule
+catalog. Put the operation under `member.mr.updates`; only explicitly selected
+fields and their established dependent fields change. For example:
+
+```json
+{
+  "client": "chc",
+  "member": {
+    "count": 2,
+    "mr": {
+      "count": 2,
+      "updates": {
+        "matching_method": "member_id_dob_gender",
+        "operation": {
+          "type": "UPDATE",
+          "fields": ["CM_MEMBER_EMAIL"]
+        }
+      }
+    }
+  },
+  "generation": {
+    "updates": {
+      "enabled": true,
+      "rule_catalog": "src/test_data_generator/configuration/member-provider-claims-key-survivorship.json"
+    }
+  }
+}
+```
+
+Use `MISSING` to remove a selected MR field, `EMPTY` to retain the key with an
+empty value, or `INVALID` to apply the configured invalid fixture value. If the
+MR block has no explicit operation, no MR update file is produced, even when
+updates are enabled for another entity; the creation roster remains an exact
+834-derived copy.
 
 `count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
 
@@ -495,6 +541,7 @@ output/
 │   ├── provider_cdf.jsonl
 │   ├── provider_nppes.jsonl
 │   ├── members.jsonl
+│   ├── member_roster.jsonl
 │   ├── claims_professional.jsonl
 │   ├── claims_history_professional.jsonl
 │   ├── claims_institutional.jsonl
