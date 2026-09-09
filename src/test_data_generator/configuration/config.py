@@ -2,9 +2,9 @@
 
 The external JSON config remains deliberately short: callers choose a client,
 entity record counts, a seed, and an output directory. This
-module expands those choices into immutable internal entity definitions from
-checked-in per-entity configuration files, then validates paths and
-relationships before generation can begin.
+module expands those choices into immutable internal entity definitions with
+hardcoded schema, module, profile, and filename defaults, then validates paths
+and relationships before generation can begin.
 """
 
 import json
@@ -64,8 +64,6 @@ class EntityConfig:
     claim_lifecycles: tuple[tuple[str, int | None], ...] = ()
     ingestion_date: str = field(default_factory=current_ingestion_date)
     update_ingestion_date: str = field(default_factory=current_ingestion_date)
-    source_entity: str | None = None
-    file_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -225,16 +223,6 @@ def load_config(path: Path) -> RunConfig:
                 ),
                 ingestion_date=_creation_ingestion_date(name, ingestion_dates),
                 update_ingestion_date=_update_ingestion_date(name, ingestion_dates),
-                source_entity=(
-                    str(raw_entity["source_entity"])
-                    if isinstance(raw_entity.get("source_entity"), str)
-                    else None
-                ),
-                file_type=(
-                    str(raw_entity["file_type"])
-                    if isinstance(raw_entity.get("file_type"), str)
-                    else None
-                ),
             )
         )
     _validate_unique_filenames(entities)
@@ -248,7 +236,7 @@ def load_config(path: Path) -> RunConfig:
     rule_catalog = (
         _resolve_path(str(rule_catalog_value), config_path.parent)
         if isinstance(rule_catalog_value, str)
-        else _entity_config_directory()
+        else None
     )
     invalid_catalog_value = update_config.get("invalid_values_catalog")
     invalid_values_catalog = (
@@ -324,19 +312,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 }
                 raw_config["provider_nppes"] = normalized_nppes
                 continue
-            selection = {key: item for key, item in value.items() if key != "mr"}
-            entities[name] = _selected_entity(entities[name], selection)
-            if name == "member" and isinstance(value.get("mr"), dict):
-                mr_selection = cast(Mapping[str, object], value["mr"])
-                mr_count = mr_selection.get("count")
-                member_count = selection.get("count")
-                if not isinstance(mr_count, int) or not isinstance(member_count, int):
-                    raise ConfigurationError("Member Roster selection count must be an integer")
-                if mr_count > member_count:
-                    raise ConfigurationError(
-                        "Member Roster count cannot exceed its source Member count"
-                    )
-                entities["member_mr"] = _selected_entity(entities["member_mr"], mr_selection)
+            entities[name] = _selected_entity(entities[name], value)
 
     claims = raw_config.get("claims")
     if isinstance(claims, dict):
@@ -392,13 +368,13 @@ def _selected_entity(
 ) -> dict[str, object]:
     """Apply a compact public entity selection to internal defaults.
 
-    A selected ``scenario`` resolves to an operation template from the entity
-    configuration.  ``method`` selects a configured matching method.  Explicit
-    ``updates`` remain a final override for focused field-level fixtures.
+    ``layout`` is deliberately the only optional entity setting. The allowed
+    layout is checked after normalization against the selected data type; all
+    implementation details remain internal.
 
     Args:
         defaults: Hardcoded implementation defaults for one entity stream.
-        selection: Public count, optional method/scenario, and focused override.
+        selection: Public ``count`` and optional ``layout`` request.
 
     Returns:
         Enabled internal entity definition with the requested layout profile.
@@ -408,32 +384,9 @@ def _selected_entity(
         raise ConfigurationError("Entity selection count must be an integer")
     count = count_value
     result = {**defaults, "enabled": count > 0, "count": count}
-    selected_scenario = selection.get("scenario")
-    if selected_scenario is not None:
-        if not isinstance(selected_scenario, str) or not selected_scenario.strip():
-            raise ConfigurationError("Entity scenario must be a non-empty string")
-        definitions = defaults.get("scenario_definitions", {})
-        if not isinstance(definitions, Mapping):
-            raise ConfigurationError("Entity configuration has invalid scenario definitions")
-        template = definitions.get(selected_scenario.upper())
-        if not isinstance(template, Mapping):
-            raise ConfigurationError(
-                f"Unknown scenario {selected_scenario!r} for configured entity"
-            )
-        result["updates"] = {key: value for key, value in template.items() if isinstance(key, str)}
-    selected_method = selection.get("method")
-    if selected_method is not None:
-        if not isinstance(selected_method, str) or not selected_method.strip():
-            raise ConfigurationError("Entity method must be a non-empty string")
-        updates = dict(cast(Mapping[str, object], result.get("updates", {})))
-        updates["matching_method"] = selected_method
-        result["updates"] = updates
     if isinstance(selection.get("updates"), dict):
         updates = cast(dict[str, object], selection["updates"])
-        result["updates"] = {
-            **cast(Mapping[str, object], result.get("updates", {})),
-            **{str(key): value for key, value in updates.items()},
-        }
+        result["updates"] = {str(key): value for key, value in updates.items()}
     if "source_claims" in selection:
         result["source_claims"] = selection["source_claims"]
     if "scenarios" in selection:
@@ -548,7 +501,6 @@ _CLAIM_FREQUENCY_CODES = ("1", "7", "8")
 _INGESTION_RELATIONSHIPS = frozenset({"SAME", "NEWER", "OLDER"})
 _INGESTION_ENTITY_GROUPS = {
     "member": "member",
-    "member_mr": "member",
     "provider": "provider",
     "claim_professional": "claims",
     "claim_institutional": "claims",
@@ -784,73 +736,104 @@ def _replacement_requested(entity: str, raw_entities: Mapping[str, object]) -> b
 
 
 def _entity_defaults() -> dict[str, dict[str, object]]:
-    """Load static entity definitions from the five checked-in entity files.
+    """Build internal defaults for all supported entities.
 
-    The run configuration can select only a known entity, its count, method,
-    scenario, and focused overrides.  Entity files own the implementation
-    metadata, output conventions, matching rules, field policies, and reusable
-    scenario templates.  This keeps user-supplied run files small without
-    letting them import arbitrary generator modules or select arbitrary paths.
+    The schema paths and implementation module names are intentionally not
+    configurable by end users.  Keeping them here gives the public config a
+    small, stable surface and prevents an input file from selecting arbitrary
+    code to import.
+
+    Returns:
+        Per-entity internal defaults used while normalizing public config.
     """
-    schema_root = _schema_root()
-    defaults: dict[str, dict[str, object]] = {}
-    for path in sorted(_entity_config_directory().glob("*.json")):
-        document = _load_json(path, "entity configuration")
-        definitions = document.get("entity_defaults")
-        if not isinstance(definitions, dict):
-            raise ConfigurationError(f"Entity configuration {path.name} needs entity_defaults")
-        for name, definition in definitions.items():
-            if not isinstance(name, str) or not isinstance(definition, dict):
-                raise ConfigurationError(
-                    f"Entity configuration {path.name} has an invalid definition"
-                )
-            if name in defaults:
-                raise ConfigurationError(f"Entity {name!r} is defined more than once")
-            required = ("profile", "schema", "module", "filename")
-            if any(not isinstance(definition.get(key), str) for key in required):
-                raise ConfigurationError(f"Entity {name!r} has incomplete implementation metadata")
-            module = str(definition["module"])
-            if not module.startswith("test_data_generator.entities."):
-                raise ConfigurationError(f"Entity {name!r} has an unsafe generator module")
-            schema = Path(str(definition["schema"]))
-            if schema.is_absolute() or ".." in schema.parts:
-                raise ConfigurationError(f"Entity {name!r} has an unsafe schema path")
-            defaults[name] = {
-                **definition,
-                "enabled": False,
-                "count": 0,
-                "schema": str(schema_root / schema),
-            }
-    required_entities = {
-        "member",
-        "member_mr",
-        "provider",
-        "claim_professional",
-        "claim_institutional",
-        "claim_history_professional",
-        "claim_history_institutional",
-        "payment_professional",
-        "payment_institutional",
+    packaged_schema_root = Path(str(files("test_data_generator").joinpath("schema", "json")))
+    schema_root = (
+        packaged_schema_root
+        if packaged_schema_root.is_dir()
+        else Path(__file__).resolve().parents[3] / "schema" / "json"
+    )
+    return {
+        "provider": {
+            "enabled": False,
+            "count": 0,
+            "profile": "provider",
+            "schema": str(schema_root / "provider/provider.schema.json"),
+            "module": "test_data_generator.entities.provider",
+            "filename": "provider_cdf.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "member": {
+            "enabled": False,
+            "count": 0,
+            "profile": "member",
+            "schema": str(schema_root / "member/member.schema.json"),
+            "module": "test_data_generator.entities.member",
+            "filename": "members.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "claim_professional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-professional",
+            "schema": str(schema_root / "claim/claim.schema.json"),
+            "module": "test_data_generator.entities.claim",
+            "filename": "claims_professional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "claim_history_professional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-professional",
+            "schema": str(schema_root / "claim/claim.schema.json"),
+            "module": "test_data_generator.entities.claim",
+            "filename": "claims_history_professional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "claim_institutional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-institutional",
+            "schema": str(schema_root / "claim/claim.schema.json"),
+            "module": "test_data_generator.entities.claim",
+            "filename": "claims_institutional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "claim_history_institutional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "claim-institutional",
+            "schema": str(schema_root / "claim/claim.schema.json"),
+            "module": "test_data_generator.entities.claim",
+            "filename": "claims_history_institutional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "payment_professional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "payment-professional",
+            "schema": str(schema_root / "payment/payment.schema.json"),
+            "module": "test_data_generator.entities.payment",
+            "filename": "payments_professional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
+        "payment_institutional": {
+            "enabled": False,
+            "count": 0,
+            "profile": "payment-institutional",
+            "schema": str(schema_root / "payment/payment.schema.json"),
+            "module": "test_data_generator.entities.payment",
+            "filename": "payments_institutional.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
     }
-    missing = sorted(required_entities.difference(defaults))
-    if missing:
-        raise ConfigurationError(
-            f"Entity configuration is missing definitions: {', '.join(missing)}"
-        )
-    return defaults
-
-
-def _entity_config_directory() -> Path:
-    """Return the packaged entity-configuration directory."""
-    packaged = Path(str(files("test_data_generator.configuration").joinpath("entities")))
-    return packaged if packaged.is_dir() else Path(__file__).with_name("entities")
-
-
-def _schema_root() -> Path:
-    """Return bundled schemas for the installed package or source checkout."""
-    packaged = Path(str(files("test_data_generator").joinpath("schema", "json")))
-    fallback = Path(__file__).resolve().parents[3] / "schema" / "json"
-    return packaged if packaged.is_dir() else fallback
 
 
 def _validate_filename(entity: str, filename: str, output_directory: Path) -> None:
@@ -897,7 +880,6 @@ def _validate_profile(entity: str, profile: object) -> None:
     permitted_profiles = {
         "provider": frozenset({"provider"}),
         "member": frozenset({"member"}),
-        "member_mr": frozenset({"member"}),
         "claim_professional": frozenset({"claim-professional"}),
         "claim_institutional": frozenset({"claim-institutional"}),
         "claim_history_professional": frozenset({"claim-professional"}),

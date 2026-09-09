@@ -22,7 +22,6 @@ from test_data_generator.configuration.config import RunConfig, load_config
 from test_data_generator.core.engine import (
     build_claim_pair_records,
     build_entity_records,
-    build_related_records,
     run_claim_pair,
     run_derived_update_records,
     run_entity,
@@ -104,26 +103,6 @@ def generate(config: Path, mode: str = "all") -> None:
         }
         for entity in run_config.entities:
             if entity.name in histories:
-                continue
-            if entity.source_entity is not None and entity.name == "member_mr":
-                source_records = generated_records.get(entity.source_entity)
-                if source_records is None:
-                    raise CommandError(
-                        f"Related entity {entity.name!r} requires source entity "
-                        f"{entity.source_entity!r}"
-                    )
-                try:
-                    records = build_related_records(entity, source_records)
-                    output_path = run_records(entity, records, run_config.creation_directory)
-                except GenerationError as error:
-                    raise CommandError(
-                        f"Related generation failed for entity {entity.name!r}: {error}"
-                    ) from error
-                print(
-                    f"{entity.name}: {entity.count} records -> "
-                    f"{transaction.final_path(output_path)}"
-                )
-                generated_records[entity.name] = _read_jsonl_records(output_path)
                 continue
             history_entity_name = {
                 "claim_professional": "claim_history_professional",
@@ -628,15 +607,6 @@ def _materialize_update_bases(
     for entity in run_config.entities:
         if entity.name in generated_records or entity.name in histories:
             continue
-        if entity.source_entity is not None and entity.name == "member_mr":
-            source_records = generated_records.get(entity.source_entity)
-            if source_records is None:
-                raise CommandError(
-                    f"Related entity {entity.name!r} requires source entity "
-                    f"{entity.source_entity!r}"
-                )
-            generated_records[entity.name] = tuple(build_related_records(entity, source_records))
-            continue
         if entity.name in {"payment_professional", "payment_institutional"}:
             continue
         if entity.name == "provider" and run_config.provider_linked:
@@ -689,14 +659,6 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
     operation_condition = (
         str(operation_config["condition"]) if "condition" in operation_config else None
     )
-    selection = str(operation_config["selection"]) if "selection" in operation_config else None
-    selection_count_value = operation_config.get("count")
-    if selection_count_value == "ALL" or selection_count_value is None:
-        selection_count = None
-    elif isinstance(selection_count_value, int) and not isinstance(selection_count_value, bool):
-        selection_count = selection_count_value
-    else:
-        raise CommandError("Scenario operation count must be a positive integer or ALL")
     include = _string_tuple(raw, "include")
     exclude = _string_tuple(raw, "exclude")
     threshold = raw.get("threshold")
@@ -712,8 +674,6 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         threshold=parsed_threshold,
         operation=operation_type,
         condition=operation_condition,
-        selection=selection,
-        selection_count=selection_count,
         invalid_values=(
             load_invalid_values(run_config.invalid_values_catalog)
             if operation_type == OperationType.INVALID

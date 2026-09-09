@@ -119,18 +119,9 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": {
-          "enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]
-        },
+        "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE"]},
         "fields": {"type": "array", "items": {"type": "string"}},
-        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]},
-        "selection": {"enum": ["ANY", "KEY", "REQUIRED", "OPTIONAL", "EXPLICIT"]},
-        "count": {
-          "oneOf": [
-            {"type": "integer", "minimum": 1},
-            {"const": "ALL"}
-          ]
-        }
+        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
       }
     },
     "provider_entity": {
@@ -191,19 +182,6 @@
           }
         },
         "layout": {"type": "string", "minLength": 1},
-        "scenario": {"type": "string", "minLength": 1},
-        "method": {"type": "string", "minLength": 1},
-        "mr": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["count"],
-          "properties": {
-            "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
-            "scenario": {"type": "string", "minLength": 1},
-            "method": {"type": "string", "minLength": 1},
-            "updates": {"$ref": "#/$defs/update_selection"}
-          }
-        },
         "output_order": {
           "type": "object",
           "additionalProperties": false,
@@ -211,7 +189,18 @@
             "headers": {"enum": ["source", "first", "last"]}
           }
         },
-        "updates": {"$ref": "#/$defs/update_selection"},
+        "updates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fields": {"type": "array", "items": {"type": "string"}},
+            "include": {"type": "array", "items": {"type": "string"}},
+            "exclude": {"type": "array", "items": {"type": "string"}},
+            "matching_method": {"type": "string", "minLength": 1},
+            "threshold": {"type": "number"},
+            "operation": {"$ref": "#/$defs/operation"}
+          }
+        },
         "source_claims": {"type": "string", "minLength": 1},
         "scenarios": {
           "type": "object",
@@ -232,18 +221,6 @@
         },
         "claim_frequency": {"enum": ["1", "7", "8"]}
       }
-    },
-    "update_selection": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "fields": {"type": "array", "items": {"type": "string"}},
-            "include": {"type": "array", "items": {"type": "string"}},
-            "exclude": {"type": "array", "items": {"type": "string"}},
-            "matching_method": {"type": "string", "minLength": 1},
-            "threshold": {"type": "number"},
-            "operation": {"$ref": "#/$defs/operation"}
-          }
     }
   }
 }
