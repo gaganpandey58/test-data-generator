@@ -52,15 +52,73 @@ class EntityRules:
 
 
 def load_rule_catalog(path: Path) -> dict[str, EntityRules]:
-    """Load and validate the normalized catalog generated from the source DOCX."""
+    """Load a legacy catalog or a manifest that composes domain catalogs."""
+    raw = _load_catalog_document(path)
+    if "domains" in raw:
+        raw = _load_domain_catalogs(path, raw)
+    return _parse_rule_catalog(raw)
+
+
+def _load_catalog_document(path: Path) -> dict[str, object]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ConfigurationError(f"Could not read update rule catalog {path}") from error
-    if not isinstance(raw, dict) or not isinstance(raw.get("entities"), dict):
+    if not isinstance(raw, dict):
+        raise ConfigurationError("Update rule catalog must be an object")
+    return raw
+
+
+def _load_domain_catalogs(manifest_path: Path, manifest: dict[str, object]) -> dict[str, object]:
+    """Compose isolated domain catalogs without duplicating shared Claim rules."""
+    domain_paths = _strings(manifest.get("domains"), "rule catalog manifest.domains")
+    if not domain_paths:
+        raise ConfigurationError("Rule catalog manifest needs at least one domain catalog")
+    entities: dict[str, object] = {}
+    aliases: dict[str, str] = {}
+    catalog_version = str(manifest.get("catalog_version", "unknown"))
+    for relative_path in domain_paths:
+        domain_path = manifest_path.parent / relative_path
+        raw = _load_catalog_document(domain_path)
+        if str(raw.get("catalog_version", catalog_version)) != catalog_version:
+            raise ConfigurationError(
+                f"Domain catalog {domain_path} has a different catalog_version"
+            )
+        raw_entities = raw.get("entities", {})
+        if not isinstance(raw_entities, dict):
+            raise ConfigurationError(
+                f"Domain catalog {domain_path} must contain an entities object"
+            )
+        for entity, definition in raw_entities.items():
+            if entity in entities or entity in aliases:
+                raise ConfigurationError(
+                    f"Entity {entity!r} appears in more than one domain catalog"
+                )
+            entities[entity] = definition
+        raw_aliases = raw.get("aliases", {})
+        if not isinstance(raw_aliases, dict) or not all(
+            isinstance(alias, str) and isinstance(target, str)
+            for alias, target in raw_aliases.items()
+        ):
+            raise ConfigurationError(f"Domain catalog {domain_path} has invalid aliases")
+        for alias, target in raw_aliases.items():
+            if alias in entities or alias in aliases:
+                raise ConfigurationError(f"Entity alias {alias!r} appears more than once")
+            aliases[alias] = target
+    return {
+        "catalog_version": catalog_version,
+        "entities": entities,
+        "aliases": aliases,
+    }
+
+
+def _parse_rule_catalog(raw: dict[str, object]) -> dict[str, EntityRules]:
+    """Validate raw entity definitions and resolve their explicit aliases."""
+    raw_entities = raw.get("entities")
+    if not isinstance(raw_entities, dict):
         raise ConfigurationError("Update rule catalog must contain an entities object")
     result: dict[str, EntityRules] = {}
-    for entity, value in raw["entities"].items():
+    for entity, value in raw_entities.items():
         if not isinstance(value, dict):
             raise ConfigurationError(f"Update rules for {entity!r} must be an object")
         fields = _fields(value.get("fields"), entity)
@@ -82,6 +140,23 @@ def load_rule_catalog(path: Path) -> dict[str, EntityRules]:
             fields=fields,
             methods=methods,
             catalog_version=str(raw.get("catalog_version", "unknown")),
+        )
+    aliases = raw.get("aliases", {})
+    if not isinstance(aliases, dict):
+        raise ConfigurationError("Update rule catalog aliases must be an object")
+    for alias, target in aliases.items():
+        if not isinstance(alias, str) or not isinstance(target, str) or target not in result:
+            raise ConfigurationError(f"Update rule catalog alias {alias!r} has an unknown target")
+        if alias in result:
+            raise ConfigurationError(f"Update rule catalog alias {alias!r} duplicates an entity")
+        source = result[target]
+        result[alias] = EntityRules(
+            entity=alias,
+            profile=source.profile,
+            keys=source.keys,
+            fields=dict(source.fields),
+            methods=source.methods,
+            catalog_version=source.catalog_version,
         )
     return result
 

@@ -1,0 +1,160 @@
+{
+  "catalog_version": "0.9",
+  "source_status": "Draft",
+  "source_revision_date": "2026-06-29",
+  "domain": "member",
+  "entities": {
+    "member": {
+      "profile": "member",
+      "source_fields": [
+        "CM_PAYER_SHORT",
+        "CM_MEMBER_CLIENT_ID",
+        "CM_MEMBER_FIRST_NAME",
+        "CM_MEMBER_MIDDLE_NAME",
+        "CM_MEMBER_LAST_NAME",
+        "CM_SUBSCRIBER_BIRTH_DATE",
+        "CM_SUBSCRIBER_GENDER",
+        "CM_MEMBER_BIRTH_DATE",
+        "CM_MEMBER_GENDER",
+        "CM_MEMBER_SSN",
+        "CM_MEMBER_ADDRESS_01",
+        "CM_MEMBER_ADDRESS_02",
+        "CM_MEMBER_ADDRESS_03",
+        "CM_MEMBER_STATE",
+        "CM_MEMBER_ZIP",
+        "CM_SUBSCRIBER_CLIENT_ID",
+        "CM_SUBSCRIBER_LAST_NAME",
+        "CM_SUBSCRIBER_FIRST_NAME",
+        "CM_SUBSCRIBER_MIDDLE_NAME",
+        "CM_SUBSCRIBER_NAME_SUFFIX",
+        "CM_SUBSCRIBER_ADDRESS_01",
+        "CM_SUBSCRIBER_ADDRESS_02",
+        "CM_SUBSCRIBER_CITY",
+        "CM_SUBSCRIBER_STATE",
+        "CM_SUBSCRIBER_ZIP",
+        "CM_PATIENT_LAST_NAME",
+        "CM_PATIENT_FIRST_NAME",
+        "CM_PATIENT_MIDDLE_NAME",
+        "CM_PATIENT_NAME_SUFFIX",
+        "CM_PATIENT_BIRTH_DATE",
+        "CM_PATIENT_GENDER",
+        "CM_PATIENT_ADDRESS_01",
+        "CM_PATIENT_CITY",
+        "CM_PATIENT_STATE",
+        "CM_PATIENT_ZIP"
+      ],
+      "keys": [
+        "CM_MEMBER_CLIENT_ID"
+      ],
+      "matching_methods": [
+        {
+          "name": "member_id_payer",
+          "needed_weight": 2,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_PAYER_SHORT"
+          ]
+        },
+        {
+          "name": "member_id_dob_gender",
+          "needed_weight": 3,
+          "fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ]
+        },
+        {
+          "name": "name_dob_gender",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ]
+        },
+        {
+          "name": "configured_weighted",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ]
+        }
+      ],
+      "fields": {
+        "CM_MEMBER_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CM_PAYER_SHORT": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CM_MEMBER_FIRST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "name_dob_gender"
+          ],
+          "optional_in": [
+            "member_id_payer"
+          ]
+        },
+        "CM_MEMBER_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_LAST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_BIRTH_DATE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_GENDER": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_SSN": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_STATE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CM_MEMBER_ZIP": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
+      }
+    }
+  }
+}

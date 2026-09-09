@@ -1,0 +1,126 @@
+{
+  "catalog_version": "0.9",
+  "source_status": "Draft",
+  "source_revision_date": "2026-06-29",
+  "domain": "provider",
+  "entities": {
+    "provider": {
+      "profile": "provider",
+      "source_fields": [
+        "CP_PROVIDER_ENTITY_TYPE",
+        "CP_PROVIDER_CLIENT_ID",
+        "CP_PROVIDER_FIRST_NAME",
+        "CP_PROVIDER_MIDDLE_NAME",
+        "CP_PROVIDER_LAST_NAME",
+        "CP_PROVIDER_FULL_NAME",
+        "CP_PROVIDER_NPI",
+        "CP_PROVIDER_FEDERAL_TAX_ID",
+        "CP_PROVIDER_PRIMARY_SPECIALTY_CODE",
+        "CP_PROVIDER_ADDRESS_01",
+        "CP_PROVIDER_ADDRESS_02",
+        "CP_PROVIDER_ADDRESS_03",
+        "CP_PROVIDER_STATE",
+        "CP_PROVIDER_ZIP",
+        "CP_PROVIDER_TAXONOMY_CODE",
+        "CP_PROVIDER_BILLING_GROUP_NAME"
+      ],
+      "keys": [
+        "CP_PROVIDER_NPI",
+        "CP_PROVIDER_FEDERAL_TAX_ID",
+        "CP_PROVIDER_CLIENT_ID"
+      ],
+      "matching_methods": [
+        {
+          "name": "deterministic_provider",
+          "needed_weight": 1,
+          "fields": [
+            "CP_PROVIDER_NPI",
+            "CP_PROVIDER_FEDERAL_TAX_ID",
+            "CP_PROVIDER_CLIENT_ID"
+          ]
+        },
+        {
+          "name": "provider_name_taxonomy",
+          "needed_weight": 3,
+          "fields": [
+            "CP_PROVIDER_LAST_NAME",
+            "CP_PROVIDER_FIRST_NAME",
+            "CP_PROVIDER_TAXONOMY_CODE",
+            "CP_PROVIDER_ZIP"
+          ]
+        },
+        {
+          "name": "provider_org_taxonomy",
+          "needed_weight": 2,
+          "fields": [
+            "CP_PROVIDER_BILLING_GROUP_NAME",
+            "CP_PROVIDER_TAXONOMY_CODE",
+            "CP_PROVIDER_ZIP"
+          ]
+        }
+      ],
+      "fields": {
+        "CP_PROVIDER_NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CP_PROVIDER_FEDERAL_TAX_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CP_PROVIDER_CLIENT_ID": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "CP_PROVIDER_FIRST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven",
+          "required_in": [
+            "provider_name_taxonomy"
+          ],
+          "optional_in": [
+            "provider_org_taxonomy"
+          ]
+        },
+        "CP_PROVIDER_MIDDLE_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_LAST_NAME": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_BILLING_GROUP_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_TAXONOMY_CODE": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "CP_PROVIDER_ZIP": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
+      }
+    }
+  }
+}

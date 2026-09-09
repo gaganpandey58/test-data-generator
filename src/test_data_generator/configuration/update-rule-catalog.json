@@ -1,0 +1,10 @@
+{
+  "catalog_version": "0.9",
+  "domains": [
+    "rules/member.json",
+    "rules/provider.json",
+    "rules/claims.json",
+    "rules/history.json",
+    "rules/payments.json"
+  ]
+}

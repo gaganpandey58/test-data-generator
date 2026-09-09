@@ -7,7 +7,7 @@
     "updates": {
       "enabled": true,
       "directory": "update-test-data",
-      "rule_catalog": "src/test_data_generator/configuration/member-provider-claims-key-survivorship.json",
+      "rule_catalog": "src/test_data_generator/configuration/update-rule-catalog.json",
       "operation": {"type": "UPDATE"}
     }
   },

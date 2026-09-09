@@ -160,7 +160,7 @@ fields and their established dependent fields change. For example:
   "generation": {
     "updates": {
       "enabled": true,
-      "rule_catalog": "src/test_data_generator/configuration/member-provider-claims-key-survivorship.json"
+      "rule_catalog": "src/test_data_generator/configuration/update-rule-catalog.json"
     }
   }
 }
@@ -441,8 +441,8 @@ a schema `oneOf` failure.
 ### Update field reference
 
 The field names below are the currently supported runtime fields from the
-normalized rule catalog. The catalog remains the source of truth:
-[`member-provider-claims-key-survivorship.json`](src/test_data_generator/configuration/member-provider-claims-key-survivorship.json).
+normalized rule catalog. The domain manifest remains the source of truth:
+[`update-rule-catalog.json`](src/test_data_generator/configuration/update-rule-catalog.json).
 
 | Entity | Matching keys | Baseline required update fields | Baseline optional update fields |
 | --- | --- | --- | --- |
@@ -475,12 +475,28 @@ Example for a targeted Member update:
 }
 ```
 
-The normalized catalog at
-`src/test_data_generator/configuration/member-provider-claims-key-survivorship.json`
-records source document revision `0.9`, entity keys, matching methods, field
-classification, elasticity, weights, and survivorship behavior. The DOCX is
-the business source; the JSON catalog is the runtime contract and must be
-regenerated/reviewed when the source document changes.
+The normalized catalog manifest at
+`src/test_data_generator/configuration/update-rule-catalog.json` composes
+isolated Member, Provider, Claims, History, and Payments configurations under
+`src/test_data_generator/configuration/rules/`. It records source document
+revision `0.9`, entity keys, matching methods, field classification,
+elasticity, weights, and survivorship behavior. History explicitly aliases
+the Claim rules because a CH record is a paired Claim representation, not an
+independent matching model. The legacy combined catalog remains supported for
+existing run configurations. The DOCX is the business source; the JSON
+catalog is the runtime contract and must be regenerated/reviewed when the
+source document changes.
+
+- [`rules/member.json`](src/test_data_generator/configuration/rules/member.json)
+  owns Member rules.
+- [`rules/provider.json`](src/test_data_generator/configuration/rules/provider.json)
+  owns Provider rules.
+- [`rules/claims.json`](src/test_data_generator/configuration/rules/claims.json)
+  owns Professional and Institutional Claim rules.
+- [`rules/history.json`](src/test_data_generator/configuration/rules/history.json)
+  maps Claims History to its paired Claim rules.
+- [`rules/payments.json`](src/test_data_generator/configuration/rules/payments.json)
+  owns Professional and Institutional Payment rules.
 
 ### Relationship-aware updates
 

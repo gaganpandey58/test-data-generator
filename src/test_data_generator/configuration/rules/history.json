@@ -1,0 +1,10 @@
+{
+  "catalog_version": "0.9",
+  "domain": "history",
+  "description": "Claims History uses the paired Claim matching and survivorship rules.",
+  "entities": {},
+  "aliases": {
+    "claim_history_professional": "claim_professional",
+    "claim_history_institutional": "claim_institutional"
+  }
+}
