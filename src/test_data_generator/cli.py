@@ -48,6 +48,7 @@ from test_data_generator.entities.provider_cdf import (
     generate_nppes_file,
     generate_provider_cdf,
 )
+from test_data_generator.update.match_fixtures import generate_match_fixture_matrix
 from test_data_generator.update.rules import load_rule_catalog
 from test_data_generator.update.scenarios import (
     ExpectedOutcome,
@@ -95,7 +96,12 @@ def generate(config: Path, mode: str = "all") -> None:
         raise CommandError(f"Configuration failed for {config.resolve()}: {error}") from error
 
     rules = None
-    if mode in {"all", "updates"} and run_config.updates_enabled:
+    needs_match_fixtures = (
+        mode in {"all", "creation"}
+        and run_config.creation_enabled
+        and bool(run_config.match_fixture_entities)
+    )
+    if (mode in {"all", "updates"} and run_config.updates_enabled) or needs_match_fixtures:
         if run_config.rule_catalog is None:
             raise CommandError("Updates are enabled but no rule_catalog is configured")
         try:
@@ -287,6 +293,24 @@ def generate(config: Path, mode: str = "all") -> None:
             print(
                 f"provider_nppes: {run_config.nppes_count} records -> "
                 f"{transaction.final_path(nppes_path)}"
+            )
+        if needs_match_fixtures:
+            assert rules is not None
+            assert run_config.match_fixture_directory is not None
+            try:
+                fixture_paths = generate_match_fixture_matrix(
+                    run_config.match_fixture_entities,
+                    generated_records,
+                    rules,
+                    run_config.seed,
+                    run_config.match_fixture_directory,
+                    run_config.invalid_values_catalog,
+                )
+            except ValueError as error:
+                raise CommandError(f"Match-fixture generation failed: {error}") from error
+            print(
+                f"match fixtures: {len(fixture_paths)} files -> "
+                f"{transaction.final_path(run_config.match_fixture_directory)}"
             )
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
@@ -531,6 +555,7 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
     temporary_root = Path(temporary.name)
     staged_creation = temporary_root / "creation"
     staged_updates = temporary_root / "updates"
+    staged_match_fixtures = temporary_root / "match-fixtures"
     for source, staged in (
         (run_config.creation_directory, staged_creation),
         (run_config.update_directory, staged_updates),
@@ -539,17 +564,35 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
             shutil.copytree(source, staged)
         else:
             staged.mkdir(parents=True)
+    if run_config.match_fixture_directory is not None:
+        source = run_config.match_fixture_directory
+        if source.is_dir():
+            shutil.copytree(source, staged_match_fixtures)
+            # Fixture matrices are complete snapshots.  Clearing the staged
+            # copy prevents stale entity folders when source counts decrease.
+            shutil.rmtree(staged_match_fixtures)
+        staged_match_fixtures.mkdir(parents=True, exist_ok=True)
     staged_config = replace(
         run_config,
         output_directory=temporary_root / "legacy",
         creation_directory=staged_creation,
         update_directory=staged_updates,
+        match_fixture_directory=(
+            staged_match_fixtures if run_config.match_fixture_directory is not None else None
+        ),
     )
     pairs: list[tuple[Path, Path]] = []
     if mode in {"all", "creation"} and run_config.creation_enabled:
         pairs.append((staged_creation, run_config.creation_directory))
     if mode in {"all", "updates"} and run_config.updates_enabled:
         pairs.append((staged_updates, run_config.update_directory))
+    if (
+        mode in {"all", "creation"}
+        and run_config.creation_enabled
+        and run_config.match_fixture_directory is not None
+        and run_config.match_fixture_entities
+    ):
+        pairs.append((staged_match_fixtures, run_config.match_fixture_directory))
     return _OutputTransaction(temporary, staged_config, tuple(pairs))
 
 

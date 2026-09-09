@@ -74,8 +74,6 @@ def resolve_match_fixture(
     method = _method(rules, request.matching_method)
     outcome = request.expected_outcome
     assert outcome is not None
-    if outcome == ExpectedOutcome.NO_MATCH and request.failure_mode is None:
-        raise ValueError("NO_MATCH requires a failure_mode")
     if outcome == ExpectedOutcome.MATCH and request.failure_mode is not None:
         raise ValueError("MATCH cannot declare a failure_mode")
 
@@ -83,6 +81,8 @@ def resolve_match_fixture(
     result = deepcopy(original)
     randomizer = Random(seed * 1_000_003 + index * 97 + 733)
     plan = request.modifications or _legacy_plan(request)
+    if outcome == ExpectedOutcome.NO_MATCH and request.failure_mode is None and not plan:
+        raise ValueError("NO_MATCH requires a failure_mode or an explicit modification plan")
     changed: list[str] = []
     removed: list[str] = []
     _apply_modifications(
@@ -105,7 +105,7 @@ def resolve_match_fixture(
         randomizer,
         changed,
     )
-    if outcome == ExpectedOutcome.NO_MATCH:
+    if outcome == ExpectedOutcome.NO_MATCH and request.failure_mode is not None:
         _apply_failure(result, original, request, rules, method, randomizer, changed, removed)
     elif request.elasticity_boundary is not None:
         _apply_match_boundary(result, original, request, rules, method, changed)

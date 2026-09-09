@@ -1,0 +1,2002 @@
+# Complete Project Documentation
+
+## 1. Purpose and scope
+
+This project generates realistic healthcare test data as newline-delimited JSON (JSONL). It supports:
+
+- Provider CDF and NPPES data.
+- Member 834 and Member Roster (MR) data.
+- Professional 837P Claims and paired Claims History (CH).
+- Institutional 837I Claims and paired Claims History (CH).
+- Professional and Institutional 835 Payments derived from Claims.
+- Creation fixtures and related update, missing, empty, invalid, duplicate, weight-boundary, and matching fixtures.
+
+The generator is intended for development, QA, integration, matching, survivorship, and negative-validation testing. It creates synthetic data; it is not a production matching engine, adjudication engine, or source of real patient/provider information.
+
+This document describes the current implementation in this repository. The authoritative runtime contracts are the checked-in configuration, layouts, schemas, and rule catalogs linked throughout this document.
+
+## 2. Quick start
+
+### Prerequisites
+
+- Python 3.12 or newer.
+- `uv` installed and available on `PATH`.
+- A valid GDF workbook under `schema/gdf/`. The repository already includes one.
+
+Install runtime and development dependencies:
+
+```sh
+cd /Users/gpandey/test-data-generator
+uv sync --extra dev
+```
+
+Generate the complete checked-in data set:
+
+```sh
+uv run generate-data
+```
+
+Run all project checks:
+
+```sh
+make verify
+```
+
+The default run writes creation files to `output/new-test-data/` and update files to `output/update-test-data/`.
+
+## 3. Project map
+
+```text
+test-data-generator/
+├── runconfig.json                         Execution scope: domains and phases
+├── generator.config.json                  Backward-compatible execution wrapper
+├── config/
+│   ├── generator.config.json              Global settings and config references
+│   ├── provider.config.json               Provider CDF/NPPES selection and updates
+│   ├── member.config.json                 Member 834/MR selection and updates
+│   ├── claims.config.json                 837P/837I selection and updates
+│   ├── payments.config.json               835P/835I scenarios and updates
+│   └── common/
+│       ├── operations.json                Reusable operation definitions
+│       ├── update-profiles.json           Reusable update/outcome profiles
+│       └── ingestion.json                 Ingestion-date relationships
+├── schema/
+│   ├── gdf/                               GDF Excel source
+│   ├── json/                              Runtime JSON Schemas
+│   └── tools/                             Schema extraction/verification scripts
+├── src/test_data_generator/
+│   ├── cli.py                             CLI orchestration and atomic publication
+│   ├── configuration/
+│   │   ├── config.py                      Config composition and validation
+│   │   ├── client_profiles.json           Client headers/default values
+│   │   ├── invalid-values.json            Shared invalid fixture values
+│   │   ├── update-rule-catalog.json       Domain rule manifest
+│   │   └── rules/                          Member/Provider/Claims/Payments rules
+│   ├── core/                               Generic generation and validation engine
+│   ├── entities/                           Domain record builders
+│   ├── layouts/                            Emitted JSON field and nesting contracts
+│   ├── samples/sample_shapes.json          Type-only sample shape defaults
+│   └── update/                             Mutation, matching, and synchronization
+└── tests/update/                           Regression and scenario tests
+```
+
+Important design rule: JSON Schemas define what is valid and available; layouts define what is emitted. A field may exist in a schema but not appear in output if the selected layout does not include it.
+
+## 4. Architecture
+
+### 4.1 Configuration layers
+
+The project separates four concerns:
+
+1. `runconfig.json` selects which domains and phases execute.
+2. `config/generator.config.json` provides global settings and references the domain/common files.
+3. Domain files choose counts, Claim lifecycle behavior, Payment scenarios, and update requests.
+4. Rule, layout, schema, invalid-value, and client-profile files define business behavior and output validity.
+
+```mermaid
+flowchart TD
+    RC[runconfig.json] --> GC[Global generator config]
+    GC --> EC[Domain configs]
+    GC --> CC[Common operations, profiles, ingestion]
+    EC --> N[Normalized internal entity definitions]
+    CC --> N
+    CP[Client profiles] --> B[Entity builders]
+    N --> B
+    GDF[GDF workbook] --> S[JSON Schemas]
+    B --> L[Layout projection]
+    L --> V[Schema and relationship validation]
+    R[Domain matching/update rules] --> U[Update engine]
+    IV[Invalid-values catalog] --> U
+    V --> U
+    U --> MF[Optional matchCode fixture matrix]
+    MF --> FM[Atomic per-record JSON fixture publication]
+    U --> P[Atomic JSONL publication]
+```
+
+### 4.2 End-to-end execution flow
+
+`uv run generate-data` performs this flow:
+
+1. Loads `runconfig.json`.
+2. Validates its `config`, `entities`, and `operations` entries.
+3. Loads `config/generator.config.json`.
+4. Loads exactly one Provider, Member, Claims, and Payments domain file.
+5. Loads common operation, update-profile, and ingestion-date files.
+6. Merges Claims/Payments `defaults` into their Professional and Institutional stream settings.
+7. Resolves named update profiles and operations into a validated update request.
+8. Expands the public configuration into internal stream definitions. Schema paths, modules, profiles, and filenames are internal safe defaults and cannot be redirected to arbitrary code by configuration.
+9. Refreshes JSON Schemas from the newest `.xlsx` workbook in `schema/gdf/`.
+10. Creates a temporary, same-filesystem staging area and copies the previous requested output directories into it.
+11. Generates creation streams in dependency order.
+12. Optionally derives per-record, per-matchCode fixture matrices from those creation records.
+13. Generates updates from creation/base records when updates are enabled.
+14. Propagates Claim changes to corresponding Claims History and enabled Payment streams.
+15. Removes stale output only for known disabled streams.
+16. Atomically swaps the completed staged directories into place. On failure, the previous complete output is restored.
+
+### 4.3 Creation dependency order
+
+The effective order is:
+
+```text
+Provider CDF/NPPES
+        ↓
+Member 834
+        ↓
+Member Roster (copied from 834)
+        ↓
+837P Claim ──→ Professional CH
+        ↓
+Professional 835 Payment
+
+837I Claim ──→ Institutional CH
+        ↓
+Institutional 835 Payment
+```
+
+Claims can use generated Member and Provider records when those streams are enabled. If they are not enabled, Claims still generate self-contained synthetic relationship values. Same-run Payments derive from the newly generated CH records and do not require a hard-coded source path.
+
+### 4.4 Validation layers
+
+The project validates data at several points:
+
+- Execution config against `execution_config.schema.json`.
+- Composed generator config against `run_config.schema.json`.
+- Counts, paths, scenario totals, Claim frequencies, and dependencies in the config loader.
+- Every normal generated record against its entity JSON Schema.
+- Payment-to-Claim identity, line count, matching fields, and scenario relationships.
+- Matching fixtures against the requested `MATCH` or `NO_MATCH` result.
+- Weight fixtures against below/equal/above threshold conditions.
+- Update synchronization before publication.
+
+`INVALID`, `MISSING`, and `EMPTY` fixtures may intentionally violate an entity schema. The generator allows the requested invalid update to be written so downstream validation behavior can be tested; creation records remain schema-valid.
+
+## 5. Data sources and contracts
+
+### 5.1 GDF workbook
+
+The newest workbook in `schema/gdf/` is used to refresh the available schema properties before generation. The checked-in workbook is:
+
+[`schema/gdf/GDF Request File Layouts Standard.xlsx`](schema/gdf/GDF%20Request%20File%20Layouts%20Standard.xlsx)
+
+Refresh explicitly:
+
+```sh
+uv run python schema/tools/extract-gdf-catalogs.py \
+  "schema/gdf/GDF Request File Layouts Standard.xlsx"
+```
+
+Verify without writing:
+
+```sh
+uv run python schema/tools/extract-gdf-catalogs.py \
+  "schema/gdf/GDF Request File Layouts Standard.xlsx" --verify
+```
+
+### 5.2 JSON Schemas
+
+Schemas define allowed fields, required fields, types, patterns, lengths, and entity-specific constraints:
+
+- [`schema/json/provider/provider.schema.json`](schema/json/provider/provider.schema.json)
+- [`schema/json/provider/provider_nppes_individual.schema.json`](schema/json/provider/provider_nppes_individual.schema.json)
+- [`schema/json/provider/provider_nppes_organizational.schema.json`](schema/json/provider/provider_nppes_organizational.schema.json)
+- [`schema/json/member/member.schema.json`](schema/json/member/member.schema.json)
+- [`schema/json/claim/claim.schema.json`](schema/json/claim/claim.schema.json)
+- [`schema/json/payment/payment.schema.json`](schema/json/payment/payment.schema.json)
+
+### 5.3 Layouts
+
+Layouts are the exact emitted-field contracts:
+
+- Provider: `provider.json`
+- NPPES: separate Individual and Organizational layouts
+- Member: `member.json`
+- Claims: separate 837P and 837I profiles, standardized during Claim-pair materialization
+- Payments: separate Professional and Institutional profiles using the shared 835 shape
+
+Inspect a layout's field names:
+
+```sh
+jq -r '.headers[].name, .root[].name, (.groups[] | .[].name)' \
+  src/test_data_generator/layouts/member.json
+```
+
+If a configured update field exists in the broad schema/rule catalog but not in the generated layout, the update fails early with a clear “not present in generated record” message.
+
+### 5.4 Client profiles
+
+[`client_profiles.json`](src/test_data_generator/configuration/client_profiles.json) supplies client-owned envelope values such as payer, platform, product, dataset, source format, and publisher. The current selectable client is `chc`.
+
+To add a client, add complete `headers` and `values` entries for Provider, Member, Professional Claim, and Institutional Claim profiles, then set `client` in the global config. No entity generator should be forked merely to change client headers.
+
+### 5.5 Sample shapes
+
+[`sample_shapes.json`](src/test_data_generator/samples/sample_shapes.json) stores type-only shape information. It fills remaining sample fields with type-compatible defaults. It is not a source of real values and external sample files are not required at runtime.
+
+### 5.6 Matching and update rules
+
+[`update-rule-catalog.json`](src/test_data_generator/configuration/update-rule-catalog.json) is a manifest for four domain files:
+
+- [`rules/member.json`](src/test_data_generator/configuration/rules/member.json)
+- [`rules/provider.json`](src/test_data_generator/configuration/rules/provider.json)
+- [`rules/claims.json`](src/test_data_generator/configuration/rules/claims.json)
+- [`rules/payments.json`](src/test_data_generator/configuration/rules/payments.json)
+
+Claims History aliases the corresponding Claim rules. It has no standalone History matching configuration.
+
+### 5.7 Invalid values
+
+[`invalid-values.json`](src/test_data_generator/configuration/invalid-values.json) is the only shared invalid-value source. Resolution first tries the exact field name, then semantic/type keys such as `NPI`, `SSN`, `DATE`, `AMOUNT`, `CODE`, `STRING`, `NUMBER`, `INTEGER`, `BOOLEAN`, and `DEFAULT`.
+
+Normal creation and valid updates never use this file.
+
+## 6. Configuration reference
+
+### 6.1 `runconfig.json`
+
+```json
+{
+  "config": "config/generator.config.json",
+  "entities": ["provider", "member", "claims", "payments"],
+  "operations": ["creation", "updates"]
+}
+```
+
+| Property | Required | Values | Meaning |
+| --- | --- | --- | --- |
+| `config` | Yes | Non-empty path | Global generator config; relative to this file. |
+| `entities` | Optional | `provider`, `member`, `claims`, `payments` | Domain groups to retain. Omission uses every configured domain. |
+| `operations` | Optional | `creation`, `updates` | Allowed phases. Default is both. |
+
+The CLI `--mode` cannot request a phase excluded by `runconfig.json`. With `--mode all`, a one-phase runconfig resolves to that one phase.
+
+The root `generator.config.json` is currently another execution wrapper with the same shape. Keep it only for backward compatibility; use `runconfig.json` for new runs.
+
+### 6.2 Global generator config
+
+Current shape:
+
+```json
+{
+  "client": "chc",
+  "seed": 20260909,
+  "output_directory": "../output",
+  "generation": {
+    "output_order": {"headers": "last"},
+    "creation": {"enabled": true, "directory": "new-test-data"},
+    "updates": {
+      "enabled": true,
+      "directory": "update-test-data",
+      "rule_catalog": "../src/test_data_generator/configuration/update-rule-catalog.json",
+      "invalid_values_catalog": "../src/test_data_generator/configuration/invalid-values.json",
+      "profile": "standard_update"
+    }
+  },
+  "entity_configs": {
+    "provider": "provider.config.json",
+    "member": "member.config.json",
+    "claims": "claims.config.json",
+    "payments": "payments.config.json"
+  },
+  "common": {
+    "operations": "common/operations.json",
+    "update_profiles": "common/update-profiles.json",
+    "ingestion": "common/ingestion.json"
+  }
+}
+```
+
+| Property | Default/constraint | Meaning |
+| --- | --- | --- |
+| `client` | Required, currently `chc` | Selects client headers and values. |
+| `seed` | Fresh 63-bit entropy when omitted | Makes values deterministic when explicitly set. |
+| `output_directory` | `./output` | Root output path, resolved relative to the global config. |
+| `generation.output_order.headers` | `source`; also `first` or `last` | Serialized header position. JSON meaning is unchanged. |
+| `generation.creation.enabled` | `true` | Enables creation phase. |
+| `generation.creation.directory` | `new-test-data` | Creation subdirectory. Must remain inside output root. |
+| `generation.updates.enabled` | `false` unless set | Enables updates. |
+| `generation.updates.directory` | `update-test-data` | Update subdirectory. Must remain inside output root. |
+| `generation.updates.rule_catalog` | Required when updates run | Domain update/matching rules. |
+| `generation.updates.invalid_values_catalog` | Packaged catalog if omitted | Shared invalid values. |
+| `generation.updates.profile` | Optional | Global default update profile. Entity settings override it. |
+| `entity_configs` | All four references required | Paths to one object per domain. |
+| `common` | All three references required | Named operations, profiles, and ingestion settings. |
+
+All modular paths are relative to `config/generator.config.json`, not necessarily the shell's current directory.
+
+### 6.3 Domain counts
+
+Counts are integers from `0` through `1,000,000`.
+
+- `count: 0` disables/skips that stream without error.
+- A successful run removes stale known output for a disabled stream.
+- Unrelated files in the output directory are not deleted.
+- Member Roster count cannot exceed Member count.
+- Provider CDF total is `nppes.count + cdf.additional_count` in linked mode.
+- Claims History count is automatically the corresponding Claim count.
+- Payment count is the final number of payment records after scenario normalization.
+
+Public entity/stream properties are:
+
+| Property | Applies to | Meaning |
+| --- | --- | --- |
+| `count` | Provider, Member, MR, Claims, Payments | Exact requested count, subject to relationship guardrails. |
+| `nppes.count` | Linked Provider | Total NPPES rows; split automatically by type. |
+| `nppes.individual` / `nppes.organizational` | Linked Provider | Explicit type counts; their sum is the NPPES total. |
+| `cdf.additional_count` | Linked Provider | CDF-only rows whose NPIs do not exist in NPPES. |
+| `mr` | Member | Derived Member Roster selection and optional MR-specific updates. |
+| `layout` | Any normal entity stream | Selects an allowed layout profile for that data type; invalid cross-type profiles are rejected. |
+| `output_order.headers` | Any normal entity stream | Overrides global `source`, `first`, or `last` header ordering. |
+| `updates` | Any update-capable stream | Profile, operation, fields, matching, weights, or negative-fixture request. |
+| `source_claims` | Payments | Read-only external Claim/CH JSONL source. |
+| `scenarios` | Payments | MATCHED/REVERSAL/REPLACEMENT/STALE/ORPHAN counts. |
+| `claim_frequency` | Claims | One deterministic frequency: `1`, `7`, or `8`. |
+| `frequencies` | Claims | Exact per-frequency distribution whose sum equals Claim count. |
+
+### 6.4 Common operations
+
+Named operations in `config/common/operations.json`:
+
+| Name | Resolved operation |
+| --- | --- |
+| `update` | `UPDATE` |
+| `different` | `DIFFERENT` |
+| `invalid` | `INVALID` |
+| `missing` | `MISSING` |
+| `empty` | `EMPTY` |
+| `duplicate` | `DUPLICATE` |
+| `weight_below_limit` | `WEIGHT_CHANGE / BELOW_LIMIT` |
+| `weight_at_limit` | `WEIGHT_CHANGE / AT_LIMIT` |
+| `weight_above_limit` | `WEIGHT_CHANGE / ABOVE_LIMIT` |
+
+An entity update may reference a named operation:
+
+```json
+"updates": {
+  "operation": "missing"
+}
+```
+
+Or provide an inline operation for field-level control:
+
+```json
+"updates": {
+  "operation": {
+    "type": "MISSING",
+    "fields": ["CM_MEMBER_MIDDLE_NAME"]
+  }
+}
+```
+
+### 6.5 Common update profiles
+
+| Profile | Purpose |
+| --- | --- |
+| `standard_update` | Valid field update. |
+| `different_value` | Explicitly require a valid different value. |
+| `duplicate` | Copy the record without field changes. |
+| `no_match_invalid` | Verified `NO_MATCH` through an invalid anchor value. |
+| `no_match_missing` | Verified `NO_MATCH` through a missing anchor. |
+| `weight_below_limit` | Select a below-threshold weight combination. |
+| `weight_at_limit` | Select an exact-threshold combination. |
+| `weight_above_limit` | Select an above-threshold combination. |
+
+Profile values are defaults. Entity values merge on top, and an inline operation can add fields while retaining a profile's operation type.
+
+Example:
+
+```json
+"updates": {
+  "profile": "standard_update",
+  "matching_method": "member_id_dob_gender",
+  "operation": {"fields": ["CM_MEMBER_EMAIL"]}
+}
+```
+
+This resolves to an `UPDATE` of `CM_MEMBER_EMAIL`.
+
+### 6.6 Update request properties
+
+| Property | Meaning |
+| --- | --- |
+| `profile` | Named common profile; modular configs only. |
+| `operation` | Named operation or inline `{type, fields, condition}`. |
+| `fields` | Explicit target fields inside an inline operation. |
+| `include` | Include optional fields in automatic/weighted selection. |
+| `exclude` | Exclude fields from selection or force optional anchors to diverge in matching fixtures. |
+| `matching_method` | Domain method name used for weights or verified matching. |
+| `threshold` | Optional decimal override for weight comparison. |
+| `expected_outcome` | `MATCH` or `NO_MATCH`; enables verified paired matching behavior. |
+| `failure_mode` | Required for `NO_MATCH`. |
+| `failure_field` | Anchor field carrying the requested failure. |
+| `collision_method` | Other method intentionally matched for `CROSS_METHOD_COLLISION`. |
+| `elasticity_boundary` | `INSIDE`, `AT`, or `OUTSIDE`. |
+| `modifications` | Independent non-weight operations applied in a verified matching fixture. |
+
+Field names are case-insensitive after normalization. Surrounding spaces and comma-separated strings are accepted. Punctuation is normalized to underscores. Two explicit aliases are supported: `Provider_npi` maps to `CP_PROVIDER_NPI`, and `Record type` maps to `CP_PROVIDER_RECORD_TYPE`. Prefer exact canonical names in maintained configurations.
+
+### 6.7 Ingestion-date configuration
+
+`config/common/ingestion.json` owns modular ingestion settings:
+
+```json
+{
+  "ingestion_dates": {
+    "existing": "20260909",
+    "update": "NEWER",
+    "overrides": {
+      "member": "SAME",
+      "provider": "OLDER",
+      "claims": {"existing": "20260910", "update": "NEWER"},
+      "claims_history": {"existing": "20260911", "update": "SAME"},
+      "payments": {"existing": "20260912", "update": "OLDER"}
+    }
+  }
+}
+```
+
+Dates use `YYYYMMDD`.
+
+| Relationship | Incoming `INGESTION_DATE` |
+| --- | --- |
+| `SAME` | Existing date unchanged. |
+| `NEWER` | Existing date plus one calendar day. |
+| `OLDER` | Existing date minus one calendar day. |
+
+Dates are calculated from configuration, not hard-coded in generation code. When ingestion config is empty, creation and updates use today's date with a `SAME` relationship. Overrides apply independently to Member, Provider, Claims, Claims History, and Payments.
+
+Do not also define `generation.ingestion_dates` in the modular global config when `common/ingestion.json` is populated; the loader rejects duplicate ownership.
+
+### 6.8 Environment variables
+
+The generator currently requires no project-specific environment variables. Configuration is file-driven.
+
+Useful tool-level variables are optional, not project contracts. For example, in a restricted environment you may redirect uv's cache:
+
+```sh
+UV_CACHE_DIR=/tmp/test-data-generator-uv-cache uv run generate-data
+```
+
+### 6.9 Per-record matchCode fixture matrices
+
+Normal creation and update streams remain JSONL. For QA cases that need a complete matrix of records per matching method, enable `generation.match_fixtures`. The generator derives each case from every created source record, then writes one JSON array per matchCode under that source record's folder.
+
+```json
+{
+  "generation": {
+    "match_fixtures": {
+      "directory": "match-fixtures",
+      "entities": {
+        "member": {
+          "match_codes": {
+            "matchCode1": {
+              "matching_method": "configured_weighted_c",
+              "operation_counts": {
+                "UPDATE": 2,
+                "INVALID": 3,
+                "MISSING": 1,
+                "EMPTY": 2,
+                "DUPLICATE": 4,
+                "WEIGHT_BELOW_LIMIT": 1,
+                "WEIGHT_AT_LIMIT": 2,
+                "WEIGHT_ABOVE_LIMIT": 3
+              },
+              "deterministic_cases": [
+                {
+                  "modifications": [
+                    {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]},
+                    {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
+                    {"type": "INVALID", "fields": ["CM_MEMBER_ZIP"]},
+                    {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+`matching_method` is the existing rule-catalog method; `matchCode1` is a QA-friendly filename label and can be any safe filename. Operation counts generate randomized field cases from that method's currently emitted fields. `deterministic_cases` generates an explicit, multi-field plan; its optional `count` repeats the case and optional `expected_outcome` (`MATCH` or `NO_MATCH`) overrides the inferred outcome. Mandatory field changes infer `NO_MATCH`; optional-only changes infer `MATCH` unless explicitly overridden. Invalid values continue to come only from `invalid-values.json`.
+
+The three weight entries map to `WEIGHT_CHANGE` with `BELOW_LIMIT`, `AT_LIMIT`, and `ABOVE_LIMIT`; their fields are selected dynamically from the method/rule weights. The fixture engine verifies the matching method for every non-weight case and records matching collisions, changed/removed/synchronized fields, total weight, and the final record in the output JSON.
+
+For two generated Members, this configuration writes:
+
+```text
+output/match-fixtures/
+  member1/
+    matchCode1.json
+    matchCode2.json
+  member2/
+    matchCode1.json
+    matchCode2.json
+```
+
+It never creates matchCode-named directories. Match fixtures run in `all` or `creation` mode, are transactionally published, and do not alter the existing `new-test-data` or `update-test-data` JSONL contracts.
+
+## 7. Entity reference
+
+### 7.1 Provider CDF
+
+Purpose: generate CDF Provider identity, address, prescribing-provider, specialty, taxonomy, and network information.
+
+Output: `provider_cdf.jsonl`.
+
+Structure:
+
+- Root Provider fields.
+- `CP_PROVIDER_ADDRESSES` nested collection.
+- `CP_PROVIDER_NETWORKS` nested collection.
+- Provider/client envelope metadata.
+
+Provider values include valid-looking identifiers, checksum-valid NPIs, TINs, names, contact data, dates, taxonomy/specialty values, addresses, and network indicators. Network indicators are constrained to `Y` or `N` where applicable.
+
+Linked Provider configuration:
+
+```json
+{
+  "provider": {
+    "nppes": {"count": 10},
+    "cdf": {"additional_count": 2}
+  }
+}
+```
+
+This creates ten NPPES rows, ten CDF rows with matching NPIs, and two additional CDF-only rows with NPIs absent from NPPES.
+
+Provider CDF supports all generic update operations. The update output is `provider_cdf.update.jsonl`. There is no duplicate `provider_cdf_updated.jsonl`.
+
+### 7.2 Provider NPPES
+
+Purpose: generate NPPES-style Individual and Organizational provider records with unique, checksum-valid NPIs.
+
+Output: `provider_nppes.jsonl`.
+
+The two NPPES types remain structurally distinct internally:
+
+- Entity type `1`: Individual provider profile.
+- Entity type `2`: Organizational/facility provider profile.
+
+They use separate entity modules, layouts, and schemas, then are written to the same requested NPPES JSONL stream. Type-specific fields are not mixed.
+
+Choose the split explicitly:
+
+```json
+"nppes": {
+  "individual": 6,
+  "organizational": 4
+}
+```
+
+Or use a total count:
+
+```json
+"nppes": {"count": 10}
+```
+
+An unspecified split is divided approximately in half, with the extra record assigned to Individual.
+
+In the normal configuration workflow, NPPES is a creation/reference stream; Provider updates are emitted for CDF. No `provider_nppes.update.jsonl` is produced.
+
+The modular nested `provider.nppes` + `provider.cdf` form is intentionally linked and therefore emits a corresponding CDF row for every NPPES row. NPPES-only generation remains available through the backward-compatible direct configuration form `provider_nppes: {"count": n}` with no `provider` selection, or by calling the NPPES entity API. A zero NPPES count skips `provider_nppes.jsonl`.
+
+### 7.3 Member 834
+
+Purpose: generate Member demographics, identifiers, address, enrollment-related values, and coordination-of-benefits data.
+
+Output: `members.jsonl` with `FILE_TYPE = "834"`.
+
+Structure:
+
+- Root `CM_*` fields.
+- `CM_MEMBER_ADDRESSES` nested collection.
+- `CM_MEMBER_COB` nested collection.
+- Member/client envelope metadata.
+
+Each generated Member has distinct identifiers and realistic names, dates, gender, SSN format, address, email, and phone values. A fixed seed makes the record repeatable.
+
+Member supports every generic update scenario described in section 8.
+
+### 7.4 Member Roster (MR)
+
+Purpose: create a roster representation of an existing generated Member rather than inventing another identity.
+
+Output: `member_roster.jsonl` with `FILE_TYPE = "MR"`.
+
+Lifecycle:
+
+```text
+Generate 834 Member
+        ↓ deep copy
+Project through Member layout
+        ↓
+Set FILE_TYPE to MR
+        ↓
+Optionally apply MR-specific update operation
+```
+
+By default, the 834 and MR rows are identical except for `FILE_TYPE`. MR-specific updates affect only the MR update stream and preserve untargeted fields. If `member.mr.updates` has no explicit operation, no `member_roster.update.jsonl` is created.
+
+Constraints:
+
+- `mr.count` may be zero.
+- `mr.count` cannot exceed `member.count`.
+- Updates-only mode materializes the Member base in memory before deriving MR.
+
+### 7.5 Professional Claim (837P)
+
+Purpose: generate Professional medical Claim headers and `CLAIM_DETAIL` lines.
+
+Output: `claims_professional.jsonl`.
+
+Key behavior:
+
+- `FILE_TYPE = "837P"`.
+- `CH_CLAIM_TYPE = "P"`.
+- Uses Professional service, diagnosis, place-of-service, procedure, provider, patient, subscriber, date, and financial values.
+- Each Claim owns a patient identity; generated Claims do not all reuse one patient unless a relationship requires it.
+- Claim/header and line/detail amounts reconcile.
+- The three current-Claim client identifiers are empty in the creation 837 row: `CH_CLIENT_CLAIM_UNIQUE_ID`, `CH_CLIENT_CLAIM_ID`, and `CH_CLIENT_ORIGINAL_CLAIM_ID`.
+
+### 7.6 Institutional Claim (837I)
+
+Purpose: generate Institutional/facility medical Claim headers and detail lines.
+
+Output: `claims_institutional.jsonl`.
+
+Key behavior:
+
+- `FILE_TYPE = "837I"`.
+- `CH_CLAIM_TYPE = "I"`.
+- Uses Institutional statement dates, type-of-bill, revenue, diagnosis, facility/provider, patient, subscriber, and financial values.
+- Institutional values are not produced by merely changing a Professional type flag.
+- The three current-Claim client identifiers are empty in the creation 837 row, as for 837P.
+
+### 7.7 Claims History (CH)
+
+Purpose: represent the existing/history version paired with each 837 Claim.
+
+Outputs:
+
+- `claims_history_professional.jsonl`
+- `claims_history_institutional.jsonl`
+
+Claims History is not independently generated. For each base Claim, the generator creates a deep-copied pair:
+
+- Current 837: client unique/claim/original IDs are blank.
+- CH: those IDs retain generated values and `FILE_TYPE = "CH"`.
+- All other business attributes are copied from the same base.
+
+Claims History uses the corresponding Claims matching rules through aliases in `rules/claims.json`; there is no `history.config.json`.
+
+When a Claim update is generated, the History update is copied from that exact Claim update. It does not perform a second random mutation. History keeps its populated identity fields unless they were specifically part of the propagated change and always restores `FILE_TYPE = "CH"`.
+
+### 7.8 Professional and Institutional Payments (835)
+
+Purpose: generate adjudication/payment records from Claims.
+
+Outputs:
+
+- `payments_professional.jsonl`
+- `payments_institutional.jsonl`
+
+Both streams use:
+
+- `FILE_TYPE = "835"`.
+- `cotiviti.source_format = "edi_x12_835"`.
+- The same overall 835 field structure.
+- `CH_CLAIM_TYPE = "P"` for Professional or `"I"` for Institutional.
+
+Payments do not create new patients for Claim-backed scenarios. They copy Claim identity, patient/member, subscriber, provider, service, line, and matching fields from the correct P or I Claims History row. Professional Payments never use Institutional source Claims, and vice versa.
+
+Financial generation maintains claim/detail consistency for charge, allowed, paid, coinsurance, copay, deductible, patient liability, and applicable adjustments. Unused adjustment slots remain empty/zero according to the schema rather than being filled with meaningless values.
+
+## 8. Generic mutation scenarios
+
+Generic mutation scenarios apply to Provider CDF, Member, MR, Claims, Claims History through Claim propagation, and Payments through direct or Claim-propagated updates. NPPES is creation-only in the normal flow.
+
+| Capability | Provider CDF | Provider NPPES | Member 834 | Member MR | 837 Claims | Claims History | 835 Payments |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Creation | Direct or NPPES-linked | Direct/linked | Direct | Derived from 834 | Direct base generation | Derived from paired 837 base | Derived from Claims, except ORPHAN |
+| `UPDATE` / `DIFFERENT` | Yes | No normal update stream | Yes | Yes, independent | Yes | Propagated from Claim | Yes, direct or propagated |
+| `MISSING` / `EMPTY` / `INVALID` | Yes | No normal update stream | Yes | Yes | Yes | Propagated from Claim | Yes, direct or propagated |
+| `DUPLICATE` | Yes | No normal update stream | Yes | Yes | Yes | Propagated from Claim | Yes |
+| Weight boundaries | Yes | No | Yes | Yes through Member rules | Yes | Through Claim rules | Yes |
+| Verified MATCH/NO_MATCH | Yes | No | Yes | Yes through Member rules | Yes | Through Claim aliases | Yes |
+| Lifecycle/source scenarios | NPPES match/non-match | Individual/Organizational | 834 | MR | Frequency 1/7/8 | CH pair | Five Payment scenarios |
+
+### 8.1 `UPDATE`
+
+Purpose: replace selected values with new, realistic, schema-compatible values.
+
+```json
+"updates": {
+  "profile": "standard_update",
+  "operation": {
+    "fields": ["CM_MEMBER_FIRST_NAME"]
+  }
+}
+```
+
+If fields are omitted, one eligible non-key field is chosen deterministically from the rule catalog and emitted layout.
+
+Matching/ID fields are excluded from automatic selection. An explicitly named key/ID may be updated; the original record remains the base used to establish the pair, and dependent records are propagated where supported. Structural stream discriminators such as `FILE_TYPE`, `CH_CLAIM_TYPE`, and `cotiviti.source_format` cannot receive a normal `UPDATE`.
+
+### 8.2 `DIFFERENT`
+
+Purpose: state explicitly that a field needs a valid value different from the existing value, without classifying it as invalid, missing, or duplicate.
+
+```json
+"updates": {
+  "operation": {
+    "type": "DIFFERENT",
+    "fields": ["CP_PROVIDER_CITY"]
+  }
+}
+```
+
+The current mutation engine uses the same domain-aware value generation as a valid update; the distinct operation name communicates test intent and is used by matching plans.
+
+### 8.3 `MISSING`
+
+Purpose: remove selected keys from the output object entirely.
+
+```json
+"updates": {
+  "operation": {
+    "type": "MISSING",
+    "fields": ["CM_MEMBER_MIDDLE_NAME"]
+  }
+}
+```
+
+`MISSING` is different from an empty string. When fields are omitted, the engine prefers a required eligible field, then falls back to another eligible field.
+
+### 8.4 `EMPTY`
+
+Purpose: retain the selected key but replace its value with the type-compatible empty representation: `""`, `0`, or `null` as appropriate.
+
+```json
+"updates": {
+  "operation": {
+    "type": "EMPTY",
+    "fields": ["CM_MEMBER_MIDDLE_NAME"]
+  }
+}
+```
+
+This is intentionally different from `MISSING` and may deliberately violate a required-value schema constraint.
+
+### 8.5 `INVALID`
+
+Purpose: replace selected values with deliberately malformed values from the shared invalid catalog.
+
+```json
+"updates": {
+  "operation": {
+    "type": "INVALID",
+    "fields": ["CP_PROVIDER_NPI"]
+  }
+}
+```
+
+The invalid value comes from `invalid-values.json`; the generator does not invent random invalid text inline. An invalid fixture can intentionally fail JSON Schema validation.
+
+### 8.6 `DUPLICATE`
+
+Purpose: emit a second record derived from the first with no business-field mutation.
+
+```json
+"updates": {
+  "profile": "duplicate"
+}
+```
+
+The `INGESTION_DATE` may remain the same or differ according to the configured ingestion relationship.
+
+### 8.7 `WEIGHT_CHANGE`
+
+Purpose: select changed fields whose combined configured weights are below, exactly at, or above a threshold.
+
+```json
+"updates": {
+  "profile": "weight_at_limit",
+  "matching_method": "configured_weighted_f"
+}
+```
+
+Conditions:
+
+- `BELOW_LIMIT`: expected apply is true.
+- `AT_LIMIT`: expected apply is true.
+- `ABOVE_LIMIT`: models post-match threshold rejection; expected apply is false.
+
+Matching keys are not automatically selected for weight mutation. Specify a matching method whenever possible so automatic selection stays within that method's field set. If no valid field combination satisfies the requested relation, generation fails instead of emitting a misleading fixture.
+
+## 9. Verified matching and negative scenarios
+
+Set `expected_outcome` to turn an update into a verified existing/incoming record pair. The creation JSONL is the existing record set; the `.update.jsonl` file is the incoming set. No per-entity match-plan or manifest file is generated.
+
+### 9.1 Positive `MATCH`
+
+```json
+"updates": {
+  "matching_method": "member_id_dob_gender",
+  "expected_outcome": "MATCH",
+  "operation": "duplicate",
+  "modifications": [
+    {"type": "DIFFERENT", "fields": ["CM_MEMBER_EMAIL"]}
+  ]
+}
+```
+
+Mandatory anchors remain matched. Independent low-priority fields may be changed. The engine assesses every configured method and rejects a fixture that accidentally satisfies a declared higher-priority method.
+
+### 9.2 Negative `NO_MATCH` failure modes
+
+A `NO_MATCH` request must name `failure_mode`.
+
+| Failure mode | Behavior |
+| --- | --- |
+| `MANDATORY_BREAK_EXACT` | Changes a mandatory exact anchor to a clearly different valid value. |
+| `MANDATORY_BREAK_BOUNDARY` | Pushes an elastic mandatory value just outside its allowed tolerance. |
+| `INVALID_VALUE` | Uses the shared invalid catalog on a mandatory anchor. |
+| `MISSING_VALUE` | Removes a mandatory anchor. |
+| `WEIGHT_MISS` | Keeps mandatory anchors but includes too few optional anchors to reach needed weight. |
+| `CROSS_METHOD_COLLISION` | Fails the target while intentionally satisfying another configured method. |
+
+Example:
+
+```json
+"updates": {
+  "profile": "no_match_invalid",
+  "matching_method": "professional_claim_fallback",
+  "failure_field": "CH_PLACE_OF_SERVICE_CODE"
+}
+```
+
+After mutation, the engine verifies that the target method really produces `NO_MATCH`. It also evaluates other methods. A cross-method collision must match the configured `collision_method`; accidental collisions are reported rather than treated as a clean negative fixture.
+
+`INVALID`, `MISSING`, or `EMPTY` cannot silently break a mandatory anchor in an intended positive fixture. To do that deliberately, configure `expected_outcome: "NO_MATCH"`.
+
+### 9.3 Elasticity boundaries
+
+For methods with elastic fields, use:
+
+- `INSIDE`: just within tolerance; should match.
+- `AT`: exactly at tolerance; should match according to the rule.
+- `OUTSIDE`: just past tolerance; use with an appropriate `NO_MATCH` failure mode.
+
+Example:
+
+```json
+"updates": {
+  "matching_method": "configured_weighted_f",
+  "expected_outcome": "MATCH",
+  "elasticity_boundary": "AT",
+  "failure_field": "CM_MEMBER_BIRTH_DATE",
+  "operation": "duplicate"
+}
+```
+
+## 10. Matching method catalog
+
+The JSON domain rules are authoritative. This section provides an operational summary.
+
+### 10.1 Member methods
+
+| Method | Mandatory anchors | Optional anchors | Needed weight |
+| --- | --- | --- | --- |
+| `member_id` | Member ID | None | 1 |
+| `member_id_dob_gender` | Member ID, DOB, Gender | None | 3 |
+| `name_dob_gender` | First Name, Last Name, DOB, Gender | None | 4 |
+| `configured_weighted_a` | First Name, Last Name, DOB, SSN, Group Number | None | 5 |
+| `configured_weighted_b` | First Name, Last Name, DOB, SSN | None; SSN elasticity `1` | 4 |
+| `configured_weighted_c` | First Name, Last Name, DOB | State, ZIP | 4 |
+| `configured_weighted_d` | DOB, SSN | First Name, Last Name | 3 |
+| `configured_weighted_e` | First Name, DOB | Street, State, ZIP | 4 |
+| `configured_weighted_f` | First Name, Last Name, DOB, SSN | Street, State, ZIP | 5 |
+| `configured_weighted_g` | First Name, Last Name, DOB, SSN | Street, State, ZIP | 5 |
+
+Methods F and G allow DOB variation of less than one month. Method B has configured SSN elasticity. Priority metadata causes lower-priority fixtures to diverge from stricter methods where necessary.
+
+### 10.2 Provider methods
+
+| Method | Mandatory anchors | Optional anchors | Needed weight |
+| --- | --- | --- | --- |
+| `provider_id` | Provider Client ID | None | 1 |
+| `provider_npi_first_last_name` | NPI, First Name, Last Name | None | 3 |
+| `provider_npi_last_name` | NPI, Last Name | None | 2 |
+| `provider_npi_address` | NPI, Street Address | None | 2 |
+| `provider_organization_tin` | Organization/Billing Group Name, TIN | None | 2 |
+| `provider_individual_weighted` | Last Name, First Name, Specialty | Street, ZIP | 4 |
+| `provider_organization_weighted` | Organization/Billing Group Name | Street, ZIP | 2 |
+| `provider_npi_weighted` | NPI, ZIP | Last Name, First Name, Street | 3 |
+
+`provider_npi_weighted` allows configured flexibility for First Name. Provider methods are alternative business contracts; the rule file does not infer unsupported subset relationships merely from similar fields.
+
+### 10.3 Professional Claim methods
+
+`professional_claim_primary` requires:
+
+- Patient ID.
+- Line service from/to dates.
+- Billing and rendering Provider NPIs.
+- Place of service.
+- Principal diagnosis.
+- Subscriber ID.
+- Claim frequency.
+- Total Claim charge amount.
+- Patient control number.
+
+Needed weight: 11.
+
+`professional_claim_fallback` uses the same fields except total Claim charge amount and patient control number. Needed weight: 9. Primary is the declared higher-priority method.
+
+### 10.4 Institutional Claim methods
+
+`institutional_claim_primary` requires:
+
+- Patient ID.
+- Claim statement/service from/to dates.
+- Billing and rendering Provider NPIs.
+- Principal diagnosis.
+- Revenue code.
+- Type of bill.
+- Subscriber ID.
+- Claim frequency.
+- Total Claim charge amount.
+- Patient control number.
+
+Needed weight: 12.
+
+`institutional_claim_fallback` removes total Claim charge amount and patient control number. Needed weight: 10. Primary is the declared higher-priority method.
+
+### 10.5 Payment methods
+
+Each Payment type exposes four methods:
+
+- `claim_method_1`: full Claims/History method including total charge and patient control number.
+- `claim_method_2`: fallback without those two fields.
+- `payment_835_method_1`: full 835 composite.
+- `payment_835_method_2`: fallback 835 composite without total charge and patient control number.
+
+Common anchors include patient ID, Claim frequency, Claim and line service dates, billing TIN/NPI, rendering NPI, subscriber ID, procedure qualifier/code/modifiers, and line charge.
+
+Professional methods include place of service. Institutional methods include type of bill and revenue code. The 835 methods include both fields when their layout carries them. Method 1 is declared higher priority than Method 2 in each family.
+
+For exact field arrays and weights, inspect:
+
+```sh
+jq '.entities.payment_professional.matching_methods' \
+  src/test_data_generator/configuration/rules/payments.json
+```
+
+## 11. Claim lifecycle scenarios
+
+Claims support frequency codes:
+
+| Frequency | Meaning | Generated lifecycle behavior |
+| --- | --- | --- |
+| `1` | Original/admit-through-discharge | Creates an original root/version. |
+| `7` | Replacement | Links to an original, increments lineage/version, changes meaningful Claim/detail data, and uses replacement adjustment semantics. |
+| `8` | Void | Links to an original, uses void/cancel semantics, and produces the expected zero-paid behavior. |
+
+### Random default
+
+If neither `claim_frequency` nor `frequencies` is set, the seed selects valid values from `1`, `7`, and `8`. The generator guarantees original rows needed by replacement/void lineage.
+
+### One explicit frequency
+
+```json
+"professional": {
+  "count": 2,
+  "claim_frequency": "7"
+}
+```
+
+Supported values are strings `"1"`, `"7"`, and `"8"`. This cannot be combined with `frequencies`.
+
+### Exact distribution
+
+```json
+"institutional": {
+  "count": 5,
+  "frequencies": {
+    "1": 2,
+    "7": 2,
+    "8": 1
+  }
+}
+```
+
+Distribution counts must equal Claim count. Any `7` or `8` distribution requires at least one `1`.
+
+### Replacement Payment guardrail
+
+If a corresponding Payment stream requests `REPLACEMENT` and its Claim count is one, the runtime expands that Claim stream to two rows—an original plus a replacement—only for that scenario. Other Payment scenarios do not trigger this expansion.
+
+## 12. Payment source scenarios
+
+Payment scenario counts are configured independently for P and I:
+
+```json
+"professional": {
+  "count": 7,
+  "scenarios": {
+    "MATCHED": 3,
+    "REVERSAL": 1,
+    "REPLACEMENT": 1,
+    "STALE": 1,
+    "ORPHAN": 1
+  }
+}
+```
+
+Scenario names are case-normalized. Values are non-negative integers.
+
+| Scenario | Source requirement | Behavior |
+| --- | --- | --- |
+| `MATCHED` | Existing same-type Claim | Copies Claim identity/matching data and creates a normal 835. |
+| `REVERSAL` | An earlier MATCHED, REPLACEMENT, or STALE Payment in the same generation request | Reuses that Claim relationship; sets status `22` and debit flag `D`. |
+| `REPLACEMENT` | A same-type frequency-7 Claim | Selects only a replacement Claim and preserves original/root relationship. |
+| `STALE` | Existing same-type Claim | Keeps Claim identity but sets Payment paid dates older than the Claim's relevant date. |
+| `ORPHAN` | None | Generates a normal-looking 835 whose matching identity does not correspond to any source Claim. No orphan Claim is created. |
+
+Rules:
+
+- Scenario totals may not exceed Payment `count`.
+- If scenario totals are lower than `count`, the remainder is added to `MATCHED`.
+- If scenarios are omitted and count is positive, all records are `MATCHED`.
+- A reversal-only request is invalid because no prior payment exists to reverse.
+- Claim-backed scenarios require the corresponding enabled CH/Claim stream or explicit `source_claims`.
+- An ORPHAN-only stream is valid with Claims count zero and no `source_claims`.
+- Orphan values contain no `ORPHAN` marker; nonexistence of a matching Claim is the only distinction.
+
+## 13. Relationship-aware updates
+
+### 13.1 Names
+
+When an existing First, Middle, or Last Name changes, the corresponding populated `*_FULL_NAME` is rebuilt from currently populated components. Empty/missing components are omitted, so output contains no extra spaces, `null`, or `undefined` text.
+
+The full-name field is updated only if it existed and was populated in the original record.
+
+### 13.2 Equivalent CH/CD fields
+
+For every `CH_<suffix>` and `CD_<suffix>` pair present in a record, synchronization occurs only when:
+
+- One member of the pair was changed.
+- Both forms existed in the original record.
+- The source original value was populated.
+- The original logical values were equivalent.
+
+This covers amounts and other true duplicate representations without blindly coupling fields that merely look similar. Numeric/string representations are coerced to the target's original type.
+
+Empty, null, or missing related values are never populated merely because the counterpart changed.
+
+### 13.3 Provider and prescribing NPI
+
+If `CP_PROVIDER_NPI` itself is explicitly changed/invalidated, a populated and originally equivalent `CP_PRESCRIBING_PROVIDER_NPI` may follow it. Updating only the prescribing NPI never flows backward and silently changes the Provider matching key.
+
+### 13.4 Claim → Claims History → Payment
+
+When a Claim update runs:
+
+1. The current Claim update is generated once.
+2. The corresponding History update is copied from that exact result.
+3. History restores its populated Claim identity fields and `FILE_TYPE = "CH"` according to the paired base.
+4. If the corresponding Payment stream is enabled, Payment updates are re-derived from updated History rows.
+5. Payment fields affected by Claim changes use the propagated values, not another random mutation.
+6. Payment financials are reconciled after propagation.
+
+A direct Payment update is an independent adjudication fixture and runs only when that Payment stream has an explicit update request. Claim propagation can still create the Payment update file even when the Payment stream has no direct update operation.
+
+## 14. Output files
+
+### Creation
+
+```text
+output/new-test-data/
+├── provider_cdf.jsonl
+├── provider_nppes.jsonl
+├── members.jsonl
+├── member_roster.jsonl
+├── claims_professional.jsonl
+├── claims_history_professional.jsonl
+├── claims_institutional.jsonl
+├── claims_history_institutional.jsonl
+├── payments_professional.jsonl
+└── payments_institutional.jsonl
+```
+
+### Updates
+
+Possible outputs:
+
+```text
+output/update-test-data/
+├── provider_cdf.update.jsonl
+├── members.update.jsonl
+├── member_roster.update.jsonl
+├── claims_professional.update.jsonl
+├── claims_history_professional.update.jsonl
+├── claims_institutional.update.jsonl
+├── claims_history_institutional.update.jsonl
+├── payments_professional.update.jsonl
+└── payments_institutional.update.jsonl
+```
+
+Files appear only for selected/configured or propagated streams. The project does not generate `.manifest`, per-entity `match_plan.json`, `provider_cdf_updated.jsonl`, or standalone History configuration output.
+
+Each JSONL line is one complete JSON object.
+
+### MatchCode fixture matrices
+
+When `generation.match_fixtures` is enabled, an additional non-JSONL QA artifact tree is created:
+
+```text
+output/match-fixtures/
+├── member1/
+│   ├── matchCode1.json
+│   └── matchCode2.json
+├── member2/
+│   ├── matchCode1.json
+│   └── matchCode2.json
+└── provider1/
+    └── deterministic_provider.json
+```
+
+The entity record owns the folder. Each `<matchCode>.json` is an array of derived fixture cases, not a single raw record. Every case includes `existing`, `record`, the applied operation plan, changed/removed/synchronized fields, actual matching methods, expected outcome, and weight information. This artifact is independent from `new-test-data` and `update-test-data`; enabling it never changes their filenames or JSONL structure.
+
+## 15. Running scenarios yourself
+
+For repeatable QA, add an explicit seed to `config/generator.config.json`. Edit only the relevant domain/common file, run the scenario, verify output, and then revert or keep the scenario under version control as appropriate.
+
+### 15.1 Run every checked-in stream
+
+```sh
+uv run generate-data
+find output -maxdepth 2 -type f -name '*.jsonl' -print | sort
+```
+
+### 15.2 Run only one domain
+
+Set `runconfig.json`:
+
+```json
+{
+  "config": "config/generator.config.json",
+  "entities": ["member"],
+  "operations": ["creation", "updates"]
+}
+```
+
+Then:
+
+```sh
+uv run generate-data
+```
+
+### 15.3 Run only creation or updates
+
+```sh
+uv run python -m test_data_generator generate \
+  --config runconfig.json --mode creation
+
+uv run python -m test_data_generator generate \
+  --config runconfig.json --mode updates
+```
+
+The requested phase must also be allowed by `runconfig.json`.
+
+### 15.4 Generate only Member data
+
+`config/member.config.json`:
+
+```json
+{
+  "member": {
+    "count": 1,
+    "mr": {"count": 0}
+  }
+}
+```
+
+Set other domain counts to zero or select only `member` in `runconfig.json`. Expected creation output: only `members.jsonl` for this domain.
+
+### 15.5 Generate 834 plus MR
+
+```json
+{
+  "member": {
+    "count": 2,
+    "mr": {"count": 2}
+  }
+}
+```
+
+Run creation, then compare:
+
+```sh
+paste output/new-test-data/members.jsonl \
+      output/new-test-data/member_roster.jsonl | \
+  head -n 1
+```
+
+For a structural comparison excluding file type:
+
+```sh
+python - <<'PY'
+import json
+from pathlib import Path
+
+def read(path):
+    return [json.loads(line) for line in Path(path).read_text().splitlines()]
+
+members = read('output/new-test-data/members.jsonl')
+roster = read('output/new-test-data/member_roster.jsonl')
+for member, mr in zip(members, roster, strict=True):
+    assert member.pop('FILE_TYPE') == '834'
+    assert mr.pop('FILE_TYPE') == 'MR'
+    assert member == mr
+print('834/MR pairs match except FILE_TYPE')
+PY
+```
+
+### 15.6 Target one field
+
+```json
+"updates": {
+  "profile": "standard_update",
+  "operation": {"fields": ["CM_MEMBER_FIRST_NAME"]}
+}
+```
+
+Run updates and compare:
+
+```sh
+jq -s '.[0].CM_MEMBER_FIRST_NAME' output/new-test-data/members.jsonl
+jq -s '.[0].CM_MEMBER_FIRST_NAME' output/update-test-data/members.update.jsonl
+```
+
+Verify untargeted fields with the Python comparison in section 16.4.
+
+### 15.7 Missing, empty, and invalid
+
+Change only the operation:
+
+```json
+{"type": "MISSING", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
+```
+
+```json
+{"type": "EMPTY", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
+```
+
+```json
+{"type": "INVALID", "fields": ["CM_MEMBER_GENDER"]}
+```
+
+Verify:
+
+```sh
+jq 'has("CM_MEMBER_MIDDLE_NAME")' output/update-test-data/members.update.jsonl
+jq '.CM_MEMBER_MIDDLE_NAME' output/update-test-data/members.update.jsonl
+jq '.CM_MEMBER_GENDER' output/update-test-data/members.update.jsonl
+```
+
+### 15.8 Weight boundaries
+
+```json
+"updates": {
+  "profile": "weight_above_limit",
+  "matching_method": "configured_weighted_f"
+}
+```
+
+Run the Member updates. Success means the engine found and verified an above-threshold combination; failure means the selected method/layout has no valid combination for that boundary.
+
+### 15.9 Deterministic Claim frequency and recency
+
+`config/claims.config.json`:
+
+```json
+{
+  "claims": {
+    "professional": {
+      "count": 2,
+      "claim_frequency": "7",
+      "updates": {
+        "profile": "standard_update",
+        "operation": {"fields": ["CH_DIAGNOSIS_CODE_01"]}
+      }
+    },
+    "institutional": {"count": 0}
+  }
+}
+```
+
+`config/common/ingestion.json`:
+
+```json
+{
+  "ingestion_dates": {
+    "overrides": {
+      "claims": {"existing": "20260909", "update": "NEWER"},
+      "claims_history": {"existing": "20260910", "update": "SAME"},
+      "payments": {"existing": "20260911", "update": "OLDER"}
+    }
+  }
+}
+```
+
+Verify:
+
+```sh
+jq '{FILE_TYPE,CH_CLAIM_TYPE,CH_CLAIM_FREQUENCY_CODE,INGESTION_DATE}' \
+  output/new-test-data/claims_professional.jsonl
+
+jq '{FILE_TYPE,CH_CLAIM_TYPE,CH_CLAIM_FREQUENCY_CODE,INGESTION_DATE}' \
+  output/update-test-data/claims_professional.update.jsonl
+```
+
+### 15.10 Orphan-only Payments without Claims
+
+Set both Claim counts to zero. Configure Payment streams as:
+
+```json
+{
+  "payments": {
+    "defaults": {
+      "scenarios": {
+        "MATCHED": 0,
+        "REVERSAL": 0,
+        "REPLACEMENT": 0,
+        "STALE": 0,
+        "ORPHAN": 1
+      }
+    },
+    "professional": {"count": 1},
+    "institutional": {"count": 1}
+  }
+}
+```
+
+This is valid without Claims. It produces one normal-looking Payment in each stream and no corresponding Claim.
+
+### 15.11 Payments from an external Claim file
+
+```json
+"professional": {
+  "count": 2,
+  "source_claims": "../fixtures/claims_history_professional.jsonl",
+  "scenarios": {"MATCHED": 1, "STALE": 1}
+}
+```
+
+The path is relative to the composed global configuration location. The input file is read-only and is never modified. It must contain Claim records compatible with the selected Payment type and required matching fields.
+
+### 15.12 Standalone Provider NPPES/CDF utility
+
+```sh
+uv run python -m test_data_generator provider-cdf \
+  --output output/provider-cdf \
+  --count 10 \
+  --unmatched-count 2 \
+  --seed 20260909
+```
+
+Expected:
+
+- `output/provider-cdf/provider_nppes.jsonl`: 10 records.
+- `output/provider-cdf/provider_cdf.jsonl`: 12 records.
+- The first 10 CDF NPIs match NPPES NPIs.
+- The remaining two are unique CDF-only NPIs.
+
+### 15.13 Generate a matchCode fixture matrix
+
+Add a `generation.match_fixtures` block such as the example in [section 6.9](#69-per-record-matchcode-fixture-matrices), ensure its source entity has a positive count, and run creation:
+
+```sh
+uv run python -m test_data_generator generate \
+  --config runconfig.json --mode creation
+```
+
+Use the real internal stream name in `entities` (`member`, `provider`, `claim_professional`, `claim_institutional`, `payment_professional`, or `payment_institutional`). `matching_method` must be a method defined for that entity in the update-rule catalog. The output folder is `output/match-fixtures` unless the configuration overrides `directory`.
+
+## 16. Verification cookbook
+
+### 16.1 Count JSONL rows
+
+```sh
+wc -l output/new-test-data/*.jsonl output/update-test-data/*.jsonl
+```
+
+### 16.2 Confirm every line is valid JSON
+
+```sh
+for file in output/new-test-data/*.jsonl output/update-test-data/*.jsonl; do
+  jq -e . "$file" >/dev/null || exit 1
+done
+```
+
+This checks JSON syntax, not schema validity.
+
+### 16.3 Inspect matchCode fixture results
+
+```sh
+find output/match-fixtures -type f -name '*.json' -print | sort
+jq '.[0] | {
+  match_code,
+  matching_method,
+  operation,
+  expected_outcome,
+  actual_match,
+  changed_fields,
+  removed_fields,
+  total_weight,
+  threshold_relation
+}' output/match-fixtures/member1/matchCode1.json
+```
+
+For a deterministic field plan, compare the `existing` and `record` values and confirm the named fields appear in `changed_fields` or `removed_fields`. For random operation-count cases, confirm the file contains exactly the configured count of each `operation`:
+
+```sh
+jq 'group_by(.operation) | map({operation: .[0].operation, count: length})' \
+  output/match-fixtures/member1/matchCode1.json
+```
+
+### 16.4 Validate normal creation output against schemas
+
+```sh
+uv run python - <<'PY'
+import json
+from pathlib import Path
+from jsonschema import Draft202012Validator
+
+checks = {
+    'output/new-test-data/provider_cdf.jsonl': 'schema/json/provider/provider.schema.json',
+    'output/new-test-data/members.jsonl': 'schema/json/member/member.schema.json',
+    'output/new-test-data/member_roster.jsonl': 'schema/json/member/member.schema.json',
+    'output/new-test-data/claims_professional.jsonl': 'schema/json/claim/claim.schema.json',
+    'output/new-test-data/claims_history_professional.jsonl': 'schema/json/claim/claim.schema.json',
+    'output/new-test-data/claims_institutional.jsonl': 'schema/json/claim/claim.schema.json',
+    'output/new-test-data/claims_history_institutional.jsonl': 'schema/json/claim/claim.schema.json',
+    'output/new-test-data/payments_professional.jsonl': 'schema/json/payment/payment.schema.json',
+    'output/new-test-data/payments_institutional.jsonl': 'schema/json/payment/payment.schema.json',
+}
+
+for data_path, schema_path in checks.items():
+    path = Path(data_path)
+    if not path.exists():
+        continue
+    schema = json.loads(Path(schema_path).read_text())
+    validator = Draft202012Validator(schema)
+    for line_number, line in enumerate(path.read_text().splitlines(), 1):
+        errors = list(validator.iter_errors(json.loads(line)))
+        assert not errors, f'{path}:{line_number}: {errors[0].message}'
+print('normal creation files validate')
+PY
+```
+
+NPPES uses type-specific schemas; validate each row according to its entity type/profile if you need an independent NPPES audit. The generator already validates NPPES records during creation.
+
+### 16.5 Show exact changed/removed fields
+
+```sh
+uv run python - <<'PY'
+import json
+from pathlib import Path
+
+before_path = Path('output/new-test-data/members.jsonl')
+after_path = Path('output/update-test-data/members.update.jsonl')
+before = json.loads(before_path.read_text().splitlines()[0])
+after = json.loads(after_path.read_text().splitlines()[0])
+
+for key in sorted(set(before) | set(after)):
+    if before.get(key) != after.get(key) or (key in before) != (key in after):
+        print(key, repr(before.get(key)), '->', repr(after.get(key)))
+PY
+```
+
+For nested fields, use a recursive diff tool or the regression tests.
+
+### 16.6 Verify unique NPPES NPIs
+
+```sh
+jq -r '.NPI' output/new-test-data/provider_nppes.jsonl | sort | uniq -d
+```
+
+No output means no duplicates.
+
+### 16.7 Verify Claim/History pairing
+
+```sh
+uv run python - <<'PY'
+import json
+from pathlib import Path
+
+ids = {
+    'CH_CLIENT_CLAIM_UNIQUE_ID',
+    'CH_CLIENT_CLAIM_ID',
+    'CH_CLIENT_ORIGINAL_CLAIM_ID',
+}
+
+for kind in ('professional', 'institutional'):
+    claims = [json.loads(x) for x in Path(f'output/new-test-data/claims_{kind}.jsonl').read_text().splitlines()]
+    history = [json.loads(x) for x in Path(f'output/new-test-data/claims_history_{kind}.jsonl').read_text().splitlines()]
+    assert len(claims) == len(history)
+    for claim, ch in zip(claims, history, strict=True):
+        assert claim['FILE_TYPE'] in {'837P', '837I'}
+        assert ch['FILE_TYPE'] == 'CH'
+        assert all(claim[name] == '' for name in ids)
+        assert all(ch[name] not in ('', None) for name in ids)
+        claim_compare = {k: v for k, v in claim.items() if k not in ids | {'FILE_TYPE'}}
+        history_compare = {k: v for k, v in ch.items() if k not in ids | {'FILE_TYPE'}}
+        assert claim_compare == history_compare
+print('Claim/CH pairs verified')
+PY
+```
+
+### 16.8 Verify Payments use correct Claim type
+
+```sh
+jq -e 'select(.FILE_TYPE != "835" or .CH_CLAIM_TYPE != "P")' \
+  output/new-test-data/payments_professional.jsonl
+
+jq -e 'select(.FILE_TYPE != "835" or .CH_CLAIM_TYPE != "I")' \
+  output/new-test-data/payments_institutional.jsonl
+```
+
+These commands should print nothing when all records are correct. `jq -e` exits nonzero on empty output, which is expected for this negative selection.
+
+### 16.9 Verify deterministic seed behavior
+
+1. Set an explicit seed.
+2. Generate data.
+3. Hash outputs.
+4. Generate again with unchanged config.
+5. Compare hashes.
+
+```sh
+find output -type f -name '*.jsonl' -exec shasum -a 256 {} \; | sort > /tmp/tdg-before.sha
+uv run generate-data
+find output -type f -name '*.jsonl' -exec shasum -a 256 {} \; | sort > /tmp/tdg-after.sha
+diff -u /tmp/tdg-before.sha /tmp/tdg-after.sha
+```
+
+No diff means deterministic reproduction. Omit/change the seed when you want independent random variation.
+
+## 17. Complete end-to-end examples
+
+### Example A: Provider matching and one CDF update
+
+Configuration:
+
+```json
+{
+  "provider": {
+    "nppes": {"individual": 2, "organizational": 1},
+    "cdf": {"additional_count": 2},
+    "updates": {
+      "profile": "standard_update",
+      "operation": {"fields": ["CP_PROVIDER_FIRST_NAME"]}
+    }
+  }
+}
+```
+
+Execution:
+
+```sh
+uv run python -m test_data_generator generate --config runconfig.json --mode all
+```
+
+Expected:
+
+- 3 NPPES rows with unique NPIs.
+- 5 CDF rows: 3 matching NPPES, 2 CDF-only.
+- 5 CDF update rows with new realistic First Name values where applicable.
+- Existing populated full-name values are recalculated.
+- Empty related name fields remain empty.
+
+Representative relationship:
+
+```text
+provider_nppes.jsonl NPI 123... valid checksum
+          ↓ matching NPI
+provider_cdf.jsonl CP_PROVIDER_NPI 123...
+          ↓ update selected First Name
+provider_cdf.update.jsonl same relationship, changed First/Full Name
+```
+
+### Example B: Member 834, MR, and verified negative match
+
+Configuration:
+
+```json
+{
+  "member": {
+    "count": 2,
+    "mr": {
+      "count": 2,
+      "updates": {
+        "profile": "no_match_missing",
+        "matching_method": "member_id_dob_gender",
+        "failure_field": "CM_MEMBER_BIRTH_DATE"
+      }
+    }
+  }
+}
+```
+
+Execution:
+
+```sh
+uv run python -m test_data_generator generate --config runconfig.json --mode all
+```
+
+Expected:
+
+- Two valid 834 rows.
+- Two MR creation rows copied from 834 with only `FILE_TYPE` changed.
+- Two MR update rows with DOB removed.
+- The matching evaluator verifies `NO_MATCH` for `member_id_dob_gender`.
+
+### Example C: 837P/CH/835 same-run lifecycle
+
+Claims config:
+
+```json
+{
+  "claims": {
+    "professional": {
+      "count": 3,
+      "frequencies": {"1": 1, "7": 1, "8": 1},
+      "updates": {
+        "profile": "standard_update",
+        "operation": {"fields": ["CH_PATIENT_MIDDLE_NAME"]}
+      }
+    },
+    "institutional": {"count": 0}
+  }
+}
+```
+
+Payments config:
+
+```json
+{
+  "payments": {
+    "professional": {
+      "count": 3,
+      "scenarios": {
+        "MATCHED": 1,
+        "REPLACEMENT": 1,
+        "STALE": 1,
+        "REVERSAL": 0,
+        "ORPHAN": 0
+      }
+    },
+    "institutional": {"count": 0}
+  }
+}
+```
+
+Expected flow:
+
+```text
+3 base professional Claim records
+  ├── current 837P: client Claim IDs blank
+  └── CH: client Claim IDs populated
+          ↓
+3 professional 835 records derived by scenario
+
+Claim update changes patient middle name
+  ├── current Claim update
+  ├── exact propagated CH update
+  └── re-derived Payment update with matching relationship values
+```
+
+### Example D: Below/at/above Member weight cases
+
+Run three times, changing only the profile:
+
+```json
+"updates": {
+  "profile": "weight_below_limit",
+  "matching_method": "configured_weighted_f"
+}
+```
+
+Then `weight_at_limit`, then `weight_above_limit`. Keep the same explicit seed. Store each output in a separate test artifact location before the next run. This produces comparable fixtures whose changed-field weights are respectively below, equal to, and above the configured threshold.
+
+## 18. Business rules and edge cases
+
+- JSONL is the only output format.
+- `otherAttributes` is not emitted.
+- Counts of zero are valid and skip generation.
+- Counts above one million are rejected.
+- Generated record identifiers are unique within their required scopes.
+- Explicit seeds are reproducible across processes; omitted seeds use fresh entropy.
+- Valid NPIs use checksum-aware generation, not arbitrary ten-digit strings.
+- Code, enum, indicator, qualifier, amount, ID, date, and demographic fields use domain/schema-aware generation instead of generic dictionary words.
+- Claims and Payments preserve P/I separation.
+- Payments are derived from Claims except intentional ORPHAN records.
+- Payment scenario remainder becomes MATCHED.
+- REPLACEMENT requires a frequency-7 source Claim.
+- REVERSAL requires an earlier generated payment relationship.
+- Current Claim and CH records are paired from one base, not generated independently.
+- Claim updates propagate to corresponding CH and enabled Payment streams.
+- Empty/null/missing equivalent fields remain empty/null/missing during synchronization.
+- Explicit key updates are permitted; automatic valid-update selection avoids keys.
+- Stream discriminators cannot be changed by ordinary valid update operations.
+- Layout projection happens before update field availability checks.
+- Generation subdirectories cannot escape the configured output root.
+- A failed run does not partially publish a new generation.
+
+## 19. Troubleshooting
+
+### `count: 0` still appears to generate a file
+
+Confirm you ran with the intended `runconfig.json` and that another selected stream does not derive the file. After a successful run, known stale files for zero-count streams are removed. If the run failed before commit, the previous complete output is intentionally preserved.
+
+### “Update field ... is not present in generated record”
+
+The field exists in a broader rule/schema catalog but not in the selected emitted layout or base record. Check the exact profile's layout and use its canonical field name.
+
+### “Update selection contains an unknown field”
+
+Use the canonical field from the relevant rule/layout. Remove trailing whitespace and accidental punctuation. Although normalization accepts common input variations, maintained config should use exact names.
+
+### Matching key requires an explicit operation
+
+Automatic selection excludes matching keys. Put the key in an explicit `UPDATE`, `DIFFERENT`, `INVALID`, or `MISSING` field list. Use `INVALID` or `MISSING` when the intent is to prevent matching; use `expected_outcome: "NO_MATCH"` when breaking a mandatory method anchor.
+
+### Structural discriminator may only be INVALID or MISSING
+
+Do not normally update `FILE_TYPE`, `CH_CLAIM_TYPE`, or source-format discriminators. Select the correct entity stream instead. Invalid/missing discriminator fixtures are allowed for negative tests.
+
+### “NO_MATCH requires a failure_mode”
+
+Add one of the six supported failure modes and any required `failure_field`/`collision_method`.
+
+### “MATCH cannot declare a failure_mode”
+
+Remove `failure_mode`; boundary variation for a positive case belongs in `elasticity_boundary`.
+
+### Mandatory-anchor INVALID/MISSING/EMPTY rejected
+
+This safeguard prevents accidental negative fixtures. Add `expected_outcome: "NO_MATCH"` with the appropriate failure mode.
+
+### Weight scenario cannot find a combination
+
+Check the matching method, emitted fields, weights, and threshold. Use `matching_method` to constrain selection. A mathematically impossible exact threshold is rejected.
+
+### Payment stream requires source Claims
+
+Enable the matching Professional/Institutional Claim stream, provide `source_claims`, or configure only ORPHAN payments. A positive Payment count with omitted scenarios means MATCHED and therefore requires Claims.
+
+### REPLACEMENT Payment has no frequency-7 Claim
+
+Set Claim `claim_frequency` to `"7"`, configure a distribution containing `"7"`, or allow the same-run random lifecycle guardrail to create one. Ensure the Payment and Claim types match.
+
+### REVERSAL-only config fails
+
+Add at least one prior `MATCHED`, `REPLACEMENT`, or `STALE` scenario in the same Payment request.
+
+### Scenario counts do not equal Payment count
+
+Counts may be lower; the remainder becomes MATCHED. They may not be higher. Reduce scenario counts or increase Payment count.
+
+### Schema validation failure on a normal update
+
+Check the field's generated type, allowed enum/code, length, and layout. Normal updates should be schema-compatible. `INVALID`, `MISSING`, and `EMPTY` failures may be intentional.
+
+### GDF schema refresh fails
+
+Ensure the newest workbook in `schema/gdf/` is a readable `.xlsx` file. Run the extractor manually to see detailed workbook errors.
+
+### `uv` cache permission error
+
+Use a writable cache directory:
+
+```sh
+UV_CACHE_DIR=/tmp/test-data-generator-uv-cache uv run generate-data
+```
+
+### Output from a failed run did not change
+
+That is the transactional safety behavior. Requested directories are staged and swapped only after the entire requested phase succeeds.
+
+## 20. Test suite guide
+
+Run all tests:
+
+```sh
+uv run python -m unittest discover -s tests -v
+```
+
+Run one module:
+
+```sh
+uv run python -m unittest tests.update.test_payment_generation -v
+```
+
+Run one test:
+
+```sh
+uv run python -m unittest \
+  tests.update.test_payment_generation.PaymentGenerationTests.test_orphan_only_payments_generate_without_claim_streams -v
+```
+
+Main coverage areas:
+
+- Modular config loading, profile resolution, unknown-profile rejection, and execution selection.
+- Zero counts and stale-output cleanup.
+- Member 834/MR derivation and independent MR updates.
+- Provider linked NPPES/CDF generation and NPI uniqueness.
+- Realistic demographic, identifier, code, and financial values.
+- Claim P/I shape, lifecycle, lineage, enrichment, and Claim/CH pairing.
+- Payment P/I source relationships and all five source scenarios.
+- Generic field operations, invalid catalog use, weights, matching outcomes, and elasticity.
+- Relationship-aware name, CH/CD, NPI, History, and Payment propagation.
+- Ingestion-date SAME/NEWER/OLDER behavior.
+- Header ordering.
+- Cross-process seed reproducibility.
+- Updates-only base materialization.
+- Atomic failure recovery and partial-publication prevention.
+- Wheel packaging of runtime schemas.
+
+Static checks:
+
+```sh
+uv run ruff check src
+uv run ruff format --check src
+uv run mypy
+```
+
+Or run all of them plus tests:
+
+```sh
+make verify
+```
+
+## 21. Adding a new configuration-only scenario
+
+For an existing operation type:
+
+1. Decide whether a common profile already represents the outcome.
+2. If yes, reference it from one domain stream and specify only the differing method/fields.
+3. If not, add one named profile to `config/common/update-profiles.json` using existing operation/failure semantics.
+4. Reuse a named operation from `config/common/operations.json`, or add a named alias for an existing operation type.
+5. Reference the profile from the appropriate domain config.
+6. Use exact canonical fields from the domain rule/layout.
+7. Run the smallest domain/phase through `runconfig.json`.
+8. Add a regression test proving the output and failure behavior.
+
+Example new reusable profile:
+
+```json
+"no_match_exact_break": {
+  "expected_outcome": "NO_MATCH",
+  "failure_mode": "MANDATORY_BREAK_EXACT",
+  "operation": "duplicate"
+}
+```
+
+Entity use:
+
+```json
+"updates": {
+  "profile": "no_match_exact_break",
+  "matching_method": "provider_npi_last_name",
+  "failure_field": "CP_PROVIDER_LAST_NAME"
+}
+```
+
+Core code changes are needed only when introducing genuinely new semantics, a new data structure, a new operation algorithm, or a new relationship—not for another combination of existing rules.
+
+## 22. Maintaining fields and business rules
+
+When requirements change, update the correct layer:
+
+| Change | Correct location |
+| --- | --- |
+| New/changed GDF field/type/length | GDF workbook, then schema refresh. |
+| Emit or omit a field | Entity layout. |
+| Client-specific envelope/default | `client_profiles.json`. |
+| Matching anchor, priority, requiredness, elasticity, or weight | Domain rule JSON. |
+| Invalid example | `invalid-values.json`. |
+| Reusable operation alias | `common/operations.json`. |
+| Reusable outcome/failure bundle | `common/update-profiles.json`. |
+| Count, Claim frequency, Payment scenario, or selected update fields | Domain config. |
+| Domain/phase selected for one run | `runconfig.json`. |
+| New field-generation semantics | Appropriate entity/shared generation code plus tests. |
+| New dependency synchronization | Shared synchronization/relationship logic plus tests. |
+
+Never add fields to a generator merely because they appear in a sample omission/presence pattern. The GDF/schema/layout/rule combination determines the complete supported contract.
+
+## 23. Operational checklist
+
+Before a QA run:
+
+- Select an explicit seed if reproducibility matters.
+- Confirm `runconfig.json` domain and phase scope.
+- Confirm positive counts only for desired streams.
+- Confirm Payment scenario totals and Claim dependencies.
+- Confirm exact update field names and matching method.
+- Confirm ingestion relationships if date ordering matters.
+
+After a QA run:
+
+- Check CLI exit code is zero.
+- Check expected files and row counts.
+- Parse every JSONL line.
+- Validate normal records against schemas.
+- Compare creation/update pairs for intended changes only.
+- Verify Claim/CH IDs and file types.
+- Verify Claim-backed Payments reuse source identity and type.
+- Verify ORPHAN Payments do not match any Claim.
+- Verify financial arithmetic and line/header consistency.
+- Preserve the config and explicit seed with the test evidence.
+
+## 24. Current limitations
+
+- Output is JSONL only.
+- NPPES has no normal `.update.jsonl` stream; CDF is the Provider update target.
+- Claims History has no independent generation/matching config; it is Claim-derived.
+- The framework generates matching and survivorship fixtures but does not execute a production matching/adjudication service.
+- Configuration can compose existing semantics; a truly new operation algorithm still requires code and tests.
+- JSON object order can be configured for readability, but consumers must not treat object-key order as data semantics.
+
+## 25. Primary commands summary
+
+```sh
+# Install
+uv sync --extra dev
+
+# Default modular run
+uv run generate-data
+
+# Explicit config and phase
+uv run python -m test_data_generator generate --config runconfig.json --mode all
+uv run python -m test_data_generator generate --config runconfig.json --mode creation
+uv run python -m test_data_generator generate --config runconfig.json --mode updates
+
+# Standalone linked Provider data
+uv run python -m test_data_generator provider-cdf \
+  --output output/provider-cdf --count 10 --unmatched-count 2 --seed 20260909
+
+# Tests and quality checks
+uv run python -m unittest discover -s tests -v
+make verify
+
+# GDF verification
+uv run python schema/tools/extract-gdf-catalogs.py \
+  "schema/gdf/GDF Request File Layouts Standard.xlsx" --verify
+```

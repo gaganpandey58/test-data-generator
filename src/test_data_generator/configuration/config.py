@@ -87,6 +87,30 @@ class IngestionDateOverride:
 
 
 @dataclass(frozen=True)
+class MatchFixtureCodeConfig:
+    """Describe one named, rule-backed match-fixture matrix.
+
+    ``name`` is deliberately a public label rather than an internal matching
+    method identifier.  This lets a QA configuration expose stable names such
+    as ``matchCode1`` while selecting any current catalog method through
+    ``matching_method``.
+    """
+
+    name: str
+    matching_method: str
+    operation_counts: Mapping[str, int]
+    deterministic_cases: tuple[Mapping[str, object], ...] = ()
+
+
+@dataclass(frozen=True)
+class MatchFixtureEntityConfig:
+    """Describe fixture matrices emitted from records of one enabled entity."""
+
+    entity: str
+    match_codes: tuple[MatchFixtureCodeConfig, ...]
+
+
+@dataclass(frozen=True)
 class RunConfig:
     """Describe the resolved settings needed for one complete generator run.
 
@@ -117,6 +141,8 @@ class RunConfig:
     nppes_organizational_count: int = 0
     nppes_filename: str = "provider_nppes.jsonl"
     provider_linked: bool = False
+    match_fixture_directory: Path | None = None
+    match_fixture_entities: tuple[MatchFixtureEntityConfig, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -173,11 +199,16 @@ def select_execution_entities(run_config: RunConfig, execution: ExecutionConfig)
     if unknown:
         raise ConfigurationError(f"Unknown execution entity group {unknown[0]!r}")
     selected_names = set().union(*(_EXECUTION_ENTITY_GROUPS[name] for name in execution.entities))
+    selected_fixtures = tuple(
+        fixture for fixture in run_config.match_fixture_entities if fixture.entity in selected_names
+    )
     return replace(
         run_config,
         entities=tuple(entity for entity in run_config.entities if entity.name in selected_names),
         # A selectively scoped run must never clean outputs owned by omitted domains.
         disabled_filenames=(),
+        match_fixture_entities=selected_fixtures,
+        match_fixture_directory=(run_config.match_fixture_directory if selected_fixtures else None),
     )
 
 
@@ -344,6 +375,15 @@ def load_config(path: Path) -> RunConfig:
     )
     if not invalid_values_catalog.is_file():
         raise ConfigurationError(f"Invalid-value catalog does not exist: {invalid_values_catalog}")
+    match_fixture_directory, match_fixture_entities = _match_fixture_config(
+        generation_config,
+        output_directory,
+        raw_entities,
+    )
+    if match_fixture_directory in {creation_directory, update_directory}:
+        raise ConfigurationError(
+            "generation.match_fixtures.directory must differ from creation and updates directories"
+        )
     return RunConfig(
         client=client,
         seed=seed,
@@ -361,7 +401,208 @@ def load_config(path: Path) -> RunConfig:
         nppes_individual_count=nppes_individual_count,
         nppes_organizational_count=nppes_organizational_count,
         provider_linked=provider_linked,
+        match_fixture_directory=match_fixture_directory,
+        match_fixture_entities=match_fixture_entities,
     )
+
+
+_MATCH_FIXTURE_OPERATIONS = frozenset(
+    {
+        "UPDATE",
+        "INVALID",
+        "MISSING",
+        "EMPTY",
+        "DUPLICATE",
+        "WEIGHT_BELOW_LIMIT",
+        "WEIGHT_AT_LIMIT",
+        "WEIGHT_ABOVE_LIMIT",
+    }
+)
+_MATCH_FIXTURE_MUTATION_OPERATIONS = frozenset(
+    {"UPDATE", "INVALID", "MISSING", "EMPTY", "DUPLICATE"}
+)
+
+
+def _match_fixture_config(
+    generation: Mapping[str, object],
+    output_directory: Path,
+    raw_entities: Mapping[str, object],
+) -> tuple[Path | None, tuple[MatchFixtureEntityConfig, ...]]:
+    """Validate the optional per-entity, per-matchCode fixture matrix.
+
+    The normal JSONL streams remain the source records.  This opt-in matrix
+    simply produces explainable JSON fixture bundles derived from those
+    records, so its configuration is intentionally isolated under
+    ``generation.match_fixtures``.
+    """
+    configured = generation.get("match_fixtures")
+    if configured is None:
+        return None, ()
+    if not isinstance(configured, Mapping):
+        raise ConfigurationError("generation.match_fixtures must be an object")
+    enabled = configured.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ConfigurationError("generation.match_fixtures.enabled must be a boolean")
+    if not enabled:
+        return None, ()
+    directory = configured.get("directory", "match-fixtures")
+    if not isinstance(directory, str) or not directory.strip():
+        raise ConfigurationError("generation.match_fixtures.directory must be a non-empty string")
+    output = _output_subdirectory(output_directory, directory, "match fixture")
+    entities = configured.get("entities")
+    if not isinstance(entities, Mapping) or not entities:
+        raise ConfigurationError("generation.match_fixtures.entities must be a non-empty object")
+
+    result: list[MatchFixtureEntityConfig] = []
+    for entity_name, entity_value in entities.items():
+        if not isinstance(entity_name, str) or entity_name not in raw_entities:
+            raise ConfigurationError(f"Unknown match-fixture entity {entity_name!r}")
+        source_entity = raw_entities[entity_name]
+        if not isinstance(source_entity, Mapping) or not source_entity.get("enabled"):
+            raise ConfigurationError(
+                f"Match-fixture entity {entity_name!r} must be enabled with a positive count"
+            )
+        if not isinstance(entity_value, Mapping):
+            raise ConfigurationError(f"Match-fixture entity {entity_name!r} must be an object")
+        codes = entity_value.get("match_codes")
+        if not isinstance(codes, Mapping) or not codes:
+            raise ConfigurationError(
+                f"Match-fixture entity {entity_name!r} must define a non-empty match_codes object"
+            )
+        code_configs: list[MatchFixtureCodeConfig] = []
+        for code_name, code_value in codes.items():
+            if not isinstance(code_name, str) or not code_name.strip():
+                raise ConfigurationError("Each matchCode name must be a non-empty string")
+            _validate_fixture_filename(code_name, "matchCode")
+            if not isinstance(code_value, Mapping):
+                raise ConfigurationError(f"matchCode {code_name!r} must be an object")
+            method = code_value.get("matching_method")
+            if not isinstance(method, str) or not method.strip():
+                raise ConfigurationError(f"matchCode {code_name!r} requires matching_method")
+            operation_counts = _match_fixture_operation_counts(code_name, code_value)
+            deterministic_cases = _match_fixture_cases(code_name, code_value)
+            if not operation_counts and not deterministic_cases:
+                raise ConfigurationError(
+                    f"matchCode {code_name!r} needs operation_counts or deterministic_cases"
+                )
+            code_configs.append(
+                MatchFixtureCodeConfig(
+                    code_name,
+                    method,
+                    operation_counts,
+                    deterministic_cases,
+                )
+            )
+        result.append(MatchFixtureEntityConfig(entity_name, tuple(code_configs)))
+    return output, tuple(result)
+
+
+def _match_fixture_operation_counts(
+    code_name: str, configured: Mapping[str, object]
+) -> Mapping[str, int]:
+    """Normalize operation-count aliases without constraining matchCode names."""
+    value = configured.get("operation_counts", {})
+    if not isinstance(value, Mapping):
+        raise ConfigurationError(f"matchCode {code_name!r}.operation_counts must be an object")
+    result: dict[str, int] = {}
+    for raw_operation, count in value.items():
+        operation = _normalize_match_fixture_operation(raw_operation)
+        if operation not in _MATCH_FIXTURE_OPERATIONS:
+            raise ConfigurationError(
+                f"matchCode {code_name!r} has unsupported operation {raw_operation!r}"
+            )
+        if (
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_RECORD_COUNT
+        ):
+            raise ConfigurationError(
+                f"matchCode {code_name!r} count for {operation!r} must be a non-negative integer"
+            )
+        result[operation] = result.get(operation, 0) + count
+    return result
+
+
+def _match_fixture_cases(
+    code_name: str, configured: Mapping[str, object]
+) -> tuple[Mapping[str, object], ...]:
+    """Validate deterministic multi-field cases while preserving their field plan."""
+    value = configured.get("deterministic_cases", [])
+    if not isinstance(value, list):
+        raise ConfigurationError(f"matchCode {code_name!r}.deterministic_cases must be an array")
+    result: list[Mapping[str, object]] = []
+    for case_index, case in enumerate(value, start=1):
+        if not isinstance(case, Mapping):
+            raise ConfigurationError(
+                f"matchCode {code_name!r} deterministic case {case_index} must be an object"
+            )
+        count = case.get("count", 1)
+        if (
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 1 <= count <= MAX_RECORD_COUNT
+        ):
+            raise ConfigurationError(
+                f"matchCode {code_name!r} deterministic case {case_index} count must be positive"
+            )
+        modifications = case.get("modifications")
+        if not isinstance(modifications, list) or not modifications:
+            raise ConfigurationError(
+                f"matchCode {code_name!r} deterministic case {case_index} needs modifications"
+            )
+        for modification in modifications:
+            if not isinstance(modification, Mapping):
+                raise ConfigurationError(
+                    f"matchCode {code_name!r} deterministic case {case_index} "
+                    "has an invalid modification"
+                )
+            operation = _normalize_match_fixture_operation(modification.get("type"))
+            if operation not in _MATCH_FIXTURE_MUTATION_OPERATIONS:
+                raise ConfigurationError(
+                    f"matchCode {code_name!r} deterministic case {case_index} has unsupported "
+                    f"mutation {modification.get('type')!r}"
+                )
+            fields = modification.get("fields")
+            if (
+                not isinstance(fields, list)
+                or not fields
+                or not all(isinstance(field, str) and field.strip() for field in fields)
+            ):
+                raise ConfigurationError(
+                    f"matchCode {code_name!r} deterministic case {case_index} mutation "
+                    "fields must be a non-empty array of field names"
+                )
+        expected = case.get("expected_outcome")
+        if expected is not None and expected not in {"MATCH", "NO_MATCH"}:
+            raise ConfigurationError(
+                f"matchCode {code_name!r} deterministic case {case_index} "
+                "has invalid expected_outcome"
+            )
+        result.append(deepcopy(dict(case)))
+    return tuple(result)
+
+
+def _normalize_match_fixture_operation(value: object) -> str:
+    """Accept clear snake/kebab aliases while retaining one internal vocabulary."""
+    if not isinstance(value, str):
+        return ""
+    normalized = value.strip().upper().replace("-", "_")
+    aliases = {
+        "BELOW_LIMIT": "WEIGHT_BELOW_LIMIT",
+        "AT_LIMIT": "WEIGHT_AT_LIMIT",
+        "ABOVE_LIMIT": "WEIGHT_ABOVE_LIMIT",
+        "WEIGHT_CHANGE_BELOW_LIMIT": "WEIGHT_BELOW_LIMIT",
+        "WEIGHT_CHANGE_AT_LIMIT": "WEIGHT_AT_LIMIT",
+        "WEIGHT_CHANGE_ABOVE_LIMIT": "WEIGHT_ABOVE_LIMIT",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _validate_fixture_filename(value: str, label: str) -> None:
+    """Prevent matchCode labels from escaping their entity fixture directory."""
+    path = Path(value)
+    if path.name != value or path.suffix or value in {".", ".."}:
+        raise ConfigurationError(f"{label} {value!r} is not a safe JSON filename")
 
 
 def _compose_modular_config(global_config: dict[str, Any], config_path: Path) -> dict[str, Any]:
