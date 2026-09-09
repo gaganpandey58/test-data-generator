@@ -29,6 +29,25 @@ class OperationType(StrEnum):
     EMPTY = "EMPTY"
     INVALID = "INVALID"
     WEIGHT_CHANGE = "WEIGHT_CHANGE"
+    DUPLICATE = "DUPLICATE"
+
+
+class ExpectedOutcome(StrEnum):
+    """Expected result of evaluating an incoming record against a method."""
+
+    MATCH = "MATCH"
+    NO_MATCH = "NO_MATCH"
+
+
+class FailureMode(StrEnum):
+    """Controlled way for a negative matching fixture to fail."""
+
+    MANDATORY_BREAK_EXACT = "MANDATORY_BREAK_EXACT"
+    MANDATORY_BREAK_BOUNDARY = "MANDATORY_BREAK_BOUNDARY"
+    INVALID_VALUE = "INVALID_VALUE"
+    MISSING_VALUE = "MISSING_VALUE"
+    WEIGHT_MISS = "WEIGHT_MISS"
+    CROSS_METHOD_COLLISION = "CROSS_METHOD_COLLISION"
 
 
 _UPDATE_PROTECTED_FIELDS = frozenset(
@@ -160,6 +179,20 @@ class UpdateRequest:
     threshold: Decimal | None = None
     condition: str | None = None
     invalid_values: Mapping[str, tuple[object, ...]] | None = None
+    expected_outcome: ExpectedOutcome | None = None
+    failure_mode: FailureMode | None = None
+    failure_field: str | None = None
+    collision_method: str | None = None
+    elasticity_boundary: str | None = None
+    modifications: tuple["FieldModification", ...] = ()
+
+
+@dataclass(frozen=True)
+class FieldModification:
+    """One explicitly scoped independent field operation."""
+
+    operation: OperationType
+    fields: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -175,6 +208,12 @@ class ResolvedUpdate:
     expected_match: bool
     expected_apply: bool
     synchronized_fields: tuple[str, ...] = ()
+    method_id: str | None = None
+    expected_outcome: ExpectedOutcome | None = None
+    failure_mode: FailureMode | None = None
+    matched_methods: tuple[str, ...] = ()
+    unexpected_methods: tuple[str, ...] = ()
+    modification_plan: tuple[FieldModification, ...] = ()
 
 
 def resolve_fields(
@@ -290,6 +329,30 @@ def resolve_update(
     base: Mapping[str, object], request: UpdateRequest, rules: EntityRules, seed: int, index: int
 ) -> ResolvedUpdate:
     """Create one deterministic update from one base record."""
+    if request.expected_outcome is not None:
+        from test_data_generator.update.matching import resolve_match_fixture
+
+        return resolve_match_fixture(base, request, rules, seed, index)
+    if request.modifications:
+        raise ValueError("Independent modifications require expected_outcome")
+    if request.matching_method is not None and request.operation in {
+        OperationType.INVALID,
+        OperationType.MISSING,
+        OperationType.EMPTY,
+    }:
+        method = next(
+            (item for item in rules.methods if item.name == request.matching_method),
+            None,
+        )
+        if method is None:
+            raise ValueError(f"Unknown matching method {request.matching_method!r}")
+        selected_fields = resolve_fields(request, rules, seed, index, _field_names(base))
+        protected = set(selected_fields).intersection(method.mandatory_fields)
+        if protected:
+            raise ValueError(
+                f"{request.operation} on mandatory anchor {sorted(protected)[0]!r} "
+                "requires expected_outcome=NO_MATCH"
+            )
     selected = resolve_fields(request, rules, seed, index, _field_names(base))
     operation = request.operation
     if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
@@ -332,7 +395,7 @@ def resolve_update(
                 changed.append(field)
                 if field in rules.keys:
                     invalidated.append(field)
-        else:
+        elif operation != OperationType.DUPLICATE:
             for field in selected:
                 old = _find_field(result, field)
                 new: object = _changed_value(old, field, randomizer, rules.profile)

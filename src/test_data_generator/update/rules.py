@@ -37,6 +37,15 @@ class MatchingMethod:
     name: str
     needed_weight: Decimal
     fields: tuple[str, ...]
+    priority: int = 100
+    mandatory_fields: tuple[str, ...] = ()
+    optional_fields: tuple[str, ...] = ()
+    field_elasticity: tuple[tuple[str, str], ...] = ()
+    higher_priority_methods: tuple[str, ...] = ()
+
+    def elasticity_for(self, field: str, default: str) -> str:
+        """Return a method-specific elasticity override when configured."""
+        return dict(self.field_elasticity).get(field, default)
 
 
 @dataclass(frozen=True)
@@ -239,11 +248,65 @@ def _methods(
         method_fields = _strings(definition.get("fields"), f"{entity}.{name}.fields")
         if any(field not in fields for field in method_fields):
             raise ConfigurationError(f"Matching method {entity}.{name} references an unknown field")
+        mandatory_fields = (
+            _strings(definition["mandatory_fields"], f"{entity}.{name}.mandatory_fields")
+            if "mandatory_fields" in definition
+            else method_fields
+        )
+        optional_fields = _strings(
+            definition.get("optional_fields", []),
+            f"{entity}.{name}.optional_fields",
+        )
+        if set(mandatory_fields).intersection(optional_fields) or set(
+            mandatory_fields + optional_fields
+        ) != set(method_fields):
+            raise ConfigurationError(
+                f"Matching method {entity}.{name} must classify every field "
+                "as mandatory or optional"
+            )
+        raw_elasticity = definition.get("field_elasticity", {})
+        if not isinstance(raw_elasticity, dict) or any(
+            field not in method_fields or not isinstance(value, str)
+            for field, value in raw_elasticity.items()
+        ):
+            raise ConfigurationError(
+                f"Matching method {entity}.{name} has invalid field_elasticity"
+            )
+        higher_priority_methods = _strings(
+            definition.get("higher_priority_methods", []),
+            f"{entity}.{name}.higher_priority_methods",
+        )
         try:
             needed = Decimal(str(definition["needed_weight"]))
+            priority = int(definition.get("priority", len(result) + 1))
         except (KeyError, ValueError, ArithmeticError) as error:
             raise ConfigurationError(f"Matching method {entity}.{name} is incomplete") from error
-        result.append(MatchingMethod(name, needed, method_fields))
+        if priority < 1:
+            raise ConfigurationError(f"Matching method {entity}.{name} has an invalid priority")
+        result.append(
+            MatchingMethod(
+                name,
+                needed,
+                method_fields,
+                priority,
+                mandatory_fields,
+                optional_fields,
+                tuple((field, value) for field, value in raw_elasticity.items()),
+                higher_priority_methods,
+            )
+        )
+    priorities = [method.priority for method in result]
+    if len(priorities) != len(set(priorities)):
+        raise ConfigurationError(f"Matching methods for {entity!r} have duplicate priorities")
+    names = {method.name for method in result}
+    if any(
+        method.name in method.higher_priority_methods
+        or not set(method.higher_priority_methods).issubset(names)
+        for method in result
+    ):
+        raise ConfigurationError(
+            f"Matching methods for {entity!r} reference an unknown priority method"
+        )
     return tuple(result)
 
 

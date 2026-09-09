@@ -15,7 +15,13 @@ from test_data_generator.configuration.config import EntityConfig, resolve_outpu
 from test_data_generator.core.errors import GenerationError
 from test_data_generator.layouts import load_layout, project_record
 from test_data_generator.update.rules import EntityRules
-from test_data_generator.update.scenarios import OperationType, UpdateRequest, resolve_update
+from test_data_generator.update.scenarios import (
+    ExpectedOutcome,
+    FailureMode,
+    OperationType,
+    UpdateRequest,
+    resolve_update,
+)
 from test_data_generator.update.validation import validate_update_contract
 
 _CLAIM_HISTORY_IDENTIFIER_FIELDS = (
@@ -229,6 +235,7 @@ def run_update_records(
     update_filename = entity.filename.removesuffix(".jsonl") + ".update.jsonl"
     final_path = resolve_output_path(output_directory, update_filename)
     temporary_path: Path | None = None
+    match_plans: list[dict[str, object]] = []
     try:
         validator = _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,18 +256,77 @@ def run_update_records(
                         updated[field] = ""
                 validate_update_contract(base_record, updated, request, resolved, rules)
                 updated["INGESTION_DATE"] = entity.update_ingestion_date
-                if request.operation not in {
-                    OperationType.MISSING,
-                    OperationType.EMPTY,
-                    OperationType.INVALID,
-                }:
+                schema_invalid_match_fixture = (
+                    request.expected_outcome == ExpectedOutcome.NO_MATCH
+                    and request.failure_mode
+                    in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
+                )
+                if (
+                    request.operation
+                    not in {
+                        OperationType.MISSING,
+                        OperationType.EMPTY,
+                        OperationType.INVALID,
+                    }
+                    and not schema_invalid_match_fixture
+                ):
                     try:
                         validator.validate(updated)
                     except ValidationError as error:
                         raise GenerationError(_validation_detail(error)) from error
+                if resolved.expected_outcome is not None:
+                    match_plans.append(
+                        {
+                            "domain": entity.name,
+                            "method_id": resolved.method_id,
+                            "expected_outcome": resolved.expected_outcome.value,
+                            "failure_mode": (
+                                resolved.failure_mode.value
+                                if resolved.failure_mode is not None
+                                else None
+                            ),
+                            "matched_methods": list(resolved.matched_methods),
+                            "unexpected_methods": list(resolved.unexpected_methods),
+                            "modification_plan": [
+                                {
+                                    "type": modification.operation.value,
+                                    "fields": list(modification.fields),
+                                }
+                                for modification in resolved.modification_plan
+                            ],
+                            "existing_record": base_record,
+                            "new_record": updated,
+                        }
+                    )
                 output_file.write(orjson.dumps(updated))
                 output_file.write(b"\n")
-        return temporary_path.replace(final_path)
+        published_path = temporary_path.replace(final_path)
+        if match_plans:
+            _write_match_plans(final_path, match_plans)
+        return published_path
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def _write_match_plans(update_path: Path, plans: list[dict[str, object]]) -> None:
+    """Publish schema-neutral paired-record metadata beside match fixtures."""
+    plan_path = update_path.with_name(update_path.stem + ".match-plan.jsonl")
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{plan_path.name}.",
+            suffix=".tmp",
+            dir=plan_path.parent,
+            delete=False,
+        ) as output_file:
+            temporary_path = Path(output_file.name)
+            for plan in plans:
+                output_file.write(orjson.dumps(plan))
+                output_file.write(b"\n")
+        temporary_path.replace(plan_path)
     except Exception:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)

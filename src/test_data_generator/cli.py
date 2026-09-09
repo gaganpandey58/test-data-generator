@@ -44,6 +44,9 @@ from test_data_generator.entities.provider_cdf import (
 )
 from test_data_generator.update.rules import load_rule_catalog
 from test_data_generator.update.scenarios import (
+    ExpectedOutcome,
+    FailureMode,
+    FieldModification,
     OperationType,
     UpdateRequest,
     load_invalid_values,
@@ -279,6 +282,7 @@ def generate(config: Path, mode: str = "all") -> None:
             )
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
+        _remove_stale_match_plans(run_config)
         _materialize_update_bases(run_config, entity_counts, generated_records)
         entities_by_name = {entity.name: entity for entity in run_config.entities}
         propagated_payment_updates: set[str] = set()
@@ -288,13 +292,16 @@ def generate(config: Path, mode: str = "all") -> None:
             # Related streams are identical to their source by default. They
             # receive an update fixture only when that stream explicitly asks
             # for an operation.
-            if entity.source_entity is not None and "operation" not in entity.update:
+            has_explicit_update = bool(
+                {"operation", "expected_outcome", "modifications"}.intersection(entity.update)
+            )
+            if entity.source_entity is not None and not has_explicit_update:
                 continue
             # A Claim update derives its related Payment update below. A direct
             # Payment operation remains an independent adjudication fixture.
             if (
                 entity.name in {"payment_professional", "payment_institutional"}
-                and "operation" not in entity.update
+                and not has_explicit_update
             ):
                 continue
             rules_entity = entity.source_entity or entity.name
@@ -396,11 +403,17 @@ def generate(config: Path, mode: str = "all") -> None:
                     updated_history = _derive_claim_history_updates(
                         updated_claims, history_bases, changed_claim_fields
                     )
+                    schema_invalid_match_fixture = (
+                        request.expected_outcome == ExpectedOutcome.NO_MATCH
+                        and request.failure_mode
+                        in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
+                    )
                     history_path = run_derived_update_records(
                         history_entity,
                         updated_history,
                         run_config.update_directory,
-                        validate_schema=request.operation
+                        validate_schema=not schema_invalid_match_fixture
+                        and request.operation
                         not in {
                             OperationType.MISSING,
                             OperationType.EMPTY,
@@ -430,7 +443,8 @@ def generate(config: Path, mode: str = "all") -> None:
                         payment_entity,
                         payment_records,
                         run_config.update_directory,
-                        validate_schema=request.operation
+                        validate_schema=not schema_invalid_match_fixture
+                        and request.operation
                         not in {
                             OperationType.MISSING,
                             OperationType.EMPTY,
@@ -685,7 +699,19 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
     entity_update = getattr(entity_config, "update", {})
     if isinstance(entity_update, dict):
         raw.update(entity_update)
+    expected_outcome_value = raw.get("expected_outcome")
+    try:
+        expected_outcome = (
+            ExpectedOutcome(str(expected_outcome_value))
+            if expected_outcome_value is not None
+            else None
+        )
+        failure_mode = FailureMode(str(raw["failure_mode"])) if "failure_mode" in raw else None
+    except ValueError as error:
+        raise CommandError("Unknown expected_outcome or failure_mode") from error
     operation_config = raw.get("operation")
+    if operation_config is None and expected_outcome is not None:
+        operation_config = {"type": OperationType.DUPLICATE.value}
     if not isinstance(operation_config, dict):
         raise CommandError("Updates require an operation object")
     try:
@@ -703,6 +729,12 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         parsed_threshold = Decimal(str(threshold)) if threshold is not None else None
     except (InvalidOperation, ValueError) as error:
         raise CommandError("Update threshold must be a decimal number") from error
+    modifications = _field_modifications(raw)
+    needs_invalid_catalog = (
+        operation_type == OperationType.INVALID
+        or any(modification.operation == OperationType.INVALID for modification in modifications)
+        or failure_mode == FailureMode.INVALID_VALUE
+    )
     return UpdateRequest(
         fields=fields,
         include=include,
@@ -713,14 +745,49 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         condition=operation_condition,
         invalid_values=(
             load_invalid_values(run_config.invalid_values_catalog)
-            if operation_type == OperationType.INVALID
-            and run_config.invalid_values_catalog is not None
+            if needs_invalid_catalog and run_config.invalid_values_catalog is not None
             else None
         ),
+        expected_outcome=expected_outcome,
+        failure_mode=failure_mode,
+        failure_field=str(raw["failure_field"]) if "failure_field" in raw else None,
+        collision_method=str(raw["collision_method"]) if "collision_method" in raw else None,
+        elasticity_boundary=(
+            str(raw["elasticity_boundary"]) if "elasticity_boundary" in raw else None
+        ),
+        modifications=modifications,
     )
 
 
-def _string_tuple(values: dict[str, object], key: str) -> tuple[str, ...]:
+def _field_modifications(raw: Mapping[str, object]) -> tuple[FieldModification, ...]:
+    """Normalize independently selectable field operations for one run."""
+    definitions = raw.get("modifications", [])
+    if not isinstance(definitions, list):
+        raise CommandError("modifications must be an array")
+    result: list[FieldModification] = []
+    for definition in definitions:
+        if not isinstance(definition, Mapping):
+            raise CommandError("Each modification must be an object")
+        try:
+            operation = OperationType(str(definition.get("type", "")))
+        except ValueError as error:
+            raise CommandError("Unknown modification operation") from error
+        if operation == OperationType.WEIGHT_CHANGE:
+            raise CommandError("WEIGHT_CHANGE is configured through the top-level operation")
+        result.append(FieldModification(operation, _string_tuple(definition, "fields")))
+    return tuple(result)
+
+
+def _remove_stale_match_plans(run_config: RunConfig) -> None:
+    """Remove only generated match-plan sidecars before publishing this update run."""
+    for entity in run_config.entities:
+        update_name = entity.filename.removesuffix(".jsonl") + ".update.match-plan.jsonl"
+        path = run_config.update_directory / update_name
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+
+
+def _string_tuple(values: Mapping[str, object], key: str) -> tuple[str, ...]:
     """Read an optional string-list setting from normalized configuration."""
     value = values.get(key, ())
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):

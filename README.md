@@ -514,6 +514,63 @@ updated only when it was present and populated originally. Empty strings,
 `null` values, and missing fields remain unchanged; unrelated fields and
 independent fields whose original values differ are not synchronized.
 
+### Verified match fixtures
+
+An update request can opt into a paired matching fixture. The generated update
+remains schema-shaped, while a sibling `*.update.match-plan.jsonl` file records
+the existing and incoming records, target method, expected outcome, applied
+field modifications, and any other methods that matched.
+
+```json
+{
+  "claims": {
+    "professional": {
+      "count": 1,
+      "updates": {
+        "matching_method": "professional_claim_fallback",
+        "expected_outcome": "MATCH",
+        "modifications": [
+          {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]},
+          {"type": "DUPLICATE"}
+        ]
+      }
+    }
+  }
+}
+```
+
+`expected_outcome` is either `MATCH` or `NO_MATCH`. A `NO_MATCH` fixture must
+declare `failure_mode`: `MANDATORY_BREAK_EXACT`,
+`MANDATORY_BREAK_BOUNDARY`, `INVALID_VALUE`, `MISSING_VALUE`, `WEIGHT_MISS`,
+or `CROSS_METHOD_COLLISION`. Use `failure_field` for the target mandatory
+anchor, `collision_method` for an intended cross-method collision, and
+`elasticity_boundary` (`INSIDE`, `AT`, or `OUTSIDE`) for date-tolerance tests.
+`INVALID`, `MISSING`, and `EMPTY` cannot modify a mandatory target anchor in a
+positive fixture. Independent non-anchor operations are declared through
+`modifications`; each entry has a `type` and optional `fields` list.
+For a weighted method, `include` keeps only the selected optional anchors
+matched and deliberately varies the remaining optional anchors; `exclude`
+forces the named optional anchors to differ. The evaluator then verifies that
+the configured needed weight is still reached.
+
+The domain rule files explicitly describe method anchors, mandatory/optional
+classification, needed weight, field-level elasticity, and
+`higher_priority_methods`. Current strict relationships are:
+
+- Professional Claims: `professional_claim_primary` strictly contains
+  `professional_claim_fallback`.
+- Institutional Claims: `institutional_claim_primary` strictly contains
+  `institutional_claim_fallback`.
+- Payments: each `claim_method_1` strictly contains `claim_method_2`, and
+  each `payment_835_method_1` strictly contains `payment_835_method_2`.
+- Members: `member_id_dob_gender` is more specific than `member_id`; the
+  name-based method is independent of Member ID and diverges the ID when it
+  must avoid the Member-ID method. Weighted Member methods are separate
+  configurable contracts.
+- Providers: deterministic identifier and individual/organizational composite
+  methods are independent alternatives, so no unsupported subset relationship
+  is inferred.
+
 ### Header ordering
 
 JSON object order does not affect parsing, but the output order can be

@@ -48,11 +48,19 @@
       ],
       "matching_methods": [
         {
-          "name": "member_id_payer",
-          "needed_weight": 2,
+          "name": "member_id",
+          "needed_weight": 1,
           "fields": [
-            "CM_MEMBER_CLIENT_ID",
-            "CM_PAYER_SHORT"
+            "CM_MEMBER_CLIENT_ID"
+          ],
+          "priority": 2,
+          "mandatory_fields": [
+            "CM_MEMBER_CLIENT_ID"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": [
+            "member_id_dob_gender",
+            "name_dob_gender"
           ]
         },
         {
@@ -62,7 +70,15 @@
             "CM_MEMBER_CLIENT_ID",
             "CM_MEMBER_BIRTH_DATE",
             "CM_MEMBER_GENDER"
-          ]
+          ],
+          "priority": 1,
+          "mandatory_fields": [
+            "CM_MEMBER_CLIENT_ID",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
         },
         {
           "name": "name_dob_gender",
@@ -72,19 +88,183 @@
             "CM_MEMBER_LAST_NAME",
             "CM_MEMBER_BIRTH_DATE",
             "CM_MEMBER_GENDER"
+          ],
+          "priority": 3,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_GENDER"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": [
+            "member_id_dob_gender"
           ]
         },
         {
-          "name": "configured_weighted",
-          "needed_weight": 4,
+          "name": "configured_weighted_a",
+          "needed_weight": 5,
           "fields": [
             "CM_MEMBER_FIRST_NAME",
             "CM_MEMBER_LAST_NAME",
             "CM_MEMBER_BIRTH_DATE",
             "CM_MEMBER_SSN",
+            "CM_GROUP_NUMBER"
+          ],
+          "priority": 4,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_GROUP_NUMBER"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "configured_weighted_b",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "priority": 5,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": [],
+          "field_elasticity": {
+            "CM_MEMBER_SSN": "1"
+          }
+        },
+        {
+          "name": "configured_weighted_c",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
             "CM_MEMBER_STATE",
             "CM_MEMBER_ZIP"
-          ]
+          ],
+          "priority": 6,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE"
+          ],
+          "optional_fields": [
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "configured_weighted_d",
+          "needed_weight": 3,
+          "fields": [
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME"
+          ],
+          "priority": 7,
+          "mandatory_fields": [
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "optional_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME"
+          ],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "configured_weighted_e",
+          "needed_weight": 4,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "priority": 8,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_BIRTH_DATE"
+          ],
+          "optional_fields": [
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "configured_weighted_f",
+          "needed_weight": 5,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "priority": 9,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "optional_fields": [
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "higher_priority_methods": [],
+          "field_elasticity": {
+            "CM_MEMBER_BIRTH_DATE": "Less than a Month"
+          }
+        },
+        {
+          "name": "configured_weighted_g",
+          "needed_weight": 5,
+          "fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN",
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "priority": 10,
+          "mandatory_fields": [
+            "CM_MEMBER_FIRST_NAME",
+            "CM_MEMBER_LAST_NAME",
+            "CM_MEMBER_BIRTH_DATE",
+            "CM_MEMBER_SSN"
+          ],
+          "optional_fields": [
+            "CM_MEMBER_ADDRESS_01",
+            "CM_MEMBER_STATE",
+            "CM_MEMBER_ZIP"
+          ],
+          "higher_priority_methods": [],
+          "field_elasticity": {
+            "CM_MEMBER_BIRTH_DATE": "Less than a Month"
+          }
         }
       ],
       "fields": {

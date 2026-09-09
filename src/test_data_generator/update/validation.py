@@ -14,7 +14,9 @@ def validate_update_contract(
     rules: EntityRules,
 ) -> None:
     """Ensure an update changes only what its operation allows."""
-    explicitly_updated_keys = set(resolved.changed_fields).intersection(rules.keys)
+    explicitly_updated_keys = set(resolved.changed_fields + resolved.removed_fields).intersection(
+        rules.keys
+    )
     if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         for key in rules.keys:
             if (

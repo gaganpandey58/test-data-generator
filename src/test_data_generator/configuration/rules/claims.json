@@ -90,24 +90,66 @@
       "matching_methods": [
         {
           "name": "professional_claim_primary",
-          "needed_weight": 4,
+          "needed_weight": 11,
           "fields": [
             "CH_PATIENT_CLIENT_ID",
-            "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_CLAIM_SERVICE_TO_DATE",
+            "CD_SERVICE_FROM_DATE",
+            "CD_SERVICE_TO_DATE",
             "CH_BILLING_PROVIDER_NPI",
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
-            "CH_CHARGE_AMOUNT"
-          ]
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_PLACE_OF_SERVICE_CODE",
+            "CH_DIAGNOSIS_CODE_01",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE",
+            "CH_CHARGE_AMOUNT",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+          ],
+          "priority": 1,
+          "mandatory_fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CD_SERVICE_FROM_DATE",
+            "CD_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_PLACE_OF_SERVICE_CODE",
+            "CH_DIAGNOSIS_CODE_01",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE",
+            "CH_CHARGE_AMOUNT",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
         },
         {
           "name": "professional_claim_fallback",
-          "needed_weight": 3,
+          "needed_weight": 9,
           "fields": [
             "CH_PATIENT_CLIENT_ID",
-            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CD_SERVICE_FROM_DATE",
+            "CD_SERVICE_TO_DATE",
             "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_PLACE_OF_SERVICE_CODE",
+            "CH_DIAGNOSIS_CODE_01",
+            "CH_SUBSCRIBER_CLIENT_ID",
             "CH_CLAIM_FREQUENCY_CODE"
+          ],
+          "priority": 2,
+          "mandatory_fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CD_SERVICE_FROM_DATE",
+            "CD_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_PLACE_OF_SERVICE_CODE",
+            "CH_DIAGNOSIS_CODE_01",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": [
+            "professional_claim_primary"
           ]
         }
       ],
@@ -341,25 +383,70 @@
       "matching_methods": [
         {
           "name": "institutional_claim_primary",
-          "needed_weight": 4,
+          "needed_weight": 12,
           "fields": [
             "CH_PATIENT_CLIENT_ID",
-            "CH_TYPE_OF_BILL_CODE",
             "CH_CLAIM_SERVICE_FROM_DATE",
             "CH_CLAIM_SERVICE_TO_DATE",
             "CH_BILLING_PROVIDER_NPI",
-            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER",
-            "CH_CHARGE_AMOUNT"
-          ]
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_DIAGNOSIS_CODE_01",
+            "CD_SUBMITTED_REVENUE_CODE",
+            "CH_TYPE_OF_BILL_CODE",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE",
+            "CH_CHARGE_AMOUNT",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+          ],
+          "priority": 1,
+          "mandatory_fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_DIAGNOSIS_CODE_01",
+            "CD_SUBMITTED_REVENUE_CODE",
+            "CH_TYPE_OF_BILL_CODE",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE",
+            "CH_CHARGE_AMOUNT",
+            "CH_PATIENT_ACCOUNT_CONTROL_NUMBER"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
         },
         {
           "name": "institutional_claim_fallback",
-          "needed_weight": 3,
+          "needed_weight": 10,
           "fields": [
             "CH_PATIENT_CLIENT_ID",
-            "CH_TYPE_OF_BILL_CODE",
             "CH_CLAIM_SERVICE_FROM_DATE",
-            "CH_BILLING_PROVIDER_NPI"
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_DIAGNOSIS_CODE_01",
+            "CD_SUBMITTED_REVENUE_CODE",
+            "CH_TYPE_OF_BILL_CODE",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE"
+          ],
+          "priority": 2,
+          "mandatory_fields": [
+            "CH_PATIENT_CLIENT_ID",
+            "CH_CLAIM_SERVICE_FROM_DATE",
+            "CH_CLAIM_SERVICE_TO_DATE",
+            "CH_BILLING_PROVIDER_NPI",
+            "CH_RENDERING_PROVIDER_NPI",
+            "CH_DIAGNOSIS_CODE_01",
+            "CD_SUBMITTED_REVENUE_CODE",
+            "CH_TYPE_OF_BILL_CODE",
+            "CH_SUBSCRIBER_CLIENT_ID",
+            "CH_CLAIM_FREQUENCY_CODE"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": [
+            "institutional_claim_primary"
           ]
         }
       ],
