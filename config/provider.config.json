@@ -2,9 +2,8 @@
   "provider": {
     "nppes": {"count": 10},
     "cdf": {"additional_count": 90},
-    "updates": {
-      "profile": "standard_update",
-      "operation": {"fields": ["CP_PROVIDER_FIRST_NAME"]}
-    }
+    "operations": [
+      {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
+    ]
   }
 }

@@ -49,17 +49,11 @@ The default run writes creation files to `output/new-test-data/` and update file
 ```text
 test-data-generator/
 ├── runconfig.json                         Execution scope: domains and phases
-├── generator.config.json                  Backward-compatible execution wrapper
 ├── config/
-│   ├── generator.config.json              Global settings and config references
 │   ├── provider.config.json               Provider CDF/NPPES selection and updates
 │   ├── member.config.json                 Member 834/MR selection and updates
 │   ├── claims.config.json                 837P/837I selection and updates
 │   ├── payments.config.json               835P/835I scenarios and updates
-│   └── common/
-│       ├── operations.json                Reusable operation definitions
-│       ├── update-profiles.json           Reusable update/outcome profiles
-│       └── ingestion.json                 Ingestion-date relationships
 ├── schema/
 │   ├── gdf/                               GDF Excel source
 │   ├── json/                              Runtime JSON Schemas
@@ -88,18 +82,15 @@ Important design rule: JSON Schemas define what is valid and available; layouts 
 
 The project separates four concerns:
 
-1. `runconfig.json` selects which domains and phases execute.
-2. `config/generator.config.json` provides global settings and references the domain/common files.
-3. Domain files choose counts, Claim lifecycle behavior, Payment scenarios, and update requests.
+1. `runconfig.json` contains the global execution settings and selects domains and phases.
+2. One domain file contains that domain's generation and scenario settings.
+3. Domain files choose counts, Claim lifecycle behavior, Payment scenarios, and direct operation plans.
 4. Rule, layout, schema, invalid-value, and client-profile files define business behavior and output validity.
 
 ```mermaid
 flowchart TD
-    RC[runconfig.json] --> GC[Global generator config]
-    GC --> EC[Domain configs]
-    GC --> CC[Common operations, profiles, ingestion]
+    RC[runconfig.json] --> EC[Domain configs]
     EC --> N[Normalized internal entity definitions]
-    CC --> N
     CP[Client profiles] --> B[Entity builders]
     N --> B
     GDF[GDF workbook] --> S[JSON Schemas]
@@ -108,8 +99,8 @@ flowchart TD
     R[Domain matching/update rules] --> U[Update engine]
     IV[Invalid-values catalog] --> U
     V --> U
-    U --> MF[Optional matchCode fixture matrix]
-    MF --> FM[Atomic per-record JSON fixture publication]
+    U --> MF[Optional match-code cases]
+    MF --> FM[Atomic per-record JSON publication in update directory]
     U --> P[Atomic JSONL publication]
 ```
 
@@ -118,21 +109,19 @@ flowchart TD
 `uv run generate-data` performs this flow:
 
 1. Loads `runconfig.json`.
-2. Validates its `config`, `entities`, and `operations` entries.
-3. Loads `config/generator.config.json`.
-4. Loads exactly one Provider, Member, Claims, and Payments domain file.
-5. Loads common operation, update-profile, and ingestion-date files.
-6. Merges Claims/Payments `defaults` into their Professional and Institutional stream settings.
-7. Resolves named update profiles and operations into a validated update request.
-8. Expands the public configuration into internal stream definitions. Schema paths, modules, profiles, and filenames are internal safe defaults and cannot be redirected to arbitrary code by configuration.
-9. Refreshes JSON Schemas from the newest `.xlsx` workbook in `schema/gdf/`.
-10. Creates a temporary, same-filesystem staging area and copies the previous requested output directories into it.
-11. Generates creation streams in dependency order.
-12. Optionally derives per-record, per-matchCode fixture matrices from those creation records.
-13. Generates updates from creation/base records when updates are enabled.
-14. Propagates Claim changes to corresponding Claims History and enabled Payment streams.
-15. Removes stale output only for known disabled streams.
-16. Atomically swaps the completed staged directories into place. On failure, the previous complete output is restored.
+2. Validates its global settings, entity-config references, domain selection, and requested phases.
+3. Loads exactly one Provider, Member, Claims, and Payments domain file.
+4. Merges Claims/Payments `defaults` into their Professional and Institutional stream settings.
+5. Normalizes each direct domain `operations` or `modifications` plan into the common internal update request.
+6. Expands the public configuration into internal stream definitions. Schema paths, modules, and filenames are internal safe defaults and cannot be redirected to arbitrary code by configuration.
+7. Refreshes JSON Schemas from the newest `.xlsx` workbook in `schema/gdf/`.
+8. Creates a temporary, same-filesystem staging area and copies the previous requested output directories into it.
+9. Generates creation streams in dependency order.
+10. Optionally derives per-record, per-match-code cases from those creation records.
+11. Generates updates from creation/base records when updates are enabled.
+12. Propagates Claim changes to corresponding Claims History and enabled Payment streams.
+13. Removes stale output only for known disabled streams.
+14. Atomically swaps the completed staged directories into place. On failure, the previous complete output is restored.
 
 ### 4.3 Creation dependency order
 
@@ -256,73 +245,59 @@ Normal creation and valid updates never use this file.
 
 ```json
 {
-  "config": "config/generator.config.json",
-  "entities": ["provider", "member", "claims", "payments"],
-  "operations": ["creation", "updates"]
-}
-```
-
-| Property | Required | Values | Meaning |
-| --- | --- | --- | --- |
-| `config` | Yes | Non-empty path | Global generator config; relative to this file. |
-| `entities` | Optional | `provider`, `member`, `claims`, `payments` | Domain groups to retain. Omission uses every configured domain. |
-| `operations` | Optional | `creation`, `updates` | Allowed phases. Default is both. |
-
-The CLI `--mode` cannot request a phase excluded by `runconfig.json`. With `--mode all`, a one-phase runconfig resolves to that one phase.
-
-The root `generator.config.json` is currently another execution wrapper with the same shape. Keep it only for backward compatibility; use `runconfig.json` for new runs.
-
-### 6.2 Global generator config
-
-Current shape:
-
-```json
-{
   "client": "chc",
-  "seed": 20260909,
-  "output_directory": "../output",
+  "output_directory": "./output",
+  "entities": ["provider", "member", "claims", "payments"],
+  "operations": ["creation", "updates"],
   "generation": {
     "output_order": {"headers": "last"},
     "creation": {"enabled": true, "directory": "new-test-data"},
     "updates": {
       "enabled": true,
       "directory": "update-test-data",
-      "rule_catalog": "../src/test_data_generator/configuration/update-rule-catalog.json",
-      "invalid_values_catalog": "../src/test_data_generator/configuration/invalid-values.json",
-      "profile": "standard_update"
+      "rule_catalog": "src/test_data_generator/configuration/update-rule-catalog.json",
+      "invalid_values_catalog": "src/test_data_generator/configuration/invalid-values.json"
     }
   },
   "entity_configs": {
-    "provider": "provider.config.json",
-    "member": "member.config.json",
-    "claims": "claims.config.json",
-    "payments": "payments.config.json"
-  },
-  "common": {
-    "operations": "common/operations.json",
-    "update_profiles": "common/update-profiles.json",
-    "ingestion": "common/ingestion.json"
+    "provider": "config/provider.config.json",
+    "member": "config/member.config.json",
+    "claims": "config/claims.config.json",
+    "payments": "config/payments.config.json"
   }
 }
 ```
+
+| Property | Required | Values | Meaning |
+| --- | --- | --- | --- |
+| `client` | Yes | Client profile name | Selects headers and client defaults. |
+| `output_directory` | Optional | Relative or absolute path | Root directory for generated files. |
+| `entities` | Optional | `provider`, `member`, `claims`, `payments` | Domain groups to retain. Omission uses every configured domain. |
+| `operations` | Optional | `creation`, `updates` | Allowed phases. Default is both. |
+| `generation` | Yes | Object | Output ordering, phase enablement, update rule catalog, and output directories. |
+| `entity_configs` | Yes | Four paths | One scenario configuration file per domain. |
+
+The CLI `--mode` cannot request a phase excluded by `runconfig.json`. With `--mode all`, a one-phase runconfig resolves to that one phase.
+
+`runconfig.json` is the only global generator configuration. There is no separate `generator.config.json`, no common operation/profile configuration, and no global match-fixture section.
+
+### 6.2 Global execution settings
+
+The global properties are the top-level properties in `runconfig.json`; their paths are resolved relative to that file. `seed` is optional: omit it for varied Faker data across runs, or set it to reproduce a run.
 
 | Property | Default/constraint | Meaning |
 | --- | --- | --- |
 | `client` | Required, currently `chc` | Selects client headers and values. |
 | `seed` | Fresh 63-bit entropy when omitted | Makes values deterministic when explicitly set. |
-| `output_directory` | `./output` | Root output path, resolved relative to the global config. |
+| `output_directory` | `./output` | Root output path. |
 | `generation.output_order.headers` | `source`; also `first` or `last` | Serialized header position. JSON meaning is unchanged. |
 | `generation.creation.enabled` | `true` | Enables creation phase. |
 | `generation.creation.directory` | `new-test-data` | Creation subdirectory. Must remain inside output root. |
-| `generation.updates.enabled` | `false` unless set | Enables updates. |
+| `generation.updates.enabled` | `false` unless set | Enables updates and per-match-code cases. |
 | `generation.updates.directory` | `update-test-data` | Update subdirectory. Must remain inside output root. |
-| `generation.updates.rule_catalog` | Required when updates run | Domain update/matching rules. |
+| `generation.updates.rule_catalog` | Packaged catalog if omitted | Domain update/matching rules. |
 | `generation.updates.invalid_values_catalog` | Packaged catalog if omitted | Shared invalid values. |
-| `generation.updates.profile` | Optional | Global default update profile. Entity settings override it. |
 | `entity_configs` | All four references required | Paths to one object per domain. |
-| `common` | All three references required | Named operations, profiles, and ingestion settings. |
-
-All modular paths are relative to `config/generator.config.json`, not necessarily the shell's current directory.
 
 ### 6.3 Domain counts
 
@@ -347,125 +322,71 @@ Public entity/stream properties are:
 | `mr` | Member | Derived Member Roster selection and optional MR-specific updates. |
 | `layout` | Any normal entity stream | Selects an allowed layout profile for that data type; invalid cross-type profiles are rejected. |
 | `output_order.headers` | Any normal entity stream | Overrides global `source`, `first`, or `last` header ordering. |
-| `updates` | Any update-capable stream | Profile, operation, fields, matching, weights, or negative-fixture request. |
+| `operations` / `modifications` | Any update-capable stream | Direct ordered mutation plan for that domain or variant. |
+| `match_codes` | Any update-capable stream | Per-method operation counts and deterministic cases. |
 | `source_claims` | Payments | Read-only external Claim/CH JSONL source. |
 | `scenarios` | Payments | MATCHED/REVERSAL/REPLACEMENT/STALE/ORPHAN counts. |
 | `claim_frequency` | Claims | One deterministic frequency: `1`, `7`, or `8`. |
 | `frequencies` | Claims | Exact per-frequency distribution whose sum equals Claim count. |
 
-### 6.4 Common operations
+### 6.4 One scenario configuration per entity
 
-Named operations in `config/common/operations.json`:
-
-| Name | Resolved operation |
-| --- | --- |
-| `update` | `UPDATE` |
-| `different` | `DIFFERENT` |
-| `invalid` | `INVALID` |
-| `missing` | `MISSING` |
-| `empty` | `EMPTY` |
-| `duplicate` | `DUPLICATE` |
-| `weight_below_limit` | `WEIGHT_CHANGE / BELOW_LIMIT` |
-| `weight_at_limit` | `WEIGHT_CHANGE / AT_LIMIT` |
-| `weight_above_limit` | `WEIGHT_CHANGE / ABOVE_LIMIT` |
-
-An entity update may reference a named operation:
-
-```json
-"updates": {
-  "operation": "missing"
-}
-```
-
-Or provide an inline operation for field-level control:
-
-```json
-"updates": {
-  "operation": {
-    "type": "MISSING",
-    "fields": ["CM_MEMBER_MIDDLE_NAME"]
-  }
-}
-```
-
-### 6.5 Common update profiles
-
-| Profile | Purpose |
-| --- | --- |
-| `standard_update` | Valid field update. |
-| `different_value` | Explicitly require a valid different value. |
-| `duplicate` | Copy the record without field changes. |
-| `no_match_invalid` | Verified `NO_MATCH` through an invalid anchor value. |
-| `no_match_missing` | Verified `NO_MATCH` through a missing anchor. |
-| `weight_below_limit` | Select a below-threshold weight combination. |
-| `weight_at_limit` | Select an exact-threshold combination. |
-| `weight_above_limit` | Select an above-threshold combination. |
-
-Profile values are defaults. Entity values merge on top, and an inline operation can add fields while retaining a profile's operation type.
-
-Example:
-
-```json
-"updates": {
-  "profile": "standard_update",
-  "matching_method": "member_id_dob_gender",
-  "operation": {"fields": ["CM_MEMBER_EMAIL"]}
-}
-```
-
-This resolves to an `UPDATE` of `CM_MEMBER_EMAIL`.
-
-### 6.6 Update request properties
-
-| Property | Meaning |
-| --- | --- |
-| `profile` | Named common profile; modular configs only. |
-| `operation` | Named operation or inline `{type, fields, condition}`. |
-| `fields` | Explicit target fields inside an inline operation. |
-| `include` | Include optional fields in automatic/weighted selection. |
-| `exclude` | Exclude fields from selection or force optional anchors to diverge in matching fixtures. |
-| `matching_method` | Domain method name used for weights or verified matching. |
-| `threshold` | Optional decimal override for weight comparison. |
-| `expected_outcome` | `MATCH` or `NO_MATCH`; enables verified paired matching behavior. |
-| `failure_mode` | Required for `NO_MATCH`. |
-| `failure_field` | Anchor field carrying the requested failure. |
-| `collision_method` | Other method intentionally matched for `CROSS_METHOD_COLLISION`. |
-| `elasticity_boundary` | `INSIDE`, `AT`, or `OUTSIDE`. |
-| `modifications` | Independent non-weight operations applied in a verified matching fixture. |
-
-Field names are case-insensitive after normalization. Surrounding spaces and comma-separated strings are accepted. Punctuation is normalized to underscores. Two explicit aliases are supported: `Provider_npi` maps to `CP_PROVIDER_NPI`, and `Record type` maps to `CP_PROVIDER_RECORD_TYPE`. Prefer exact canonical names in maintained configurations.
-
-### 6.7 Ingestion-date configuration
-
-`config/common/ingestion.json` owns modular ingestion settings:
+An entity file is the sole place to configure that domain's cases. Put its count, matching method, expected outcome, optional weight settings, and ordered mutation list together. `operations` and `modifications` are aliases; use `operations` in new configuration.
 
 ```json
 {
-  "ingestion_dates": {
-    "existing": "20260909",
-    "update": "NEWER",
-    "overrides": {
-      "member": "SAME",
-      "provider": "OLDER",
-      "claims": {"existing": "20260910", "update": "NEWER"},
-      "claims_history": {"existing": "20260911", "update": "SAME"},
-      "payments": {"existing": "20260912", "update": "OLDER"}
-    }
+  "member": {
+    "count": 3,
+    "matching_method": "configured_weighted_c",
+    "expected_outcome": "NO_MATCH",
+    "operations": [
+      {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]},
+      {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
+      {"type": "INVALID", "fields": ["CM_MEMBER_ZIP"]},
+      {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
+    ]
   }
 }
 ```
 
-Dates use `YYYYMMDD`.
+Operations are applied in order to a copy of the generated original. Untargeted fields retain their original values. `UPDATE` already means “replace with a valid value different from the original”; there is no `DIFFERENT` operation. Invalid values are always selected from the shared `invalid-values.json` catalog.
 
-| Relationship | Incoming `INGESTION_DATE` |
+| Operation | Result |
 | --- | --- |
-| `SAME` | Existing date unchanged. |
-| `NEWER` | Existing date plus one calendar day. |
-| `OLDER` | Existing date minus one calendar day. |
+| `UPDATE` | A valid, realistic replacement value. |
+| `INVALID` | A catalogued invalid field/type value. |
+| `MISSING` | Removes the key from the output object. |
+| `EMPTY` | Retains the key with the schema-appropriate empty representation. |
+| `DUPLICATE` | Preserves business fields in a related copy. |
+| `WEIGHT_CHANGE` | Selects weighted fields; requires `condition`: `BELOW_LIMIT`, `AT_LIMIT`, or `ABOVE_LIMIT`. |
 
-Dates are calculated from configuration, not hard-coded in generation code. When ingestion config is empty, creation and updates use today's date with a `SAME` relationship. Overrides apply independently to Member, Provider, Claims, Claims History, and Payments.
+### 6.5 Scenario properties
 
-Do not also define `generation.ingestion_dates` in the modular global config when `common/ingestion.json` is populated; the loader rejects duplicate ownership.
+| Property | Meaning |
+| --- | --- |
+| `operations` / `modifications` | Ordered `{type, fields, condition}` objects. Fields can be a list or omitted for eligible automatic selection. |
+| `matching_method` | Rule-catalog method used for weights or verified matching. |
+| `threshold` | Optional decimal override for a weight comparison. |
+| `expected_outcome` | `MATCH` or `NO_MATCH`; verifies the related pair against its method. |
+| `failure_mode` / `failure_field` | Required way and field to fail a verified `NO_MATCH` case. |
+| `collision_method` | Other method intentionally used by a `CROSS_METHOD_COLLISION` case. |
+| `elasticity_boundary` | `INSIDE`, `AT`, or `OUTSIDE` tolerance boundary. |
+| `include` / `exclude` | Controls automatic optional-field selection. |
+
+Field names are normalized case-insensitively. Punctuation and surrounding spaces are normalized, but maintained configurations should use canonical field names.
+
+### 6.6 Ingestion-date configuration
+
+Set `ingestion_dates` in the relevant domain configuration (or the relevant Professional/Institutional variant), not in a separate common file:
+
+```json
+"ingestion_dates": {
+  "existing": "20260909",
+  "update": "NEWER"
+}
+```
+
+Dates use `YYYYMMDD`. `SAME`, `NEWER`, and `OLDER` set an incoming date equal to, one day after, or one day before the configured existing date. The generator calculates this relationship; it does not hard-code calendar dates.
 
 ### 6.8 Environment variables
 
@@ -477,66 +398,61 @@ Useful tool-level variables are optional, not project contracts. For example, in
 UV_CACHE_DIR=/tmp/test-data-generator-uv-cache uv run generate-data
 ```
 
-### 6.9 Per-record matchCode fixture matrices
+### 6.9 Per-record match-code cases
 
-Normal creation and update streams remain JSONL. For QA cases that need a complete matrix of records per matching method, enable `generation.match_fixtures`. The generator derives each case from every created source record, then writes one JSON array per matchCode under that source record's folder.
+Put `match_codes` directly on the entity or variant being tested. The generator derives each case from every created source record and writes one JSON array per matching method and match-code label under that entity record's folder.
 
 ```json
 {
-  "generation": {
-    "match_fixtures": {
-      "directory": "match-fixtures",
-      "entities": {
-        "member": {
-          "match_codes": {
-            "matchCode1": {
-              "matching_method": "configured_weighted_c",
-              "operation_counts": {
-                "UPDATE": 2,
-                "INVALID": 3,
-                "MISSING": 1,
-                "EMPTY": 2,
-                "DUPLICATE": 4,
-                "WEIGHT_BELOW_LIMIT": 1,
-                "WEIGHT_AT_LIMIT": 2,
-                "WEIGHT_ABOVE_LIMIT": 3
-              },
-              "deterministic_cases": [
-                {
-                  "modifications": [
-                    {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]},
-                    {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
-                    {"type": "INVALID", "fields": ["CM_MEMBER_ZIP"]},
-                    {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
-                  ]
-                }
-              ]
-            }
+  "member": {
+    "count": 2,
+    "match_codes": {
+      "matchCode1": {
+        "matching_method": "configured_weighted_c",
+        "operation_counts": {
+          "UPDATE": 2,
+          "INVALID": 3,
+          "MISSING": 1,
+          "EMPTY": 2,
+          "DUPLICATE": 4,
+          "WEIGHT_BELOW_LIMIT": 1,
+          "WEIGHT_AT_LIMIT": 2,
+          "WEIGHT_ABOVE_LIMIT": 3,
+          "ELASTICITY_INSIDE": 1,
+          "ELASTICITY_AT_LIMIT": 1,
+          "ELASTICITY_OUTSIDE": 1
+        },
+        "cases": [
+          {
+            "modifications": [
+              {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]},
+              {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
+              {"type": "INVALID", "fields": ["CM_MEMBER_ZIP"]},
+              {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
+            ]
           }
-        }
+        ]
       }
     }
   }
 }
 ```
 
-`matching_method` is the existing rule-catalog method; `matchCode1` is a QA-friendly filename label and can be any safe filename. Operation counts generate randomized field cases from that method's currently emitted fields. `deterministic_cases` generates an explicit, multi-field plan; its optional `count` repeats the case and optional `expected_outcome` (`MATCH` or `NO_MATCH`) overrides the inferred outcome. Mandatory field changes infer `NO_MATCH`; optional-only changes infer `MATCH` unless explicitly overridden. Invalid values continue to come only from `invalid-values.json`.
+`matching_method` is the rule-catalog method; `matchCode1` is a QA-friendly label. Counts create randomized cases using the method's current eligible fields. `cases` creates an explicit, multi-field plan; legacy `deterministic_cases` remains accepted during migration. A case's optional `count` repeats it and optional `expected_outcome` (`MATCH` or `NO_MATCH`) overrides its inferred outcome. Invalid values come only from `invalid-values.json`.
 
-The three weight entries map to `WEIGHT_CHANGE` with `BELOW_LIMIT`, `AT_LIMIT`, and `ABOVE_LIMIT`; their fields are selected dynamically from the method/rule weights. The fixture engine verifies the matching method for every non-weight case and records matching collisions, changed/removed/synchronized fields, total weight, and the final record in the output JSON.
+Weight counts dynamically select the configured method's weighted fields for below, exact, or above the threshold. Elasticity counts generate just-inside, exactly-at, and just-outside configured tolerances. The engine records the modifications, expected outcome, matching collisions, changed/removed/synchronized fields, total weight, and final record in every output JSON.
 
 For two generated Members, this configuration writes:
 
 ```text
-output/match-fixtures/
+output/update-test-data/
   member1/
-    matchCode1.json
-    matchCode2.json
+    configured_weighted_c__matchCode1.json
   member2/
-    matchCode1.json
-    matchCode2.json
+    configured_weighted_c__matchCode1.json
 ```
 
-It never creates matchCode-named directories. Match fixtures run in `all` or `creation` mode, are transactionally published, and do not alter the existing `new-test-data` or `update-test-data` JSONL contracts.
+The entity is always the folder. If the match-code label equals the matching-method name, the filename is `<matching-method>.json`; otherwise it is `<matching-method>__<match-code>.json`. Cases run in `all` or `creation` mode, are transactionally published in the normal update directory, and do not create a separate match-plan or fixture directory.
 
 ## 7. Entity reference
 
@@ -722,7 +638,7 @@ Generic mutation scenarios apply to Provider CDF, Member, MR, Claims, Claims His
 | Capability | Provider CDF | Provider NPPES | Member 834 | Member MR | 837 Claims | Claims History | 835 Payments |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Creation | Direct or NPPES-linked | Direct/linked | Direct | Derived from 834 | Direct base generation | Derived from paired 837 base | Derived from Claims, except ORPHAN |
-| `UPDATE` / `DIFFERENT` | Yes | No normal update stream | Yes | Yes, independent | Yes | Propagated from Claim | Yes, direct or propagated |
+| `UPDATE` | Yes | No normal update stream | Yes | Yes, independent | Yes | Propagated from Claim | Yes, direct or propagated |
 | `MISSING` / `EMPTY` / `INVALID` | Yes | No normal update stream | Yes | Yes | Yes | Propagated from Claim | Yes, direct or propagated |
 | `DUPLICATE` | Yes | No normal update stream | Yes | Yes | Yes | Propagated from Claim | Yes |
 | Weight boundaries | Yes | No | Yes | Yes through Member rules | Yes | Through Claim rules | Yes |
@@ -734,99 +650,68 @@ Generic mutation scenarios apply to Provider CDF, Member, MR, Claims, Claims His
 Purpose: replace selected values with new, realistic, schema-compatible values.
 
 ```json
-"updates": {
-  "profile": "standard_update",
-  "operation": {
-    "fields": ["CM_MEMBER_FIRST_NAME"]
-  }
-}
+"operations": [
+  {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]}
+]
 ```
 
 If fields are omitted, one eligible non-key field is chosen deterministically from the rule catalog and emitted layout.
 
 Matching/ID fields are excluded from automatic selection. An explicitly named key/ID may be updated; the original record remains the base used to establish the pair, and dependent records are propagated where supported. Structural stream discriminators such as `FILE_TYPE`, `CH_CLAIM_TYPE`, and `cotiviti.source_format` cannot receive a normal `UPDATE`.
 
-### 8.2 `DIFFERENT`
-
-Purpose: state explicitly that a field needs a valid value different from the existing value, without classifying it as invalid, missing, or duplicate.
-
-```json
-"updates": {
-  "operation": {
-    "type": "DIFFERENT",
-    "fields": ["CP_PROVIDER_CITY"]
-  }
-}
-```
-
-The current mutation engine uses the same domain-aware value generation as a valid update; the distinct operation name communicates test intent and is used by matching plans.
-
-### 8.3 `MISSING`
+### 8.2 `MISSING`
 
 Purpose: remove selected keys from the output object entirely.
 
 ```json
-"updates": {
-  "operation": {
-    "type": "MISSING",
-    "fields": ["CM_MEMBER_MIDDLE_NAME"]
-  }
-}
+"operations": [
+  {"type": "MISSING", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
+]
 ```
 
 `MISSING` is different from an empty string. When fields are omitted, the engine prefers a required eligible field, then falls back to another eligible field.
 
-### 8.4 `EMPTY`
+### 8.3 `EMPTY`
 
 Purpose: retain the selected key but replace its value with the type-compatible empty representation: `""`, `0`, or `null` as appropriate.
 
 ```json
-"updates": {
-  "operation": {
-    "type": "EMPTY",
-    "fields": ["CM_MEMBER_MIDDLE_NAME"]
-  }
-}
+"operations": [
+  {"type": "EMPTY", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
+]
 ```
 
 This is intentionally different from `MISSING` and may deliberately violate a required-value schema constraint.
 
-### 8.5 `INVALID`
+### 8.4 `INVALID`
 
 Purpose: replace selected values with deliberately malformed values from the shared invalid catalog.
 
 ```json
-"updates": {
-  "operation": {
-    "type": "INVALID",
-    "fields": ["CP_PROVIDER_NPI"]
-  }
-}
+"operations": [
+  {"type": "INVALID", "fields": ["CP_PROVIDER_NPI"]}
+]
 ```
 
 The invalid value comes from `invalid-values.json`; the generator does not invent random invalid text inline. An invalid fixture can intentionally fail JSON Schema validation.
 
-### 8.6 `DUPLICATE`
+### 8.5 `DUPLICATE`
 
 Purpose: emit a second record derived from the first with no business-field mutation.
 
 ```json
-"updates": {
-  "profile": "duplicate"
-}
+"operations": [{"type": "DUPLICATE"}]
 ```
 
 The `INGESTION_DATE` may remain the same or differ according to the configured ingestion relationship.
 
-### 8.7 `WEIGHT_CHANGE`
+### 8.6 `WEIGHT_CHANGE`
 
 Purpose: select changed fields whose combined configured weights are below, exactly at, or above a threshold.
 
 ```json
-"updates": {
-  "profile": "weight_at_limit",
-  "matching_method": "configured_weighted_f"
-}
+"matching_method": "configured_weighted_f",
+"operations": [{"type": "WEIGHT_CHANGE", "condition": "AT_LIMIT"}]
 ```
 
 Conditions:
@@ -844,14 +729,12 @@ Set `expected_outcome` to turn an update into a verified existing/incoming recor
 ### 9.1 Positive `MATCH`
 
 ```json
-"updates": {
-  "matching_method": "member_id_dob_gender",
-  "expected_outcome": "MATCH",
-  "operation": "duplicate",
-  "modifications": [
-    {"type": "DIFFERENT", "fields": ["CM_MEMBER_EMAIL"]}
-  ]
-}
+"matching_method": "member_id_dob_gender",
+"expected_outcome": "MATCH",
+"operations": [
+  {"type": "DUPLICATE"},
+  {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
+]
 ```
 
 Mandatory anchors remain matched. Independent low-priority fields may be changed. The engine assesses every configured method and rejects a fixture that accidentally satisfies a declared higher-priority method.
@@ -872,11 +755,13 @@ A `NO_MATCH` request must name `failure_mode`.
 Example:
 
 ```json
-"updates": {
-  "profile": "no_match_invalid",
-  "matching_method": "professional_claim_fallback",
-  "failure_field": "CH_PLACE_OF_SERVICE_CODE"
-}
+"matching_method": "professional_claim_fallback",
+"expected_outcome": "NO_MATCH",
+"failure_mode": "INVALID_VALUE",
+"failure_field": "CH_PLACE_OF_SERVICE_CODE",
+"operations": [
+  {"type": "INVALID", "fields": ["CH_PLACE_OF_SERVICE_CODE"]}
+]
 ```
 
 After mutation, the engine verifies that the target method really produces `NO_MATCH`. It also evaluates other methods. A cross-method collision must match the configured `collision_method`; accidental collisions are reported rather than treated as a clean negative fixture.
@@ -894,13 +779,11 @@ For methods with elastic fields, use:
 Example:
 
 ```json
-"updates": {
-  "matching_method": "configured_weighted_f",
-  "expected_outcome": "MATCH",
-  "elasticity_boundary": "AT",
-  "failure_field": "CM_MEMBER_BIRTH_DATE",
-  "operation": "duplicate"
-}
+"matching_method": "configured_weighted_f",
+"expected_outcome": "MATCH",
+"elasticity_boundary": "AT",
+"failure_field": "CM_MEMBER_BIRTH_DATE",
+"operations": [{"type": "DUPLICATE"}]
 ```
 
 ## 10. Matching method catalog
@@ -1154,27 +1037,27 @@ Files appear only for selected/configured or propagated streams. The project doe
 
 Each JSONL line is one complete JSON object.
 
-### MatchCode fixture matrices
+### Match-code cases
 
-When `generation.match_fixtures` is enabled, an additional non-JSONL QA artifact tree is created:
+When an entity's `match_codes` is configured, an additional JSON case tree is written inside the normal update directory:
 
 ```text
-output/match-fixtures/
+output/update-test-data/
 ├── member1/
-│   ├── matchCode1.json
-│   └── matchCode2.json
+│   ├── configured_weighted_c__matchCode1.json
+│   └── configured_weighted_f__matchCode2.json
 ├── member2/
-│   ├── matchCode1.json
-│   └── matchCode2.json
+│   ├── configured_weighted_c__matchCode1.json
+│   └── configured_weighted_f__matchCode2.json
 └── provider1/
     └── deterministic_provider.json
 ```
 
-The entity record owns the folder. Each `<matchCode>.json` is an array of derived fixture cases, not a single raw record. Every case includes `existing`, `record`, the applied operation plan, changed/removed/synchronized fields, actual matching methods, expected outcome, and weight information. This artifact is independent from `new-test-data` and `update-test-data`; enabling it never changes their filenames or JSONL structure.
+The entity record owns the folder. Each file is an array of derived cases, not a single raw record. Every case includes `existing`, `record`, the applied operation plan, changed/removed/synchronized fields, actual matching methods, expected outcome, and weight information. There is no separate fixture directory or per-entity match-plan file.
 
 ## 15. Running scenarios yourself
 
-For repeatable QA, add an explicit seed to `config/generator.config.json`. Edit only the relevant domain/common file, run the scenario, verify output, and then revert or keep the scenario under version control as appropriate.
+For repeatable QA, add an explicit `seed` to `runconfig.json`. Edit only the relevant domain file, run the scenario, verify output, and then revert or keep the scenario under version control as appropriate.
 
 ### 15.1 Run every checked-in stream
 
@@ -1189,7 +1072,8 @@ Set `runconfig.json`:
 
 ```json
 {
-  "config": "config/generator.config.json",
+  "client": "chc",
+  "output_directory": "./output",
   "entities": ["member"],
   "operations": ["creation", "updates"]
 }
@@ -1270,10 +1154,9 @@ PY
 ### 15.6 Target one field
 
 ```json
-"updates": {
-  "profile": "standard_update",
-  "operation": {"fields": ["CM_MEMBER_FIRST_NAME"]}
-}
+"operations": [
+  {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]}
+]
 ```
 
 Run updates and compare:
@@ -1312,10 +1195,8 @@ jq '.CM_MEMBER_GENDER' output/update-test-data/members.update.jsonl
 ### 15.8 Weight boundaries
 
 ```json
-"updates": {
-  "profile": "weight_above_limit",
-  "matching_method": "configured_weighted_f"
-}
+"matching_method": "configured_weighted_f",
+"operations": [{"type": "WEIGHT_CHANGE", "condition": "ABOVE_LIMIT"}]
 ```
 
 Run the Member updates. Success means the engine found and verified an above-threshold combination; failure means the selected method/layout has no valid combination for that boundary.
@@ -1330,29 +1211,17 @@ Run the Member updates. Success means the engine found and verified an above-thr
     "professional": {
       "count": 2,
       "claim_frequency": "7",
-      "updates": {
-        "profile": "standard_update",
-        "operation": {"fields": ["CH_DIAGNOSIS_CODE_01"]}
-      }
+      "operations": [
+        {"type": "UPDATE", "fields": ["CH_DIAGNOSIS_CODE_01"]}
+      ],
+      "ingestion_dates": {"existing": "20260909", "update": "NEWER"}
     },
     "institutional": {"count": 0}
   }
 }
 ```
 
-`config/common/ingestion.json`:
-
-```json
-{
-  "ingestion_dates": {
-    "overrides": {
-      "claims": {"existing": "20260909", "update": "NEWER"},
-      "claims_history": {"existing": "20260910", "update": "SAME"},
-      "payments": {"existing": "20260911", "update": "OLDER"}
-    }
-  }
-}
-```
+Set a separate Claims History or Payment ingestion-date relationship in the applicable `claims` or `payments` entity configuration; no common ingestion file is needed.
 
 Verify:
 
@@ -1417,16 +1286,16 @@ Expected:
 - The first 10 CDF NPIs match NPPES NPIs.
 - The remaining two are unique CDF-only NPIs.
 
-### 15.13 Generate a matchCode fixture matrix
+### 15.13 Generate per-record match-code cases
 
-Add a `generation.match_fixtures` block such as the example in [section 6.9](#69-per-record-matchcode-fixture-matrices), ensure its source entity has a positive count, and run creation:
+Add `match_codes` to the relevant entity configuration as shown in [section 6.9](#69-per-record-match-code-cases), ensure that entity has a positive count, and run creation:
 
 ```sh
 uv run python -m test_data_generator generate \
   --config runconfig.json --mode creation
 ```
 
-Use the real internal stream name in `entities` (`member`, `provider`, `claim_professional`, `claim_institutional`, `payment_professional`, or `payment_institutional`). `matching_method` must be a method defined for that entity in the update-rule catalog. The output folder is `output/match-fixtures` unless the configuration overrides `directory`.
+Use the domain name in `runconfig.json` (`member`, `provider`, `claims`, or `payments`). `matching_method` must be a method defined for the selected entity in the update-rule catalog. The output folders are under `output/update-test-data/<entity><record-number>/`.
 
 ## 16. Verification cookbook
 
@@ -1446,10 +1315,10 @@ done
 
 This checks JSON syntax, not schema validity.
 
-### 16.3 Inspect matchCode fixture results
+### 16.3 Inspect match-code case results
 
 ```sh
-find output/match-fixtures -type f -name '*.json' -print | sort
+find output/update-test-data -type f -path '*/*[0-9]/*.json' -print | sort
 jq '.[0] | {
   match_code,
   matching_method,
@@ -1460,14 +1329,14 @@ jq '.[0] | {
   removed_fields,
   total_weight,
   threshold_relation
-}' output/match-fixtures/member1/matchCode1.json
+}' output/update-test-data/member1/configured_weighted_c__matchCode1.json
 ```
 
 For a deterministic field plan, compare the `existing` and `record` values and confirm the named fields appear in `changed_fields` or `removed_fields`. For random operation-count cases, confirm the file contains exactly the configured count of each `operation`:
 
 ```sh
 jq 'group_by(.operation) | map({operation: .[0].operation, count: length})' \
-  output/match-fixtures/member1/matchCode1.json
+  output/update-test-data/member1/configured_weighted_c__matchCode1.json
 ```
 
 ### 16.4 Validate normal creation output against schemas
@@ -1602,10 +1471,9 @@ Configuration:
   "provider": {
     "nppes": {"individual": 2, "organizational": 1},
     "cdf": {"additional_count": 2},
-    "updates": {
-      "profile": "standard_update",
-      "operation": {"fields": ["CP_PROVIDER_FIRST_NAME"]}
-    }
+    "operations": [
+      {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
+    ]
   }
 }
 ```
@@ -1644,11 +1512,13 @@ Configuration:
     "count": 2,
     "mr": {
       "count": 2,
-      "updates": {
-        "profile": "no_match_missing",
-        "matching_method": "member_id_dob_gender",
-        "failure_field": "CM_MEMBER_BIRTH_DATE"
-      }
+      "matching_method": "member_id_dob_gender",
+      "expected_outcome": "NO_MATCH",
+      "failure_mode": "MISSING_VALUE",
+      "failure_field": "CM_MEMBER_BIRTH_DATE",
+      "operations": [
+        {"type": "MISSING", "fields": ["CM_MEMBER_BIRTH_DATE"]}
+      ]
     }
   }
 }
@@ -1677,10 +1547,9 @@ Claims config:
     "professional": {
       "count": 3,
       "frequencies": {"1": 1, "7": 1, "8": 1},
-      "updates": {
-        "profile": "standard_update",
-        "operation": {"fields": ["CH_PATIENT_MIDDLE_NAME"]}
-      }
+      "operations": [
+        {"type": "UPDATE", "fields": ["CH_PATIENT_MIDDLE_NAME"]}
+      ]
     },
     "institutional": {"count": 0}
   }
@@ -1724,16 +1593,14 @@ Claim update changes patient middle name
 
 ### Example D: Below/at/above Member weight cases
 
-Run three times, changing only the profile:
+Run three times, changing only the weight condition:
 
 ```json
-"updates": {
-  "profile": "weight_below_limit",
-  "matching_method": "configured_weighted_f"
-}
+"matching_method": "configured_weighted_f",
+"operations": [{"type": "WEIGHT_CHANGE", "condition": "BELOW_LIMIT"}]
 ```
 
-Then `weight_at_limit`, then `weight_above_limit`. Keep the same explicit seed. Store each output in a separate test artifact location before the next run. This produces comparable fixtures whose changed-field weights are respectively below, equal to, and above the configured threshold.
+Then use `AT_LIMIT`, then `ABOVE_LIMIT`. Keep the same explicit seed. Store each output in a separate test artifact location before the next run. This produces comparable fixtures whose changed-field weights are respectively below, equal to, and above the configured threshold.
 
 ## 18. Business rules and edge cases
 
@@ -1775,7 +1642,7 @@ Use the canonical field from the relevant rule/layout. Remove trailing whitespac
 
 ### Matching key requires an explicit operation
 
-Automatic selection excludes matching keys. Put the key in an explicit `UPDATE`, `DIFFERENT`, `INVALID`, or `MISSING` field list. Use `INVALID` or `MISSING` when the intent is to prevent matching; use `expected_outcome: "NO_MATCH"` when breaking a mandatory method anchor.
+Automatic selection excludes matching keys. Put the key in an explicit `UPDATE`, `INVALID`, or `MISSING` field list. Use `INVALID` or `MISSING` when the intent is to prevent matching; use `expected_outcome: "NO_MATCH"` when breaking a mandatory method anchor.
 
 ### Structural discriminator may only be INVALID or MISSING
 
@@ -1890,33 +1757,23 @@ make verify
 
 For an existing operation type:
 
-1. Decide whether a common profile already represents the outcome.
-2. If yes, reference it from one domain stream and specify only the differing method/fields.
-3. If not, add one named profile to `config/common/update-profiles.json` using existing operation/failure semantics.
-4. Reuse a named operation from `config/common/operations.json`, or add a named alias for an existing operation type.
-5. Reference the profile from the appropriate domain config.
-6. Use exact canonical fields from the domain rule/layout.
-7. Run the smallest domain/phase through `runconfig.json`.
-8. Add a regression test proving the output and failure behavior.
+1. Open only the relevant domain file.
+2. Add or amend the stream's `operations` list with the required ordered field changes.
+3. Add `matching_method`, outcome/failure, weight, or elasticity properties only when that scenario needs them.
+4. Use exact canonical fields from the domain rule/layout.
+5. Run the smallest domain/phase through `runconfig.json`.
+6. Add a regression test proving the output and failure behavior.
 
-Example new reusable profile:
+Example configuration-only negative scenario:
 
 ```json
-"no_match_exact_break": {
-  "expected_outcome": "NO_MATCH",
-  "failure_mode": "MANDATORY_BREAK_EXACT",
-  "operation": "duplicate"
-}
-```
-
-Entity use:
-
-```json
-"updates": {
-  "profile": "no_match_exact_break",
-  "matching_method": "provider_npi_last_name",
-  "failure_field": "CP_PROVIDER_LAST_NAME"
-}
+"matching_method": "provider_npi_last_name",
+"expected_outcome": "NO_MATCH",
+"failure_mode": "MANDATORY_BREAK_EXACT",
+"failure_field": "CP_PROVIDER_LAST_NAME",
+"operations": [
+  {"type": "UPDATE", "fields": ["CP_PROVIDER_LAST_NAME"]}
+]
 ```
 
 Core code changes are needed only when introducing genuinely new semantics, a new data structure, a new operation algorithm, or a new relationship—not for another combination of existing rules.
@@ -1932,9 +1789,7 @@ When requirements change, update the correct layer:
 | Client-specific envelope/default | `client_profiles.json`. |
 | Matching anchor, priority, requiredness, elasticity, or weight | Domain rule JSON. |
 | Invalid example | `invalid-values.json`. |
-| Reusable operation alias | `common/operations.json`. |
-| Reusable outcome/failure bundle | `common/update-profiles.json`. |
-| Count, Claim frequency, Payment scenario, or selected update fields | Domain config. |
+| Count, Claim frequency, Payment scenario, scenario outcome, or selected update fields | Domain config. |
 | Domain/phase selected for one run | `runconfig.json`. |
 | New field-generation semantics | Appropriate entity/shared generation code plus tests. |
 | New dependency synchronization | Shared synchronization/relationship logic plus tests. |

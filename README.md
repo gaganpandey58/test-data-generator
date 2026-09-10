@@ -93,48 +93,44 @@ To support a new client, add a complete top-level client entry with `headers` an
 
 ## Configuration
 
-The checked-in configuration is composed from small, focused JSON files:
+`runconfig.json` is the only run-level configuration. It owns execution
+scope, client, output directories, the shared rule/invalid catalogs, and one
+reference for each domain scenario file:
 
 ```text
-runconfig.json                         # execution scope: config, domains, phases
+runconfig.json                         # execution + global output settings
 config/
-├── generator.config.json              # client, output, global enablement, references
-├── provider.config.json               # CDF/NPPES and Provider updates
-├── member.config.json                 # 834/MR and Member updates
-├── claims.config.json                 # professional/institutional Claims updates
-├── payments.config.json               # professional/institutional 835 scenarios
-└── common/
-    ├── operations.json                # named UPDATE, DIFFERENT, INVALID, etc.
-    ├── update-profiles.json           # reusable outcome/failure profiles
-    └── ingestion.json                 # shared optional ingestion defaults
+├── provider.config.json               # Provider creation and test scenarios
+├── member.config.json                 # 834/MR creation and test scenarios
+├── claims.config.json                 # 837P/837I/CH creation and test scenarios
+└── payments.config.json               # 835P/835I creation and test scenarios
 ```
 
-The root [`generator.config.json`](generator.config.json) remains as a
-backwards-compatible execution wrapper. New runs should use
-[`runconfig.json`](runconfig.json).
+Each entity file is the single place for its test scenarios. Put ordinary
+updates, invalid/missing/empty plans, match-code operation counts, weighted
+boundaries, elasticity cases, and deterministic multi-field cases beside the
+entity count. The shared rule catalog still defines healthcare matching and
+field semantics; `invalid-values.json` remains the shared source for invalid
+test values.
 
-`config/generator.config.json` owns only global settings and references. Each
-domain file owns its count, fields, matching method, or payment scenario data.
-The loader resolves named profiles and operations into the existing validated
-internal configuration before generation, so schemas, generator modules, and
-output names remain internal defaults.
-
-For example, this entity update uses a reusable profile while declaring only
-the field that differs:
+For example, this entity applies a deterministic, multi-field update plan:
 
 ```json
 {
-  "updates": {
-    "profile": "standard_update",
-    "operation": {"fields": ["CH_PATIENT_FIRST_NAME"]}
-  }
+  "count": 3,
+  "matching_method": "professional_claim_primary",
+  "expected_outcome": "NO_MATCH",
+  "operations": [
+    {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]},
+    {"type": "EMPTY", "fields": ["CH_PATIENT_STATE"]},
+    {"type": "INVALID", "fields": ["CH_PATIENT_ZIP"]},
+    {"type": "MISSING", "fields": ["CH_PATIENT_LAST_NAME"]}
+  ]
 }
 ```
 
-To add a scenario, add or reuse an operation in `common/operations.json`, add
-an outcome profile in `common/update-profiles.json` when needed, then reference
-that profile from the relevant entity config. No entity generator code is
-needed unless the new scenario requires genuinely new record semantics.
+`UPDATE` is the only valid-difference operation. There is no separate
+operation for “different”.
 
 `member.mr` is optional. When enabled, the generator creates each roster row
 from the corresponding emitted 834 Member row instead of invoking a second
@@ -144,7 +140,7 @@ Member generator. By default, the records are identical except that
 it cannot exceed the number of source Member rows.
 
 MR-specific operations use the same shared update engine and Member rule
-catalog. Put the operation under `member.mr.updates`; only explicitly selected
+catalog. Put `operations` directly under `member.mr`; only explicitly selected
 fields and their established dependent fields change. For example:
 
 ```json
@@ -154,19 +150,10 @@ fields and their established dependent fields change. For example:
     "count": 2,
     "mr": {
       "count": 2,
-      "updates": {
-        "matching_method": "member_id_dob_gender",
-        "operation": {
-          "type": "UPDATE",
-          "fields": ["CM_MEMBER_EMAIL"]
-        }
-      }
-    }
-  },
-  "generation": {
-    "updates": {
-      "enabled": true,
-      "rule_catalog": "src/test_data_generator/configuration/update-rule-catalog.json"
+      "matching_method": "member_id_dob_gender",
+      "operations": [
+        {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
+      ]
     }
   }
 }
@@ -474,9 +461,9 @@ Example for a targeted Member update:
 {
   "member": {
     "count": 1,
-    "updates": {
-      "operation": {"type": "UPDATE", "fields": ["CM_MEMBER_SSN"]}
-    }
+    "operations": [
+      {"type": "UPDATE", "fields": ["CM_MEMBER_SSN"]}
+    ]
   }
 }
 ```
@@ -530,14 +517,12 @@ requested outcome and cross-method collisions before it publishes the update.
   "claims": {
     "professional": {
       "count": 1,
-      "updates": {
-        "matching_method": "professional_claim_fallback",
-        "expected_outcome": "MATCH",
-        "modifications": [
-          {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]},
-          {"type": "DUPLICATE"}
-        ]
-      }
+      "matching_method": "professional_claim_fallback",
+      "expected_outcome": "MATCH",
+      "operations": [
+        {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]},
+        {"type": "DUPLICATE"}
+      ]
     }
   }
 }
@@ -551,9 +536,8 @@ anchor, `collision_method` for an intended cross-method collision, and
 `elasticity_boundary` (`INSIDE`, `AT`, or `OUTSIDE`) for date-tolerance tests.
 `INVALID`, `MISSING`, and `EMPTY` cannot modify a mandatory target anchor in a
 positive fixture. Independent non-anchor operations are declared through
-`modifications`; each entry has a `type` and optional `fields` list.
-Use `DIFFERENT` when a field only needs a valid value different from the
-existing record. `UPDATE` remains supported for existing configurations.
+`operations`; each entry has a `type` and optional `fields` list. `UPDATE`
+always supplies a valid value different from the existing record.
 `INVALID` values are always read from the shared
 [`invalid-values.json`](src/test_data_generator/configuration/invalid-values.json)
 catalog, first by exact field and then by configured field type; no invalid

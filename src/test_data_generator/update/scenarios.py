@@ -9,7 +9,6 @@ from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
 from importlib.resources import files
-from itertools import combinations
 from pathlib import Path
 from random import Random
 from typing import Mapping
@@ -28,7 +27,6 @@ class OperationType(StrEnum):
     MISSING = "MISSING"
     EMPTY = "EMPTY"
     INVALID = "INVALID"
-    DIFFERENT = "DIFFERENT"
     WEIGHT_CHANGE = "WEIGHT_CHANGE"
     DUPLICATE = "DUPLICATE"
 
@@ -236,6 +234,7 @@ class FieldModification:
 
     operation: OperationType
     fields: tuple[str, ...]
+    condition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -257,6 +256,20 @@ class ResolvedUpdate:
     matched_methods: tuple[str, ...] = ()
     unexpected_methods: tuple[str, ...] = ()
     modification_plan: tuple[FieldModification, ...] = ()
+
+
+def may_violate_schema(request: UpdateRequest) -> bool:
+    """Return whether an explicit negative operation may break JSON Schema.
+
+    Missing a required field, emptying a constrained value, or deliberately
+    injecting an invalid value is the point of these QA fixtures.  The normal
+    schema validator must not suppress that requested negative output.
+    """
+    operations = (request.operation, *(item.operation for item in request.modifications))
+    return any(
+        operation in {OperationType.MISSING, OperationType.EMPTY, OperationType.INVALID}
+        for operation in operations
+    )
 
 
 def resolve_fields(
@@ -281,7 +294,6 @@ def resolve_fields(
         selected = [field for field in _normalize_fields(request.include, known) if field in known]
     elif request.operation in {
         OperationType.UPDATE,
-        OperationType.DIFFERENT,
         OperationType.MISSING,
         OperationType.EMPTY,
         OperationType.INVALID,
@@ -315,10 +327,7 @@ def resolve_fields(
         raise ValueError(f"Update selection contains an unknown field {unknown!r}")
     if any(field in rules.keys for field in selected) and not (
         request.operation in {OperationType.INVALID, OperationType.MISSING}
-        or (
-            request.operation in {OperationType.UPDATE, OperationType.DIFFERENT}
-            and explicit_selection
-        )
+        or (request.operation == OperationType.UPDATE and explicit_selection)
     ):
         matching = next(field for field in selected if field in rules.keys)
         raise ValueError(
@@ -381,7 +390,7 @@ def resolve_update(
 
         return resolve_match_fixture(base, request, rules, seed, index)
     if request.modifications:
-        raise ValueError("Independent modifications require expected_outcome")
+        return _resolve_modification_plan(base, request, rules, seed, index)
     if request.matching_method is not None and request.operation in {
         OperationType.INVALID,
         OperationType.MISSING,
@@ -479,6 +488,64 @@ def resolve_update(
         expected_apply=not (operation == OperationType.WEIGHT_CHANGE and condition == "ABOVE_LIMIT")
         and not invalidated,
         synchronized_fields=synchronized,
+    )
+
+
+def _resolve_modification_plan(
+    base: Mapping[str, object],
+    request: UpdateRequest,
+    rules: EntityRules,
+    seed: int,
+    index: int,
+) -> ResolvedUpdate:
+    """Apply an ordered, explicit field-operation plan to one derived record.
+
+    Direct entity scenarios can deliberately combine UPDATE, INVALID, MISSING,
+    EMPTY, and WEIGHT_CHANGE without declaring a matching assertion.  Each
+    operation is resolved through the existing schema-aware mutation path, so
+    updates retain their normal format, synchronization, and invalid catalog
+    behavior.
+    """
+    original = deepcopy(dict(base))
+    current: Mapping[str, object] = original
+    changed: list[str] = []
+    removed: list[str] = []
+    invalidated: list[str] = []
+    synchronized: list[str] = []
+    total = Decimal("0")
+    relation = "below"
+    expected_apply = True
+    for position, modification in enumerate(request.modifications, start=1):
+        nested_request = UpdateRequest(
+            operation=modification.operation,
+            fields=modification.fields,
+            include=request.include,
+            exclude=request.exclude,
+            matching_method=request.matching_method,
+            threshold=request.threshold,
+            condition=modification.condition,
+            invalid_values=request.invalid_values,
+        )
+        resolved = resolve_update(current, nested_request, rules, seed, index * 10_000 + position)
+        current = resolved.record
+        changed.extend(resolved.changed_fields)
+        removed.extend(resolved.removed_fields)
+        invalidated.extend(resolved.invalidated_keys)
+        synchronized.extend(resolved.synchronized_fields)
+        total += resolved.total_weight
+        relation = resolved.threshold_relation
+        expected_apply = expected_apply and resolved.expected_apply
+    return ResolvedUpdate(
+        record=dict(current),
+        changed_fields=tuple(dict.fromkeys(changed)),
+        removed_fields=tuple(dict.fromkeys(removed)),
+        invalidated_keys=tuple(dict.fromkeys(invalidated)),
+        total_weight=total,
+        threshold_relation=relation,
+        expected_match=not invalidated,
+        expected_apply=expected_apply and not invalidated,
+        synchronized_fields=tuple(dict.fromkeys(synchronized)),
+        modification_plan=request.modifications,
     )
 
 
@@ -992,12 +1059,53 @@ def _weight_combination(
     threshold: Decimal,
     wanted: str,
 ) -> tuple[str, ...] | None:
-    """Return the smallest candidate combination for one threshold relation."""
+    """Return a deterministic combination without exhaustive subset enumeration.
+
+    Weight-boundary fixtures run against large Claim and Payment layouts, where
+    trying every subset is exponential.  All catalog weights are non-negative:
+    an empty selection is always below a positive threshold, and the fewest
+    fields that can exceed a threshold are the highest-weight fields.  Exact
+    boundaries use a bounded dynamic-programming table that retains only the
+    best plan for each reachable total at or below the threshold.
+    """
     if _relation(Decimal("0"), threshold) == wanted:
         return ()
-    for size in range(1, len(candidates) + 1):
-        for combination in combinations(candidates, size):
-            total = sum((rules.fields[name].weight for name in combination), Decimal("0"))
-            if _relation(total, threshold) == wanted:
-                return combination
+    positive = tuple(name for name in candidates if rules.fields[name].weight > 0)
+    if wanted == "above":
+        selected: list[str] = []
+        total = Decimal("0")
+        ordered = sorted(
+            enumerate(positive), key=lambda item: (-rules.fields[item[1]].weight, item[0])
+        )
+        for _, name in ordered:
+            selected.append(name)
+            total += rules.fields[name].weight
+            if _relation(total, threshold) == "above":
+                return tuple(selected)
+        return None
+    if wanted == "equal":
+        plans: dict[Decimal, tuple[str, ...]] = {Decimal("0"): ()}
+        for name in positive:
+            weight = rules.fields[name].weight
+            for total, plan in tuple(plans.items()):
+                candidate_total = total + weight
+                if candidate_total > threshold:
+                    continue
+                candidate_plan = (*plan, name)
+                existing_plan = plans.get(candidate_total)
+                if existing_plan is None or _is_preferred_weight_plan(
+                    candidate_plan, existing_plan, candidates
+                ):
+                    plans[candidate_total] = candidate_plan
+        return plans.get(threshold)
     return None
+
+
+def _is_preferred_weight_plan(
+    candidate: tuple[str, ...], current: tuple[str, ...], order: tuple[str, ...]
+) -> bool:
+    """Prefer fewer fields, then preserve catalog field order deterministically."""
+    if len(candidate) != len(current):
+        return len(candidate) < len(current)
+    positions = {name: index for index, name in enumerate(order)}
+    return tuple(positions[name] for name in candidate) < tuple(positions[name] for name in current)

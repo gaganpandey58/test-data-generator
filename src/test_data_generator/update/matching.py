@@ -81,7 +81,12 @@ def resolve_match_fixture(
     result = deepcopy(original)
     randomizer = Random(seed * 1_000_003 + index * 97 + 733)
     plan = request.modifications or _legacy_plan(request)
-    if outcome == ExpectedOutcome.NO_MATCH and request.failure_mode is None and not plan:
+    if (
+        outcome == ExpectedOutcome.NO_MATCH
+        and request.failure_mode is None
+        and not plan
+        and request.elasticity_boundary is None
+    ):
         raise ValueError("NO_MATCH requires a failure_mode or an explicit modification plan")
     changed: list[str] = []
     removed: list[str] = []
@@ -140,7 +145,7 @@ def resolve_match_fixture(
     )
     applied_plan = plan
     if changed:
-        applied_plan += (FieldModification(OperationType.DIFFERENT, tuple(dict.fromkeys(changed))),)
+        applied_plan += (FieldModification(OperationType.UPDATE, tuple(dict.fromkeys(changed))),)
     if removed:
         applied_plan += (FieldModification(OperationType.MISSING, tuple(dict.fromkeys(removed))),)
     return ResolvedUpdate(
@@ -412,18 +417,35 @@ def _elasticity_days(elasticity: str) -> int | None:
 
 def _elastic_value(value: object, elasticity: str, boundary: str | None) -> object:
     tolerance = _elasticity_days(elasticity)
-    if tolerance is None:
-        raise ValueError(f"Field elasticity {elasticity!r} does not support date boundaries")
-    parsed = _parse_date(value)
-    if parsed is None:
-        raise ValueError("Elasticity boundary fields must contain a date")
     normalized = str(boundary).upper()
-    offset = {"INSIDE": max(0, tolerance - 1), "AT": tolerance, "OUTSIDE": tolerance + 1}.get(
-        normalized
-    )
-    if offset is None:
+    if normalized not in {"INSIDE", "AT", "OUTSIDE"}:
         raise ValueError("elasticity_boundary must be INSIDE, AT, or OUTSIDE")
-    return (parsed + timedelta(days=offset)).strftime("%Y%m%d")
+    if tolerance is not None:
+        parsed = _parse_date(value)
+        if parsed is None:
+            raise ValueError("Elasticity boundary fields must contain a date")
+        offset = {
+            "INSIDE": max(0, tolerance - 1),
+            "AT": tolerance,
+            "OUTSIDE": tolerance + 1,
+        }[normalized]
+        return (parsed + timedelta(days=offset)).strftime("%Y%m%d")
+    try:
+        numeric = Decimal(str(value))
+        limit = Decimal(str(elasticity))
+    except (InvalidOperation, ValueError) as error:
+        raise ValueError(f"Field elasticity {elasticity!r} does not support boundaries") from error
+    delta = {
+        "INSIDE": max(Decimal("0"), limit / Decimal("2")),
+        "AT": limit,
+        "OUTSIDE": limit + Decimal("1"),
+    }[normalized]
+    candidate = numeric + delta
+    if isinstance(value, int):
+        return int(candidate)
+    if isinstance(value, float):
+        return float(candidate)
+    return format(candidate, "f")
 
 
 def _parse_date(value: object) -> date | None:

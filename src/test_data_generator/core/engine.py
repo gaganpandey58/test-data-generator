@@ -18,8 +18,8 @@ from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.scenarios import (
     ExpectedOutcome,
     FailureMode,
-    OperationType,
     UpdateRequest,
+    may_violate_schema,
     resolve_update,
 )
 from test_data_generator.update.validation import validate_update_contract
@@ -260,15 +260,7 @@ def run_update_records(
                     and request.failure_mode
                     in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
                 )
-                if (
-                    request.operation
-                    not in {
-                        OperationType.MISSING,
-                        OperationType.EMPTY,
-                        OperationType.INVALID,
-                    }
-                    and not schema_invalid_match_fixture
-                ):
+                if not may_violate_schema(request) and not schema_invalid_match_fixture:
                     try:
                         validator.validate(updated)
                     except ValidationError as error:

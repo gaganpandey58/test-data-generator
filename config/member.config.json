@@ -1,16 +1,14 @@
 {
   "member": {
     "count": 1,
-    "updates": {
-      "profile": "standard_update",
-      "operation": {"fields": ["CM_MEMBER_FIRST_NAME"]}
-    },
+    "operations": [
+      {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]}
+    ],
     "mr": {
       "count": 1,
-      "updates": {
-        "profile": "standard_update",
-        "operation": {"fields": ["CM_MEMBER_MIDDLE_NAME"]}
-      }
+      "operations": [
+        {"type": "UPDATE", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
+      ]
     }
   }
 }

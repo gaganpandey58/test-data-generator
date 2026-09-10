@@ -141,7 +141,6 @@ class RunConfig:
     nppes_organizational_count: int = 0
     nppes_filename: str = "provider_nppes.jsonl"
     provider_linked: bool = False
-    match_fixture_directory: Path | None = None
     match_fixture_entities: tuple[MatchFixtureEntityConfig, ...] = ()
 
 
@@ -171,24 +170,33 @@ _EXECUTION_OPERATIONS = frozenset({"creation", "updates"})
 
 
 def load_execution_config(path: Path) -> ExecutionConfig:
-    """Load a focused ``runconfig.json`` execution request.
+    r"""Load a focused ``runconfig.json`` execution request.
 
-    A normal generator configuration remains accepted for backwards
-    compatibility and implicitly selects every entity and both phases.
+    The checked-in run configuration is both the execution request and the
+    global generator configuration.  The former ``{\"config\": ...}`` wrapper
+    is still accepted for a migration window, but no longer required.
     """
     request_path = path.resolve()
     raw = _load_json(request_path, "execution configuration")
-    if "config" not in raw:
-        return ExecutionConfig(request_path)
-    _validate_execution_schema(raw)
-    config_value = raw["config"]
-    assert isinstance(config_value, str)
-    config_path = _resolve_path(config_value, request_path.parent)
-    if config_path == request_path:
-        raise ConfigurationError("Execution configuration cannot reference itself")
-    entities = tuple(raw.get("entities", ()))
-    operations = tuple(raw.get("operations", ("creation", "updates")))
-    return ExecutionConfig(config_path, entities, operations)
+    if "config" in raw:
+        _validate_execution_schema(raw)
+        config_value = raw["config"]
+        assert isinstance(config_value, str)
+        config_path = _resolve_path(config_value, request_path.parent)
+        if config_path == request_path:
+            raise ConfigurationError("Execution configuration cannot reference itself")
+        return ExecutionConfig(
+            config_path,
+            tuple(raw.get("entities", ())),
+            tuple(raw.get("operations", ("creation", "updates"))),
+        )
+    entities = raw.get("entities", [])
+    operations = raw.get("operations", ["creation", "updates"])
+    if not isinstance(entities, list) or not all(isinstance(value, str) for value in entities):
+        raise ConfigurationError("runconfig entities must be an array of entity groups")
+    if not isinstance(operations, list) or not all(isinstance(value, str) for value in operations):
+        raise ConfigurationError("runconfig operations must be an array of phases")
+    return ExecutionConfig(request_path, tuple(entities), tuple(operations))
 
 
 def select_execution_entities(run_config: RunConfig, execution: ExecutionConfig) -> RunConfig:
@@ -208,7 +216,6 @@ def select_execution_entities(run_config: RunConfig, execution: ExecutionConfig)
         # A selectively scoped run must never clean outputs owned by omitted domains.
         disabled_filenames=(),
         match_fixture_entities=selected_fixtures,
-        match_fixture_directory=(run_config.match_fixture_directory if selected_fixtures else None),
     )
 
 
@@ -250,6 +257,7 @@ def load_config(path: Path) -> RunConfig:
     if "entity_configs" in raw_config:
         raw_config = _compose_modular_config(raw_config, config_path)
         _validate_schema(raw_config)
+    _normalize_entity_scenarios(raw_config)
     provider_linked = isinstance(raw_config.get("provider"), dict) and (
         isinstance(raw_config["provider"].get("nppes"), dict)
         or isinstance(raw_config["provider"].get("cdf"), dict)
@@ -365,8 +373,10 @@ def load_config(path: Path) -> RunConfig:
     rule_catalog = (
         _resolve_path(str(rule_catalog_value), config_path.parent)
         if isinstance(rule_catalog_value, str)
-        else None
+        else Path(__file__).with_name("update-rule-catalog.json")
     )
+    if not rule_catalog.is_file():
+        raise ConfigurationError(f"Update rule catalog does not exist: {rule_catalog}")
     invalid_catalog_value = update_config.get("invalid_values_catalog")
     invalid_values_catalog = (
         _resolve_path(str(invalid_catalog_value), config_path.parent)
@@ -375,15 +385,7 @@ def load_config(path: Path) -> RunConfig:
     )
     if not invalid_values_catalog.is_file():
         raise ConfigurationError(f"Invalid-value catalog does not exist: {invalid_values_catalog}")
-    match_fixture_directory, match_fixture_entities = _match_fixture_config(
-        generation_config,
-        output_directory,
-        raw_entities,
-    )
-    if match_fixture_directory in {creation_directory, update_directory}:
-        raise ConfigurationError(
-            "generation.match_fixtures.directory must differ from creation and updates directories"
-        )
+    match_fixture_entities = _match_fixture_config(raw_entities)
     return RunConfig(
         client=client,
         seed=seed,
@@ -394,14 +396,13 @@ def load_config(path: Path) -> RunConfig:
         update_directory=update_directory,
         rule_catalog=rule_catalog,
         updates_enabled=bool(update_config.get("enabled", False)),
-        update_defaults=update_config,
+        update_defaults={},
         creation_enabled=bool(creation_config.get("enabled", True)),
         invalid_values_catalog=invalid_values_catalog,
         nppes_count=nppes_count,
         nppes_individual_count=nppes_individual_count,
         nppes_organizational_count=nppes_organizational_count,
         provider_linked=provider_linked,
-        match_fixture_directory=match_fixture_directory,
         match_fixture_entities=match_fixture_entities,
     )
 
@@ -416,6 +417,9 @@ _MATCH_FIXTURE_OPERATIONS = frozenset(
         "WEIGHT_BELOW_LIMIT",
         "WEIGHT_AT_LIMIT",
         "WEIGHT_ABOVE_LIMIT",
+        "ELASTICITY_INSIDE",
+        "ELASTICITY_AT_LIMIT",
+        "ELASTICITY_OUTSIDE",
     }
 )
 _MATCH_FIXTURE_MUTATION_OPERATIONS = frozenset(
@@ -424,50 +428,25 @@ _MATCH_FIXTURE_MUTATION_OPERATIONS = frozenset(
 
 
 def _match_fixture_config(
-    generation: Mapping[str, object],
-    output_directory: Path,
     raw_entities: Mapping[str, object],
-) -> tuple[Path | None, tuple[MatchFixtureEntityConfig, ...]]:
-    """Validate the optional per-entity, per-matchCode fixture matrix.
+) -> tuple[MatchFixtureEntityConfig, ...]:
+    """Read per-entity match-code cases from the owning entity configuration.
 
-    The normal JSONL streams remain the source records.  This opt-in matrix
-    simply produces explainable JSON fixture bundles derived from those
-    records, so its configuration is intentionally isolated under
-    ``generation.match_fixtures``.
+    Match-code cases are update artifacts, so they intentionally share the
+    normal updated output directory.  Keeping them on the entity itself means
+    a QA author can define ordinary updates, deterministic plans, weighted
+    cases, and elasticity cases in one configuration document.
     """
-    configured = generation.get("match_fixtures")
-    if configured is None:
-        return None, ()
-    if not isinstance(configured, Mapping):
-        raise ConfigurationError("generation.match_fixtures must be an object")
-    enabled = configured.get("enabled", True)
-    if not isinstance(enabled, bool):
-        raise ConfigurationError("generation.match_fixtures.enabled must be a boolean")
-    if not enabled:
-        return None, ()
-    directory = configured.get("directory", "match-fixtures")
-    if not isinstance(directory, str) or not directory.strip():
-        raise ConfigurationError("generation.match_fixtures.directory must be a non-empty string")
-    output = _output_subdirectory(output_directory, directory, "match fixture")
-    entities = configured.get("entities")
-    if not isinstance(entities, Mapping) or not entities:
-        raise ConfigurationError("generation.match_fixtures.entities must be a non-empty object")
-
     result: list[MatchFixtureEntityConfig] = []
-    for entity_name, entity_value in entities.items():
-        if not isinstance(entity_name, str) or entity_name not in raw_entities:
-            raise ConfigurationError(f"Unknown match-fixture entity {entity_name!r}")
-        source_entity = raw_entities[entity_name]
+    for entity_name, source_entity in raw_entities.items():
         if not isinstance(source_entity, Mapping) or not source_entity.get("enabled"):
-            raise ConfigurationError(
-                f"Match-fixture entity {entity_name!r} must be enabled with a positive count"
-            )
-        if not isinstance(entity_value, Mapping):
-            raise ConfigurationError(f"Match-fixture entity {entity_name!r} must be an object")
-        codes = entity_value.get("match_codes")
+            continue
+        codes = source_entity.get("match_codes")
+        if codes is None:
+            continue
         if not isinstance(codes, Mapping) or not codes:
             raise ConfigurationError(
-                f"Match-fixture entity {entity_name!r} must define a non-empty match_codes object"
+                f"Entity {entity_name!r}.match_codes must be a non-empty object"
             )
         code_configs: list[MatchFixtureCodeConfig] = []
         for code_name, code_value in codes.items():
@@ -494,7 +473,7 @@ def _match_fixture_config(
                 )
             )
         result.append(MatchFixtureEntityConfig(entity_name, tuple(code_configs)))
-    return output, tuple(result)
+    return tuple(result)
 
 
 def _match_fixture_operation_counts(
@@ -527,7 +506,7 @@ def _match_fixture_cases(
     code_name: str, configured: Mapping[str, object]
 ) -> tuple[Mapping[str, object], ...]:
     """Validate deterministic multi-field cases while preserving their field plan."""
-    value = configured.get("deterministic_cases", [])
+    value = configured.get("cases", configured.get("deterministic_cases", []))
     if not isinstance(value, list):
         raise ConfigurationError(f"matchCode {code_name!r}.deterministic_cases must be an array")
     result: list[Mapping[str, object]] = []
@@ -606,26 +585,17 @@ def _validate_fixture_filename(value: str, label: str) -> None:
 
 
 def _compose_modular_config(global_config: dict[str, Any], config_path: Path) -> dict[str, Any]:
-    """Resolve global, entity, and common configuration documents once."""
+    """Resolve the run configuration and one scenario document per domain."""
     entity_references = global_config.get("entity_configs")
-    common_references = global_config.get("common")
-    if not isinstance(entity_references, Mapping) or not isinstance(common_references, Mapping):
-        raise ConfigurationError("Modular configuration requires entity_configs and common objects")
+    if not isinstance(entity_references, Mapping):
+        raise ConfigurationError("Modular configuration requires an entity_configs object")
     expected_entities = ("provider", "member", "claims", "payments")
     if set(entity_references) != set(expected_entities):
         raise ConfigurationError(
             "entity_configs must contain provider, member, claims, and payments references"
         )
-    expected_common = ("operations", "update_profiles", "ingestion")
-    if set(common_references) != set(expected_common):
-        raise ConfigurationError(
-            "common must contain operations, update_profiles, and ingestion references"
-        )
-
     composed: dict[str, Any] = {
-        key: deepcopy(value)
-        for key, value in global_config.items()
-        if key not in {"entity_configs", "common"}
+        key: deepcopy(value) for key, value in global_config.items() if key != "entity_configs"
     }
     for entity_name in expected_entities:
         reference = entity_references[entity_name]
@@ -636,38 +606,8 @@ def _compose_modular_config(global_config: dict[str, Any], config_path: Path) ->
         if set(document) != {entity_name} or not isinstance(document[entity_name], dict):
             raise ConfigurationError(f"{entity_path} must contain only a {entity_name!r} object")
         composed[entity_name] = _expand_domain_defaults(entity_name, document[entity_name])
-
-    operations = _load_common_operations(common_references["operations"], config_path.parent)
-    profiles = _load_update_profiles(common_references["update_profiles"], config_path.parent)
-    ingestion = _load_common_ingestion(common_references["ingestion"], config_path.parent)
-    generation = composed.setdefault("generation", {})
-    if not isinstance(generation, dict):
-        raise ConfigurationError("generation must be an object")
-    if "ingestion_dates" in generation and ingestion:
-        raise ConfigurationError(
-            "Define ingestion_dates in common/ingestion.json, not generator config"
-        )
-    if ingestion:
-        generation["ingestion_dates"] = ingestion
-    _resolve_configured_updates(composed, profiles, operations)
+    _normalize_entity_scenarios(composed)
     return composed
-
-
-def _load_common_operations(
-    reference: object, base_directory: Path
-) -> Mapping[str, Mapping[str, object]]:
-    """Load named reusable operation definitions."""
-    if not isinstance(reference, str):
-        raise ConfigurationError("common.operations must be a path string")
-    document = _load_json(_resolve_path(reference, base_directory), "common operations")
-    operations = document.get("operations") if set(document) == {"operations"} else None
-    if not isinstance(operations, dict) or not operations:
-        raise ConfigurationError("common operations must contain a non-empty operations object")
-    if not all(
-        isinstance(name, str) and isinstance(value, dict) for name, value in operations.items()
-    ):
-        raise ConfigurationError("Each common operation must be an object")
-    return cast(Mapping[str, Mapping[str, object]], operations)
 
 
 def _expand_domain_defaults(entity_name: str, document: Mapping[str, object]) -> dict[str, object]:
@@ -700,110 +640,69 @@ def _merge_configuration(base: dict[str, object], override: dict[str, object]) -
     return merged
 
 
-def _load_update_profiles(
-    reference: object, base_directory: Path
-) -> Mapping[str, Mapping[str, object]]:
-    """Load reusable update scenario profiles."""
-    if not isinstance(reference, str):
-        raise ConfigurationError("common.update_profiles must be a path string")
-    document = _load_json(_resolve_path(reference, base_directory), "common update profiles")
-    profiles = document.get("profiles") if set(document) == {"profiles"} else None
-    if not isinstance(profiles, dict) or not profiles:
-        raise ConfigurationError("common update profiles must contain a non-empty profiles object")
-    if not all(
-        isinstance(name, str) and isinstance(value, dict) for name, value in profiles.items()
-    ):
-        raise ConfigurationError("Each update profile must be an object")
-    return cast(Mapping[str, Mapping[str, object]], profiles)
+_SCENARIO_ATTRIBUTES = frozenset(
+    {
+        "matching_method",
+        "threshold",
+        "expected_outcome",
+        "failure_mode",
+        "failure_field",
+        "collision_method",
+        "elasticity_boundary",
+        "include",
+        "exclude",
+    }
+)
 
 
-def _load_common_ingestion(reference: object, base_directory: Path) -> dict[str, object]:
-    """Load the optional reusable ingestion-date defaults."""
-    if not isinstance(reference, str):
-        raise ConfigurationError("common.ingestion must be a path string")
-    document = _load_json(_resolve_path(reference, base_directory), "common ingestion")
-    value = document.get("ingestion_dates") if set(document) == {"ingestion_dates"} else None
-    if not isinstance(value, dict):
-        raise ConfigurationError("common ingestion must contain an ingestion_dates object")
-    return deepcopy(value)
+def _normalize_entity_scenarios(config: dict[str, Any]) -> None:
+    """Turn direct entity ``operations`` into the existing update request shape.
 
-
-def _resolve_configured_updates(
-    config: dict[str, Any],
-    profiles: Mapping[str, Mapping[str, object]],
-    operations: Mapping[str, Mapping[str, object]],
-) -> None:
-    """Expand named profile and operation references before normal validation."""
-    generation = config.get("generation")
-    if isinstance(generation, dict) and isinstance(generation.get("updates"), dict):
-        generation["updates"] = _resolve_update_reference(
-            generation["updates"], profiles, operations
-        )
+    The public model deliberately keeps all scenario values beside the entity
+    count.  ``updates`` remains accepted as a compatibility alias, while new
+    configurations use ``operations`` (or ``modifications``) directly.
+    """
     for entity_name in ("provider", "member"):
         entity = config.get(entity_name)
         if not isinstance(entity, dict):
             continue
-        if isinstance(entity.get("updates"), dict):
-            entity["updates"] = _resolve_update_reference(entity["updates"], profiles, operations)
-        member_roster = entity.get("mr")
-        if isinstance(member_roster, dict) and isinstance(member_roster.get("updates"), dict):
-            member_roster["updates"] = _resolve_update_reference(
-                member_roster["updates"], profiles, operations
-            )
+        _normalize_entity_scenario(entity, entity_name)
+        roster = entity.get("mr")
+        if isinstance(roster, dict):
+            _normalize_entity_scenario(roster, f"{entity_name}.mr")
     for domain_name in ("claims", "payments"):
         domain = config.get(domain_name)
         if not isinstance(domain, dict):
             continue
         for stream in ("professional", "institutional"):
             entity = domain.get(stream)
-            if isinstance(entity, dict) and isinstance(entity.get("updates"), dict):
-                entity["updates"] = _resolve_update_reference(
-                    entity["updates"], profiles, operations
-                )
+            if isinstance(entity, dict):
+                _normalize_entity_scenario(entity, f"{domain_name}.{stream}")
 
 
-def _resolve_update_reference(
-    configured: Mapping[str, object],
-    profiles: Mapping[str, Mapping[str, object]],
-    operations: Mapping[str, Mapping[str, object]],
-) -> dict[str, object]:
-    """Merge one named profile and named operation into the legacy update shape."""
-    profile_name = configured.get("profile")
-    if profile_name is not None and not isinstance(profile_name, str):
-        raise ConfigurationError("Update profile must be a string")
-    profile = profiles.get(profile_name, {}) if profile_name is not None else {}
-    if profile_name is not None and not profile:
-        raise ConfigurationError(f"Unknown update profile {profile_name!r}")
-    result = deepcopy(dict(profile))
-    result.update({key: deepcopy(value) for key, value in configured.items() if key != "profile"})
-    profile_operation = profile.get("operation")
-    configured_operation = configured.get("operation")
-    base_operation = _resolve_operation_reference(profile_operation, operations)
-    override_operation = _resolve_operation_reference(configured_operation, operations)
-    if base_operation is not None and override_operation is not None:
-        base_operation.update(override_operation)
-        result["operation"] = base_operation
-    elif override_operation is not None:
-        result["operation"] = override_operation
-    elif base_operation is not None:
-        result["operation"] = base_operation
-    return result
-
-
-def _resolve_operation_reference(
-    configured: object, operations: Mapping[str, Mapping[str, object]]
-) -> dict[str, object] | None:
-    """Resolve either a named common operation or an inline operation override."""
-    if configured is None:
-        return None
-    if isinstance(configured, str):
-        operation = operations.get(configured)
-        if operation is None:
-            raise ConfigurationError(f"Unknown common operation {configured!r}")
-        return deepcopy(dict(operation))
-    if isinstance(configured, Mapping):
-        return deepcopy(dict(configured))
-    raise ConfigurationError("Update operation must be an object or a common operation name")
+def _normalize_entity_scenario(entity: dict[str, object], label: str) -> None:
+    """Normalize one direct scenario without requiring named global profiles."""
+    if "updates" in entity:
+        if not isinstance(entity["updates"], Mapping):
+            raise ConfigurationError(f"{label}.updates must be an object")
+        return
+    operations = entity.get("operations")
+    modifications = entity.get("modifications")
+    if operations is not None and modifications is not None:
+        raise ConfigurationError(f"{label} cannot define both operations and modifications")
+    plan = operations if operations is not None else modifications
+    if plan is None:
+        return
+    if not isinstance(plan, list) or not plan:
+        raise ConfigurationError(f"{label}.operations must be a non-empty array")
+    if not all(isinstance(item, Mapping) for item in plan):
+        raise ConfigurationError(f"{label}.operations entries must be objects")
+    update: dict[str, object] = {
+        key: deepcopy(value) for key, value in entity.items() if key in _SCENARIO_ATTRIBUTES
+    }
+    update["operation"] = {"type": "DUPLICATE"}
+    update["modifications"] = deepcopy(plan)
+    entity["updates"] = update
 
 
 def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
@@ -941,6 +840,8 @@ def _selected_entity(
     if isinstance(selection.get("updates"), dict):
         updates = cast(dict[str, object], selection["updates"])
         result["updates"] = {str(key): value for key, value in updates.items()}
+    if "match_codes" in selection:
+        result["match_codes"] = deepcopy(selection["match_codes"])
     if "source_claims" in selection:
         result["source_claims"] = selection["source_claims"]
     if "scenarios" in selection:

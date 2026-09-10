@@ -36,6 +36,11 @@ _WEIGHT_OPERATIONS = {
     "WEIGHT_AT_LIMIT": "AT_LIMIT",
     "WEIGHT_ABOVE_LIMIT": "ABOVE_LIMIT",
 }
+_ELASTICITY_OPERATIONS = {
+    "ELASTICITY_INSIDE": "INSIDE",
+    "ELASTICITY_AT_LIMIT": "AT",
+    "ELASTICITY_OUTSIDE": "OUTSIDE",
+}
 
 
 def generate_match_fixture_matrix(
@@ -46,7 +51,7 @@ def generate_match_fixture_matrix(
     output_directory: Path,
     invalid_values_catalog: Path | None,
 ) -> tuple[Path, ...]:
-    """Write one ``<matchCode>.json`` array beneath each base-record folder.
+    """Write one ``<matching-method>.json`` array beneath each source folder.
 
     Every array entry has both the original record and one derived fixture,
     together with enough metadata to independently verify the selected method,
@@ -82,7 +87,12 @@ def generate_match_fixture_matrix(
                     seed,
                     invalid_values,
                 )
-                output_path = entity_directory / f"{match_code.name}.json"
+                output_name = (
+                    match_code.matching_method
+                    if match_code.name == match_code.matching_method
+                    else f"{match_code.matching_method}__{match_code.name}"
+                )
+                output_path = entity_directory / f"{output_name}.json"
                 output_path.write_text(
                     json.dumps(cases, indent=2, default=_json_default) + "\n",
                     encoding="utf-8",
@@ -120,6 +130,14 @@ def _build_cases(
             if operation in _WEIGHT_OPERATIONS:
                 plans.append((operation, (), None))
                 continue
+            if operation in _ELASTICITY_OPERATIONS:
+                outcome = (
+                    ExpectedOutcome.NO_MATCH
+                    if operation == "ELASTICITY_OUTSIDE"
+                    else ExpectedOutcome.MATCH
+                )
+                plans.append((operation, (), outcome))
+                continue
             field = randomizer.choice(method_fields)
             modification = FieldModification(OperationType(operation), (field,))
             plans.append(
@@ -136,6 +154,7 @@ def _build_cases(
             FieldModification(
                 OperationType(str(definition["type"]).upper()),
                 tuple(str(field).strip() for field in cast(list[str], definition["fields"])),
+                str(definition["condition"]) if "condition" in definition else None,
             )
             for definition in raw_modifications
         )
@@ -224,6 +243,34 @@ def _resolve_case(
             seed,
             index,
         )
+    if operation in _ELASTICITY_OPERATIONS:
+        method = _matching_method(rules, matching_method)
+        field = next(
+            (
+                candidate
+                for candidate in method.mandatory_fields
+                if method.elasticity_for(candidate, rules.fields[candidate].elasticity)
+                not in {"", "0", "exact"}
+            ),
+            None,
+        )
+        if field is None:
+            raise ValueError(f"Matching method {matching_method!r} has no elastic mandatory field")
+        assert expected_outcome is not None
+        return resolve_match_fixture(
+            base,
+            UpdateRequest(
+                operation=OperationType.DUPLICATE,
+                matching_method=matching_method,
+                expected_outcome=expected_outcome,
+                invalid_values=invalid_values,
+                failure_field=field,
+                elasticity_boundary=_ELASTICITY_OPERATIONS[operation],
+            ),
+            rules,
+            seed,
+            index,
+        )
     assert expected_outcome is not None
     return resolve_match_fixture(
         base,
@@ -283,7 +330,10 @@ def _case_seed(seed: int, *parts: object) -> int:
 
 
 def _plan_item(item: FieldModification) -> dict[str, object]:
-    return {"operation": item.operation.value, "fields": list(item.fields)}
+    result: dict[str, object] = {"operation": item.operation.value, "fields": list(item.fields)}
+    if item.condition is not None:
+        result["condition"] = item.condition
+    return result
 
 
 def _json_default(value: object) -> object:

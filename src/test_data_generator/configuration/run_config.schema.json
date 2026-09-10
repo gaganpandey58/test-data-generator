@@ -42,25 +42,7 @@
             "enabled": {"type": "boolean"},
             "directory": {"type": "string", "minLength": 1},
             "rule_catalog": {"type": "string", "minLength": 1},
-            "invalid_values_catalog": {"type": "string", "minLength": 1},
-            "profile": {"type": "string", "minLength": 1},
-            "matching_method": {"type": "string", "minLength": 1},
-            "threshold": {"type": "number"},
-            "operation": {"$ref": "#/$defs/operation"},
-            "expected_outcome": {"enum": ["MATCH", "NO_MATCH"]},
-            "failure_mode": {"enum": ["MANDATORY_BREAK_EXACT", "MANDATORY_BREAK_BOUNDARY", "INVALID_VALUE", "MISSING_VALUE", "WEIGHT_MISS", "CROSS_METHOD_COLLISION"]},
-            "failure_field": {"type": "string", "minLength": 1},
-            "collision_method": {"type": "string", "minLength": 1},
-            "elasticity_boundary": {"enum": ["INSIDE", "AT", "OUTSIDE"]},
-            "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
-            "field_selection": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "include": {"type": "array", "items": {"type": "string"}},
-                "exclude": {"type": "array", "items": {"type": "string"}}
-              }
-            }
+            "invalid_values_catalog": {"type": "string", "minLength": 1}
           }
         },
         "ingestion_dates": {
@@ -81,19 +63,6 @@
               }
             }
           }
-        },
-        "match_fixtures": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {"type": "boolean"},
-            "directory": {"type": "string", "minLength": 1},
-            "entities": {
-              "type": "object",
-              "minProperties": 1,
-              "additionalProperties": {"$ref": "#/$defs/match_fixture_entity"}
-            }
-          }
         }
       }
     },
@@ -108,15 +77,17 @@
         "payments": {"type": "string", "minLength": 1}
       }
     },
-    "common": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["operations", "update_profiles", "ingestion"],
-      "properties": {
-        "operations": {"type": "string", "minLength": 1},
-        "update_profiles": {"type": "string", "minLength": 1},
-        "ingestion": {"type": "string", "minLength": 1}
-      }
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["provider", "member", "claims", "payments"]}
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["creation", "updates"]}
     },
     "provider": {
       "$ref": "#/$defs/provider_entity"
@@ -161,7 +132,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["UPDATE", "DIFFERENT", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
+        "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
         "fields": {"type": "array", "items": {"type": "string"}},
         "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
       }
@@ -171,20 +142,9 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["UPDATE", "DIFFERENT", "MISSING", "EMPTY", "INVALID", "DUPLICATE"]},
-        "fields": {"type": "array", "items": {"type": "string"}}
-      }
-    },
-    "match_fixture_entity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["match_codes"],
-      "properties": {
-        "match_codes": {
-          "type": "object",
-          "minProperties": 1,
-          "additionalProperties": {"$ref": "#/$defs/match_fixture_code"}
-        }
+        "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
+        "fields": {"type": "array", "items": {"type": "string"}},
+        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
       }
     },
     "match_fixture_code": {
@@ -193,13 +153,10 @@
       "required": ["matching_method"],
       "properties": {
         "matching_method": {"type": "string", "minLength": 1},
-        "operation_counts": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1000000
-          }
+        "operation_counts": {"$ref": "#/$defs/operation_counts"},
+        "cases": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/match_fixture_case"}
         },
         "deterministic_cases": {
           "type": "array",
@@ -208,8 +165,26 @@
       },
       "anyOf": [
         {"required": ["operation_counts"]},
+        {"required": ["cases"]},
         {"required": ["deterministic_cases"]}
       ]
+    },
+    "operation_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "UPDATE": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "INVALID": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "MISSING": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "EMPTY": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "DUPLICATE": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "WEIGHT_BELOW_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "WEIGHT_AT_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "WEIGHT_ABOVE_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "ELASTICITY_INSIDE": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "ELASTICITY_AT_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "ELASTICITY_OUTSIDE": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
     },
     "match_fixture_case": {
       "type": "object",
@@ -328,6 +303,15 @@
                 "elasticity_boundary": {"enum": ["INSIDE", "AT", "OUTSIDE"]},
                 "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}}
               }
+            },
+            "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+            "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+            "matching_method": {"type": "string", "minLength": 1},
+            "expected_outcome": {"enum": ["MATCH", "NO_MATCH"]},
+            "match_codes": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {"$ref": "#/$defs/match_fixture_code"}
             }
           }
         },
@@ -355,6 +339,22 @@
             "elasticity_boundary": {"enum": ["INSIDE", "AT", "OUTSIDE"]},
             "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}}
           }
+        },
+        "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+        "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+        "matching_method": {"type": "string", "minLength": 1},
+        "threshold": {"type": "number"},
+        "expected_outcome": {"enum": ["MATCH", "NO_MATCH"]},
+        "failure_mode": {"enum": ["MANDATORY_BREAK_EXACT", "MANDATORY_BREAK_BOUNDARY", "INVALID_VALUE", "MISSING_VALUE", "WEIGHT_MISS", "CROSS_METHOD_COLLISION"]},
+        "failure_field": {"type": "string", "minLength": 1},
+        "collision_method": {"type": "string", "minLength": 1},
+        "elasticity_boundary": {"enum": ["INSIDE", "AT", "OUTSIDE"]},
+        "include": {"type": "array", "items": {"type": "string"}},
+        "exclude": {"type": "array", "items": {"type": "string"}},
+        "match_codes": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/match_fixture_code"}
         },
         "source_claims": {"type": "string", "minLength": 1},
         "scenarios": {

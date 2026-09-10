@@ -1,5 +1,0 @@
-{
-  "config": "config/generator.config.json",
-  "entities": ["provider", "member", "claims", "payments"],
-  "operations": ["creation", "updates"]
-}

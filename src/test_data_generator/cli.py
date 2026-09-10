@@ -57,6 +57,7 @@ from test_data_generator.update.scenarios import (
     OperationType,
     UpdateRequest,
     load_invalid_values,
+    may_violate_schema,
 )
 
 
@@ -296,21 +297,20 @@ def generate(config: Path, mode: str = "all") -> None:
             )
         if needs_match_fixtures:
             assert rules is not None
-            assert run_config.match_fixture_directory is not None
             try:
                 fixture_paths = generate_match_fixture_matrix(
                     run_config.match_fixture_entities,
                     generated_records,
                     rules,
                     run_config.seed,
-                    run_config.match_fixture_directory,
+                    run_config.update_directory,
                     run_config.invalid_values_catalog,
                 )
             except ValueError as error:
                 raise CommandError(f"Match-fixture generation failed: {error}") from error
             print(
                 f"match fixtures: {len(fixture_paths)} files -> "
-                f"{transaction.final_path(run_config.match_fixture_directory)}"
+                f"{transaction.final_path(run_config.update_directory)}"
             )
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
@@ -444,12 +444,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         updated_history,
                         run_config.update_directory,
                         validate_schema=not schema_invalid_match_fixture
-                        and request.operation
-                        not in {
-                            OperationType.MISSING,
-                            OperationType.EMPTY,
-                            OperationType.INVALID,
-                        },
+                        and not may_violate_schema(request),
                     )
                     changed_history_fields = tuple(
                         _changed_field_names(base, updated)
@@ -475,12 +470,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         payment_records,
                         run_config.update_directory,
                         validate_schema=not schema_invalid_match_fixture
-                        and request.operation
-                        not in {
-                            OperationType.MISSING,
-                            OperationType.EMPTY,
-                            OperationType.INVALID,
-                        },
+                        and not may_violate_schema(request),
                     )
                 except (GenerationError, ValueError) as error:
                     raise CommandError(
@@ -555,7 +545,6 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
     temporary_root = Path(temporary.name)
     staged_creation = temporary_root / "creation"
     staged_updates = temporary_root / "updates"
-    staged_match_fixtures = temporary_root / "match-fixtures"
     for source, staged in (
         (run_config.creation_directory, staged_creation),
         (run_config.update_directory, staged_updates),
@@ -564,36 +553,32 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
             shutil.copytree(source, staged)
         else:
             staged.mkdir(parents=True)
-    if run_config.match_fixture_directory is not None:
-        source = run_config.match_fixture_directory
-        if source.is_dir():
-            shutil.copytree(source, staged_match_fixtures)
-            # Fixture matrices are complete snapshots.  Clearing the staged
-            # copy prevents stale entity folders when source counts decrease.
-            shutil.rmtree(staged_match_fixtures)
-        staged_match_fixtures.mkdir(parents=True, exist_ok=True)
+    if run_config.match_fixture_entities and mode in {"all", "creation"}:
+        _clear_match_fixture_directories(staged_updates, run_config)
     staged_config = replace(
         run_config,
         output_directory=temporary_root / "legacy",
         creation_directory=staged_creation,
         update_directory=staged_updates,
-        match_fixture_directory=(
-            staged_match_fixtures if run_config.match_fixture_directory is not None else None
-        ),
     )
     pairs: list[tuple[Path, Path]] = []
     if mode in {"all", "creation"} and run_config.creation_enabled:
         pairs.append((staged_creation, run_config.creation_directory))
-    if mode in {"all", "updates"} and run_config.updates_enabled:
-        pairs.append((staged_updates, run_config.update_directory))
-    if (
+    if (mode in {"all", "updates"} and run_config.updates_enabled) or (
         mode in {"all", "creation"}
         and run_config.creation_enabled
-        and run_config.match_fixture_directory is not None
         and run_config.match_fixture_entities
     ):
-        pairs.append((staged_match_fixtures, run_config.match_fixture_directory))
+        pairs.append((staged_updates, run_config.update_directory))
     return _OutputTransaction(temporary, staged_config, tuple(pairs))
+
+
+def _clear_match_fixture_directories(directory: Path, run_config: RunConfig) -> None:
+    """Remove only prior match-code folders for the configured source streams."""
+    for fixture in run_config.match_fixture_entities:
+        for candidate in directory.glob(f"{fixture.entity}[0-9]*"):
+            if candidate.is_dir() and candidate.name.removeprefix(fixture.entity).isdigit():
+                shutil.rmtree(candidate)
 
 
 def _is_orphan_only_payment(name: str, scenarios: Mapping[str, int]) -> bool:
@@ -822,9 +807,10 @@ def _field_modifications(raw: Mapping[str, object]) -> tuple[FieldModification, 
             operation = OperationType(str(definition.get("type", "")))
         except ValueError as error:
             raise CommandError("Unknown modification operation") from error
-        if operation == OperationType.WEIGHT_CHANGE:
-            raise CommandError("WEIGHT_CHANGE is configured through the top-level operation")
-        result.append(FieldModification(operation, _string_tuple(definition, "fields")))
+        condition = str(definition["condition"]) if "condition" in definition else None
+        if operation == OperationType.WEIGHT_CHANGE and condition is None:
+            raise CommandError("WEIGHT_CHANGE modification requires a condition")
+        result.append(FieldModification(operation, _string_tuple(definition, "fields"), condition))
     return tuple(result)
 
 
