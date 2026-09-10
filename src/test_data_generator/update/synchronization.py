@@ -25,7 +25,33 @@ def synchronize_record(
             original, updated, changed, "CP_PROVIDER_NPI", "CP_PRESCRIBING_PROVIDER_NPI"
         )
     )
+    synchronized.update(_synchronize_nppes_entity_type(original, updated, changed))
     return tuple(sorted(synchronized))
+
+
+def _synchronize_nppes_entity_type(
+    original: Mapping[str, object], updated: dict[str, object], changed: set[str]
+) -> set[str]:
+    """Keep NPPES's human-readable type description derived from its code."""
+    if "ENTITY_TYPE_CODE" not in changed:
+        return set()
+    original_description = list(_locations(original, "ENTITY_TYPE_DESCRIPTION"))
+    for position, (parent, key) in enumerate(_locations(updated, "ENTITY_TYPE_DESCRIPTION")):
+        if position >= len(original_description):
+            continue
+        old_value = original_description[position][0][original_description[position][1]]
+        if not _populated(old_value):
+            continue
+        entity_type = _value_at(updated, "ENTITY_TYPE_CODE", position)
+        if str(entity_type) == "1":
+            parent[key] = "Individual"
+        elif str(entity_type) == "2":
+            parent[key] = "Organization"
+        else:
+            # INVALID fixtures deliberately preserve their supplied invalid
+            # code; the derived description cannot truthfully be inferred.
+            parent[key] = old_value
+    return {"ENTITY_TYPE_DESCRIPTION"}
 
 
 def _synchronize_names(

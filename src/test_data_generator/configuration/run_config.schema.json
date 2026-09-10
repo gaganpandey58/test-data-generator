@@ -92,20 +92,7 @@
     "provider": {
       "$ref": "#/$defs/provider_entity"
     },
-    "provider_nppes": {
-      "type": "object",
-      "additionalProperties": false,
-      "anyOf": [
-        {"required": ["count"]},
-        {"required": ["individual"]},
-        {"required": ["organizational"]}
-      ],
-      "properties": {
-        "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000}
-      }
-    },
+    "provider_nppes": {"$ref": "#/$defs/nppes_entity"},
     "member": {"$ref": "#/$defs/member_entity"},
     "claims": {
       "type": "object",
@@ -134,7 +121,8 @@
       "properties": {
         "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
         "fields": {"type": "array", "items": {"type": "string"}},
-        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
+        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]},
+        "values": {"type": "object", "additionalProperties": true}
       }
     },
     "modification": {
@@ -144,7 +132,8 @@
       "properties": {
         "type": {"enum": ["UPDATE", "MISSING", "EMPTY", "INVALID", "WEIGHT_CHANGE", "DUPLICATE"]},
         "fields": {"type": "array", "items": {"type": "string"}},
-        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
+        "condition": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]},
+        "values": {"type": "object", "additionalProperties": true}
       }
     },
     "match_fixture_code": {
@@ -235,6 +224,20 @@
         {"not": {"required": ["mr"]}}
       ]
     },
+    "nppes_entity": {
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}},
+        {"anyOf": [{"required": ["count"]}, {"required": ["individual"]}, {"required": ["organizational"]}]}
+      ]
+    },
+    "history_entity": {
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"required": ["count"]},
+        {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}}
+      ]
+    },
     "member_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
@@ -246,20 +249,9 @@
       "additionalProperties": false,
       "properties": {
         "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "nppes": {
-          "type": "object",
-          "additionalProperties": false,
-          "anyOf": [
-            {"required": ["count"]},
-            {"required": ["individual"]},
-            {"required": ["organizational"]}
-          ],
-          "properties": {
-            "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
-            "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
-            "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000}
-          }
-        },
+        "nppes": {"$ref": "#/$defs/nppes_entity"},
+        "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "cdf": {
           "type": "object",
           "additionalProperties": false,
@@ -315,6 +307,8 @@
             }
           }
         },
+        "history": {"$ref": "#/$defs/history_entity"},
+        "linked": {"type": "boolean"},
         "output_order": {
           "type": "object",
           "additionalProperties": false,

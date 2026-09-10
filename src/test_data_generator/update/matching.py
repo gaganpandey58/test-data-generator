@@ -18,7 +18,9 @@ from test_data_generator.update.scenarios import (
     ResolvedUpdate,
     UpdateRequest,
     _changed_value,
+    _configured_or_changed_value,
     _field_names,
+    _first_distinct,
     _invalid_values_for,
     _normalize_fields,
 )
@@ -181,7 +183,7 @@ def _method(rules: EntityRules, name: str | None) -> MatchingMethod:
 def _legacy_plan(request: UpdateRequest) -> tuple[FieldModification, ...]:
     if request.operation == OperationType.DUPLICATE and not request.fields:
         return ()
-    return (FieldModification(request.operation, request.fields),)
+    return (FieldModification(request.operation, request.fields, values=request.values),)
 
 
 def _apply_modifications(
@@ -219,11 +221,13 @@ def _apply_modifications(
             if old is _MISSING:
                 raise ValueError(f"Modification field {field!r} is not present in generated record")
             if modification.operation == OperationType.INVALID:
-                value = randomizer.choice(_invalid_values_for(invalid_values, field, profile))
+                value = _first_distinct(_invalid_values_for(invalid_values, field, profile), old)
             elif modification.operation == OperationType.EMPTY:
                 value = "" if isinstance(old, str) else 0
             else:
-                value = _changed_value(old, field, randomizer, profile)
+                value = _configured_or_changed_value(
+                    old, field, modification.values, randomizer, profile
+                )
             _replace(result, field, value)
             if value != old:
                 changed.append(field)
@@ -277,8 +281,9 @@ def _apply_failure(
         _replace(
             result,
             failure_field,
-            randomizer.choice(
-                _invalid_values_for(request.invalid_values or {}, failure_field, rules.profile)
+            _first_distinct(
+                _invalid_values_for(request.invalid_values or {}, failure_field, rules.profile),
+                old,
             ),
         )
         changed.append(failure_field)

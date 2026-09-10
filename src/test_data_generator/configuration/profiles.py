@@ -14,6 +14,7 @@ from test_data_generator.layouts import load_layout
 
 _ENTITY_LAYOUTS = {
     "provider": "provider",
+    "provider_nppes": "provider",
     "member": "member",
     "claim_professional": "claim-professional",
     "claim_history_professional": "claim-professional",
@@ -104,6 +105,7 @@ def _section(client: str, section: str, entity: str) -> Mapping[str, object]:
     try:
         profile = profiles[client]
         source_entity = {
+            "provider_nppes": "provider",
             "payment_professional": "claim_professional",
             "payment_institutional": "claim_institutional",
             "claim_history_professional": "claim_professional",

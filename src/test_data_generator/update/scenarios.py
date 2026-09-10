@@ -13,9 +13,6 @@ from pathlib import Path
 from random import Random
 from typing import Mapping
 
-from faker import Faker
-
-from test_data_generator.core.identifiers import valid_ein, valid_npi, valid_phone_number, valid_ssn
 from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.synchronization import synchronize_record
 
@@ -219,6 +216,7 @@ class UpdateRequest:
     matching_method: str | None = None
     threshold: Decimal | None = None
     condition: str | None = None
+    values: Mapping[str, object] | None = None
     invalid_values: Mapping[str, tuple[object, ...]] | None = None
     expected_outcome: ExpectedOutcome | None = None
     failure_mode: FailureMode | None = None
@@ -235,6 +233,7 @@ class FieldModification:
     operation: OperationType
     fields: tuple[str, ...]
     condition: str | None = None
+    values: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -315,16 +314,23 @@ def resolve_fields(
             for name in known
             if name not in rules.keys and _is_mutable_for_operation(name, request.operation)
         ]
+    if rules.catalog_version == "code-defined":
+        unknown = [field for field in selected if field not in known]
+        if unknown:
+            raise ValueError(f"Update selection contains an unknown field {unknown[0]!r}")
     if available_fields is not None:
         unavailable = [field for field in selected if field not in available_fields]
         if unavailable and explicit_selection:
-            raise ValueError(f"Update field {unavailable[0]!r} is not present in generated record")
+            if rules.catalog_version != "code-defined":
+                raise ValueError(
+                    f"Update field {unavailable[0]!r} is not present in generated record"
+                )
         selected = [field for field in selected if field in available_fields]
     excluded = set(_normalize_fields(request.exclude, known))
     selected = [field for field in selected if field not in excluded]
     if any(field not in known for field in selected):
-        unknown = next(field for field in selected if field not in known)
-        raise ValueError(f"Update selection contains an unknown field {unknown!r}")
+        unknown_field = next(field for field in selected if field not in known)
+        raise ValueError(f"Update selection contains an unknown field {unknown_field!r}")
     if any(field in rules.keys for field in selected) and not (
         request.operation in {OperationType.INVALID, OperationType.MISSING}
         or (request.operation == OperationType.UPDATE and explicit_selection)
@@ -341,6 +347,8 @@ def resolve_fields(
                 "or MISSING operation"
             )
     if not selected:
+        if rules.catalog_version == "code-defined" and explicit_selection:
+            return ()
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
 
@@ -428,6 +436,10 @@ def resolve_update(
     changed: list[str] = []
     removed: list[str] = []
     invalidated: list[str] = []
+    # ``seed`` and ``index`` remain part of this API for reproducible record
+    # selection and matching fixtures.  They must not decide the replacement
+    # value of an UPDATE: values are either explicitly supplied by the
+    # scenario or derived deterministically from the field's domain.
     randomizer = Random(seed * 1_000_003 + index * 97 + 41)
     if operation == OperationType.MISSING:
         for field in selected:
@@ -447,14 +459,16 @@ def resolve_update(
             catalog = request.invalid_values or {}
             for field in selected:
                 values = _invalid_values_for(catalog, field, rules.profile)
-                _replace_field(result, field, randomizer.choice(values))
+                _replace_field(result, field, _first_distinct(values, _find_field(result, field)))
                 changed.append(field)
                 if field in rules.keys:
                     invalidated.append(field)
         elif operation != OperationType.DUPLICATE:
             for field in selected:
                 old = _find_field(result, field)
-                new: object = _changed_value(old, field, randomizer, rules.profile)
+                new = _configured_or_changed_value(
+                    old, field, request.values, randomizer, rules.profile
+                )
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
@@ -524,6 +538,7 @@ def _resolve_modification_plan(
             matching_method=request.matching_method,
             threshold=request.threshold,
             condition=modification.condition,
+            values=modification.values,
             invalid_values=request.invalid_values,
         )
         resolved = resolve_update(current, nested_request, rules, seed, index * 10_000 + position)
@@ -549,98 +564,172 @@ def _resolve_modification_plan(
     )
 
 
-def _changed_value(value: object, field: str, randomizer: Random, profile: str = "") -> object:
-    """Return a changed value without leaving the field's value domain.
+_NO_CONFIGURED_VALUE = object()
 
-    The update engine is used for every layout field, including fields that
-    the JSON Schema represents only as a string.  Schema enums are therefore
-    consulted first, then GDF/835 semantic code families are handled through
-    shared code sets.  Only genuine free text reaches Faker's word fallback.
+
+def _configured_or_changed_value(
+    value: object,
+    field: str,
+    configured_values: Mapping[str, object] | None,
+    randomizer: Random,
+    profile: str,
+) -> object:
+    """Prefer a scenario's exact field value over the deterministic default.
+
+    ``UPDATE`` is intentionally data-driven.  A caller may supply a value for
+    every selected field, and the engine never replaces that request with a
+    generated/Faker value.  In the absence of an override, the fallback below
+    is a fixed, field-domain value chosen solely from the field name and its
+    current value; the run seed never changes the replacement value.
     """
+    configured = (
+        configured_values.get(field, _NO_CONFIGURED_VALUE)
+        if configured_values is not None
+        else _NO_CONFIGURED_VALUE
+    )
+    if configured is not _NO_CONFIGURED_VALUE:
+        if configured == value:
+            raise ValueError(
+                f"Configured UPDATE value for {field!r} must differ from the existing value"
+            )
+        return deepcopy(configured)
+    return _changed_value(value, field, randomizer, profile)
+
+
+def _changed_value(value: object, field: str, randomizer: Random, profile: str = "") -> object:
+    """Return a deterministic, realistic, field-specific replacement value.
+
+    Update records must be reproducible and explainable.  Unlike creation,
+    they never use Faker or a random number to manufacture an arbitrary new
+    value.  Schema enums and healthcare code domains remain authoritative;
+    free-text, demographic, address, identifier, and metadata fields use a
+    small, realistic synthetic-value catalog.
+    """
+    del randomizer  # Kept in the private signature while matching callers migrate.
     upper_field = field.upper()
-    # The source schemas accept X for compatibility, but the configured
-    # generator's realistic-data contract intentionally emits only M/F.
-    if "GENDER" in upper_field and isinstance(value, str):
-        values = tuple(candidate for candidate in ("F", "M") if candidate != value)
-        return randomizer.choice(values)
-    enum_candidate = _schema_enum_candidate(profile, field, value, randomizer)
+    enum_candidate = _schema_enum_candidate(profile, field, value, Random(0))
     if enum_candidate is not None:
         return enum_candidate
     if upper_field in _INTEGER_IDENTIFIER_FIELDS_BY_PROFILE.get(profile, frozenset()):
-        return int(valid_ein(randomizer))
+        return int(str(_first_distinct(("753267439", "196010245"), value)))
     if isinstance(value, bool):
         return not value
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        code_candidate = _semantic_code_candidate(upper_field, str(value), randomizer)
+        code_candidate = _semantic_code_candidate(upper_field, str(value), Random(0))
         if code_candidate is not None and code_candidate.isdigit():
             return int(code_candidate) if isinstance(value, int) else float(code_candidate)
-        if isinstance(value, int):
-            int_candidate = randomizer.randrange(max(0, value - 100), value + 101)
-            return int_candidate if int_candidate != value else value + 1
-        float_candidate = round(randomizer.uniform(max(0, value - 100), value + 100), 2)
-        return float_candidate if float_candidate != value else round(value + 1, 2)
+        increment = 1 if isinstance(value, int) else 1.0
+        return value + increment
+    if isinstance(value, list):
+        return _changed_collection(value, field, profile)
+    if isinstance(value, Mapping):
+        return _changed_mapping(value, field, profile)
     if isinstance(value, str):
-        faker = Faker("en_US")
-        faker.seed_instance(randomizer.randrange(1, 2**31 - 1))
-        candidate: object
         if "NPI" in upper_field:
-            candidate = valid_npi(randomizer)
-        elif "SSN" in upper_field:
-            candidate = valid_ssn(randomizer)
-        elif "FEDERAL_TAX_ID" in upper_field or upper_field.endswith("_EIN"):
-            candidate = valid_ein(randomizer)
-        elif "PHONE" in upper_field or "FAX" in upper_field:
-            candidate = valid_phone_number(randomizer)
-        elif "EMAIL" in upper_field:
-            candidate = faker.email()
-        elif "FIRST_NAME" in upper_field:
-            candidate = faker.first_name().upper()
-        elif "LAST_NAME" in upper_field:
-            candidate = faker.last_name().upper()
-        elif "MIDDLE_NAME" in upper_field:
-            candidate = faker.first_name()[0].upper()
-        elif "FULL_NAME" in upper_field:
-            candidate = faker.name().upper()
-        elif upper_field.endswith("CLIENT_ROOT_CLAIM_ID"):
-            candidate = _changed_root_claim_id(value, randomizer)
-        elif (
-            coded_candidate := _semantic_code_candidate(upper_field, value, randomizer)
-        ) is not None:
-            candidate = coded_candidate
-        elif "PLACE_OF_SERVICE_CODE" in upper_field:
-            candidate = randomizer.choice(
-                tuple(code for code in ("11", "21", "22", "23") if code != value)
+            return _first_distinct(("7240073479", "2590976199", "8669683897"), value)
+        if "SSN" in upper_field:
+            return _first_distinct(("596258835", "152875870", "732593521"), value)
+        if "FEDERAL_TAX_ID" in upper_field or "TIN" in upper_field or upper_field.endswith("_EIN"):
+            return _first_distinct(("753267439", "196010245", "927655415"), value)
+        if "PHONE" in upper_field or "FAX" in upper_field:
+            return _first_distinct(("5697590794", "4867219083", "9925881278"), value)
+        if "EMAIL" in upper_field:
+            return _first_distinct(
+                ("amelia.parker@example.test", "noah.bennett@example.test"), value
             )
-        elif "INDICATOR" in upper_field and value in {"Y", "N"}:
-            candidate = "N" if value == "Y" else "Y"
-        elif "GENDER" in upper_field:
-            candidate = randomizer.choice(("F", "M"))
-        elif upper_field.endswith("CLAIM_FREQUENCY_CODE"):
-            candidate = randomizer.choice(tuple(code for code in ("1", "7", "8") if code != value))
-        elif "CITY" in upper_field:
-            candidate = faker.city().upper()
-        elif "STATE" in upper_field:
-            candidate = randomizer.choice(tuple(code for code in _STATE_CODES if code != value))
-        elif "ZIP_PLUS_FOUR" in upper_field:
-            candidate = f"{randomizer.randrange(10_000):04d}"
-        elif "ZIP" in upper_field:
-            candidate = faker.postcode()[:5]
-        elif _is_compact_date_field(upper_field, value):
-            candidate = _changed_compact_date(value, randomizer)
-        elif _is_timestamp_field(upper_field, value):
-            candidate = _changed_timestamp(value, randomizer)
-        elif "ID" in upper_field or "NUMBER" in upper_field:
-            candidate = _same_shape_identifier(value, randomizer)
-        else:
-            candidate = faker.word().upper()
-        if candidate == value and "GENDER" in upper_field:
-            candidate = next(option for option in ("F", "M") if option != value)
-        elif candidate == value and _is_constrained_field(upper_field):
-            candidate = _semantic_code_candidate(upper_field, value, randomizer, force_change=True)
-        elif candidate == value:
-            candidate = f"{faker.word().upper()}X"
-        return candidate
-    return randomizer.randrange(1000, 9999)
+        if _is_date_or_timestamp_field(upper_field, value):
+            return _changed_date_like(value)
+        if "FULL_NAME" in upper_field:
+            return _first_distinct(("AMELIA R PARKER", "NOAH J BENNETT"), value)
+        if "FIRST_NAME" in upper_field:
+            return _first_distinct(("AMELIA", "NOAH"), value)
+        if "MIDDLE_NAME" in upper_field:
+            return _first_distinct(("R", "J"), value)
+        if "LAST_NAME" in upper_field:
+            return _first_distinct(("PARKER", "BENNETT"), value)
+        if "ORGANIZATION" in upper_field or "GROUP_NAME" in upper_field:
+            return _first_distinct(("LAKESHORE HEALTH PARTNERS", "RIVERSTONE MEDICAL GROUP"), value)
+        if "ADDRESS" in upper_field:
+            return _first_distinct(("4827 WILLOW CREEK DRIVE", "910 HARBOR VIEW AVENUE"), value)
+        if "CITY" in upper_field:
+            return _first_distinct(("AUSTIN", "MADISON"), value)
+        if "COUNTRY" in upper_field:
+            return _first_distinct(("US", "CA"), value)
+        if "ZIP_PLUS_FOUR" in upper_field:
+            return _first_distinct(("0198", "4821"), value)
+        if "ZIP" in upper_field or "POSTAL" in upper_field:
+            return _first_distinct(("78701", "53703"), value)
+        if upper_field.endswith("CLIENT_ROOT_CLAIM_ID"):
+            return _changed_root_claim_id(value, Random(0))
+        if (coded_candidate := _semantic_code_candidate(upper_field, value, Random(0))) is not None:
+            return coded_candidate
+        if "UUID" in upper_field or "ROWID" in upper_field or "MESSAGE_ID" in upper_field:
+            return _first_distinct(
+                ("3fa85f64-5717-4562-b3fc-2c963f66afa6", "6fa459ea-ee8a-3ca4-894e-db77e160355e"),
+                value,
+            )
+        if "ID" in upper_field or "NUMBER" in upper_field or "CONTROL" in upper_field:
+            return _changed_identifier(value, upper_field)
+        if "DESCRIPTION" in upper_field:
+            return _first_distinct(("PROVIDER UPDATE", "REVISED RECORD"), value)
+        if "TITLE" in upper_field or "POSITION" in upper_field:
+            return _first_distinct(("MEDICAL DIRECTOR", "PRACTICE MANAGER"), value)
+        if "CREDENTIAL" in upper_field:
+            return _first_distinct(("DO", "NP"), value)
+        return _first_distinct(("REVISED", "UPDATED"), value)
+    return 1
+
+
+def _first_distinct(values: tuple[object, ...], current: object) -> object:
+    """Return the first configured value that differs from ``current``."""
+    return next((candidate for candidate in values if candidate != current), values[0])
+
+
+def _changed_collection(value: list[object], field: str, profile: str) -> list[object]:
+    """Change a populated nested collection without inventing unrelated rows."""
+    if not value:
+        raise ValueError(f"UPDATE of empty collection {field!r} requires an explicit field value")
+    updated = deepcopy(value)
+    first = updated[0]
+    if isinstance(first, Mapping):
+        updated[0] = _changed_mapping(first, field, profile)
+        return updated
+    updated[0] = _changed_value(first, field, Random(0), profile)
+    return updated
+
+
+def _changed_mapping(value: Mapping[str, object], field: str, profile: str) -> dict[str, object]:
+    """Change the first populated scalar in a nested object deterministically."""
+    updated = deepcopy(dict(value))
+    for child_name, child_value in updated.items():
+        if child_value not in (None, "", [], {}):
+            updated[child_name] = _changed_value(child_value, child_name, Random(0), profile)
+            return updated
+    raise ValueError(f"UPDATE of empty object {field!r} requires an explicit field value")
+
+
+def _is_date_or_timestamp_field(field: str, value: str) -> bool:
+    """Recognize compact, ISO, and slash-formatted source dates."""
+    return (
+        _is_compact_date_field(field, value)
+        or _is_timestamp_field(field, value)
+        or ("DATE" in field and bool(value))
+    )
+
+
+def _changed_date_like(value: str) -> str:
+    """Advance a supported date by one day without consulting random state."""
+    for pattern in ("%Y%m%d", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            updated = datetime.strptime(value, pattern).date() + timedelta(days=1)
+            return updated.strftime(pattern)
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return "20250115"
+    return (parsed + timedelta(days=1)).isoformat().replace("+00:00", "Z")
 
 
 def _semantic_code_candidate(
@@ -744,7 +833,10 @@ def _semantic_code_candidate(
         return None
     candidates = tuple(candidate for candidate in values if candidate != value)
     if candidates:
-        return randomizer.choice(candidates)
+        # Update values must be repeatable and field-specific.  Selection of a
+        # target field can still be random in random scenario mode, but the
+        # replacement for that field is never random.
+        return candidates[0]
     if force_change:
         if len(values) > 1:
             return next(candidate for candidate in values if candidate != value)
@@ -781,9 +873,9 @@ def _changed_compact_date(value: str, randomizer: Random) -> str:
     try:
         original = datetime.strptime(value, "%Y%m%d").date()
     except ValueError:
-        original = date(2020, 1, 1) + timedelta(days=randomizer.randrange(3_650))
-    offset = randomizer.choice(tuple(range(-365, 0)) + tuple(range(1, 366)))
-    return (original + timedelta(days=offset)).strftime("%Y%m%d")
+        original = date(2020, 1, 1)
+    del randomizer
+    return (original + timedelta(days=1)).strftime("%Y%m%d")
 
 
 def _is_timestamp_field(field: str, value: str) -> bool:
@@ -797,8 +889,8 @@ def _changed_timestamp(value: str, randomizer: Random) -> str:
         original = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return _changed_compact_date("", randomizer)
-    offset = randomizer.choice(tuple(range(-365, 0)) + tuple(range(1, 366)))
-    updated = original + timedelta(days=offset)
+    del randomizer
+    updated = original + timedelta(days=1)
     return updated.isoformat().replace("+00:00", "Z")
 
 
@@ -807,8 +899,9 @@ def _schema_enum_candidate(
 ) -> object | None:
     """Return a different JSON Schema enum member when the schema defines one."""
     allowed = _schema_enum_values(profile, field)
+    del randomizer
     candidates = tuple(candidate for candidate in allowed if candidate != value)
-    return randomizer.choice(candidates) if candidates else None
+    return candidates[0] if candidates else None
 
 
 @lru_cache(maxsize=None)
@@ -889,14 +982,15 @@ def _load_profile_schema(profile: str) -> Mapping[str, object] | None:
 
 def _same_shape_identifier(value: str, randomizer: Random) -> str:
     """Return a changed identifier while retaining its observed source format."""
+    del randomizer
     result: list[str] = []
     for character in value:
         if character.isdigit():
-            result.append(str(randomizer.randrange(10)))
+            result.append(str((int(character) + 1) % 10))
         elif character.isupper():
-            result.append(chr(randomizer.randrange(ord("A"), ord("Z") + 1)))
+            result.append(chr((ord(character) - ord("A") + 1) % 26 + ord("A")))
         elif character.islower():
-            result.append(chr(randomizer.randrange(ord("a"), ord("z") + 1)))
+            result.append(chr((ord(character) - ord("a") + 1) % 26 + ord("a")))
         else:
             result.append(character)
     candidate = "".join(result)
@@ -907,15 +1001,44 @@ def _same_shape_identifier(value: str, randomizer: Random) -> str:
     return candidate
 
 
+def _changed_identifier(value: str, field: str) -> str:
+    """Return a deterministic identifier, including when the source is empty.
+
+    Empty optional identifiers are common in source records.  An explicit
+    UPDATE must still produce a meaningful, valid-looking value instead of
+    silently preserving the empty source value.  Prefixes convey the logical
+    identifier family while retaining the existing identifier shape whenever a
+    source value is available.
+    """
+    if value:
+        return _same_shape_identifier(value, Random(0))
+    if "GROUP_NUMBER" in field:
+        return "GRP-48291"
+    if "ACCOUNT_CONTROL" in field:
+        return "ACC-482910"
+    if "MASTER_ID" in field:
+        return "MASTER-482910"
+    if "CLAIM" in field:
+        return "CLM-482910"
+    if "PAYMENT" in field:
+        return "PAY-482910"
+    if "NETWORK" in field:
+        return "NET-482910"
+    if "CLIENT_ID" in field:
+        return "CLIENT-482910"
+    if "RECORD" in field:
+        return "REC-482910"
+    return "ID-482910"
+
+
 def _changed_root_claim_id(value: str, randomizer: Random) -> str:
     """Change a Claim root ID while retaining its P/I root identifier contract."""
     match = re.fullmatch(r"([PI]ROOT)([0-9]{8})", value)
     if match is None:
         return _same_shape_identifier(value, randomizer)
     original = match.group(2)
-    replacement = f"{randomizer.randrange(100_000_000):08d}"
-    if replacement == original:
-        replacement = f"{(int(original) + 1) % 100_000_000:08d}"
+    del randomizer
+    replacement = f"{(int(original) + 1) % 100_000_000:08d}"
     return match.group(1) + replacement
 
 
@@ -994,6 +1117,12 @@ def _weight_threshold(request: UpdateRequest, rules: EntityRules) -> Decimal:
     """Resolve a usable threshold, including a default below-limit boundary."""
     if request.threshold is not None:
         return request.threshold
+    if not rules.methods:
+        if request.operation == OperationType.WEIGHT_CHANGE:
+            raise ValueError(
+                f"WEIGHT_CHANGE is not supported for code-defined entity {rules.entity!r}"
+            )
+        return Decimal("0")
     method = next(
         (method for method in rules.methods if method.name == request.matching_method),
         rules.methods[0],
@@ -1017,6 +1146,8 @@ def _select_weight_fields(
     matching_method: str | None = None,
 ) -> tuple[str, ...]:
     """Choose the smallest deterministic field combination for a weight boundary."""
+    if not rules.methods:
+        raise ValueError(f"WEIGHT_CHANGE is not supported for code-defined entity {rules.entity!r}")
     method = next(
         (method for method in rules.methods if method.name == matching_method),
         rules.methods[0],

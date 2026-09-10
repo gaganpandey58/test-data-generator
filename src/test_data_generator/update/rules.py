@@ -1,6 +1,7 @@
 """Normalized matching and survivorship rules for update generation."""
 
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -58,6 +59,52 @@ class EntityRules:
     fields: dict[str, FieldRule]
     methods: tuple[MatchingMethod, ...]
     catalog_version: str = "unknown"
+
+
+def rules_for_records(
+    entity: str,
+    profile: str,
+    records: Iterable[Mapping[str, object]],
+    *,
+    keys: tuple[str, ...] = (),
+) -> EntityRules:
+    """Build update eligibility from a code-defined record shape.
+
+    NPPES has two intentionally separate source shapes and no GDF layout or
+    JSON Schema in this project.  This adapter lets those records use the same
+    shared operation resolver as every other entity without turning a sample
+    file into a field catalog.  Every field actually emitted by either shape
+    becomes independently selectable, including nested array/object fields.
+    """
+    field_names: set[str] = set()
+    for record in records:
+        field_names.update(_record_field_names(record))
+    fields = {
+        name: FieldRule(name, required=False, weight=Decimal("1"), survivorship="record_field")
+        for name in sorted(field_names)
+    }
+    return EntityRules(
+        entity=entity,
+        profile=profile,
+        keys=keys,
+        fields=fields,
+        methods=(),
+        catalog_version="code-defined",
+    )
+
+
+def _record_field_names(record: Mapping[str, object]) -> set[str]:
+    """Collect field names from a root or nested source-shape record."""
+    result: set[str] = set()
+    for name, value in record.items():
+        result.add(name)
+        if isinstance(value, Mapping):
+            result.update(_record_field_names(value))
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, Mapping):
+                    result.update(_record_field_names(item))
+    return result
 
 
 def load_rule_catalog(path: Path) -> dict[str, EntityRules]:

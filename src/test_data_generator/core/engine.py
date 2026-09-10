@@ -182,7 +182,7 @@ def _publish_records(
     final_path = resolve_output_path(output_directory, filename)
     temporary_path: Path | None = None
     try:
-        validator = _load_validator(entity.schema)
+        validator = None if entity.name == "provider_nppes" else _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="wb",
@@ -195,7 +195,8 @@ def _publish_records(
             for record in records:
                 normalized = dict(record)
                 normalized["INGESTION_DATE"] = ingestion_date
-                if validate_schema:
+                _ensure_claim_history_identifiers(entity, normalized)
+                if validate_schema and validator is not None:
                     try:
                         validator.validate(normalized)
                     except ValidationError as error:
@@ -236,7 +237,7 @@ def run_update_records(
     final_path = resolve_output_path(output_directory, update_filename)
     temporary_path: Path | None = None
     try:
-        validator = _load_validator(entity.schema)
+        validator = None if entity.name == "provider_nppes" else _load_validator(entity.schema)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="wb",
@@ -249,18 +250,27 @@ def run_update_records(
             for index, base in enumerate(records):
                 base_record = dict(base)
                 resolved = resolve_update(base_record, request, rules, seed, index)
-                updated = _order_headers(project_record(resolved.record, entity.profile), entity)
+                updated = (
+                    deepcopy(resolved.record)
+                    if entity.name == "provider_nppes"
+                    else _order_headers(project_record(resolved.record, entity.profile), entity)
+                )
                 if entity.name in {"claim_professional", "claim_institutional"}:
                     for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
                         updated[field] = ""
                 validate_update_contract(base_record, updated, request, resolved, rules)
                 updated["INGESTION_DATE"] = entity.update_ingestion_date
+                _ensure_claim_history_identifiers(entity, updated)
                 schema_invalid_match_fixture = (
                     request.expected_outcome == ExpectedOutcome.NO_MATCH
                     and request.failure_mode
                     in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
                 )
-                if not may_violate_schema(request) and not schema_invalid_match_fixture:
+                if (
+                    validator is not None
+                    and not may_violate_schema(request)
+                    and not schema_invalid_match_fixture
+                ):
                     try:
                         validator.validate(updated)
                     except ValidationError as error:
@@ -297,7 +307,28 @@ def _build_record(
         record = generate_record(*(arguments + (None, related_records)))
     else:
         record = generate_record(*arguments)
+    if entity.file_type is not None:
+        record["FILE_TYPE"] = entity.file_type
     return _order_headers(project_record(record, entity.profile), entity)
+
+
+def _ensure_claim_history_identifiers(entity: EntityConfig, record: Mapping[str, object]) -> None:
+    """Keep the three CH client identifiers populated in every History row."""
+    if entity.name not in {"claim_history_professional", "claim_history_institutional"}:
+        return
+    missing = next(
+        (
+            field
+            for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS
+            if not isinstance(record.get(field), str) or not str(record[field]).strip()
+        ),
+        None,
+    )
+    if missing is not None:
+        raise GenerationError(
+            f"Claims History field {missing!r} must be populated; CH identifiers cannot be empty, "
+            "missing, or invalid"
+        )
 
 
 def _order_headers(record: dict[str, object], entity: EntityConfig) -> dict[str, object]:

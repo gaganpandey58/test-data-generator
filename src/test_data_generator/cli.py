@@ -48,8 +48,9 @@ from test_data_generator.entities.provider_cdf import (
     generate_nppes_file,
     generate_provider_cdf,
 )
+from test_data_generator.entities.provider_nppes import generate_records as generate_nppes_records
 from test_data_generator.update.match_fixtures import generate_match_fixture_matrix
-from test_data_generator.update.rules import load_rule_catalog
+from test_data_generator.update.rules import load_rule_catalog, rules_for_records
 from test_data_generator.update.scenarios import (
     ExpectedOutcome,
     FailureMode,
@@ -119,9 +120,30 @@ def generate(config: Path, mode: str = "all") -> None:
             entity.name: entity
             for entity in run_config.entities
             if entity.name in {"claim_history_professional", "claim_history_institutional"}
+            and entity.linked_to_claim
         }
         for entity in run_config.entities:
             if entity.name in histories:
+                continue
+            if entity.name == "provider_nppes":
+                if run_config.provider_linked:
+                    # The CDF-linked provider branch below writes the shared
+                    # source NPPES stream and registers its rows.
+                    continue
+                try:
+                    nppes_path = generate_nppes_file(
+                        run_config.creation_directory / entity.filename,
+                        entity.count,
+                        run_config.seed,
+                        run_config.nppes_individual_count,
+                        run_config.nppes_organizational_count,
+                    )
+                except (OSError, ValueError) as error:
+                    raise CommandError(f"NPPES generation failed: {error}") from error
+                print(
+                    f"{entity.name}: {entity.count} records -> {transaction.final_path(nppes_path)}"
+                )
+                generated_records[entity.name] = _read_jsonl_records(nppes_path)
                 continue
             if entity.source_entity is not None:
                 source_records = generated_records.get(entity.source_entity)
@@ -149,31 +171,31 @@ def generate(config: Path, mode: str = "all") -> None:
             }.get(entity.name)
             if history_entity_name is not None:
                 history_entity = histories.get(history_entity_name)
-                if history_entity is None:
-                    raise CommandError(f"Claim stream {entity.name!r} has no Claims History stream")
-                try:
-                    claim_path, history_path = run_claim_pair(
-                        entity,
-                        history_entity,
-                        run_config.seed,
-                        run_config.creation_directory,
-                        entity_counts,
-                        generated_records,
+                if history_entity is not None:
+                    try:
+                        claim_path, history_path = run_claim_pair(
+                            entity,
+                            history_entity,
+                            run_config.seed,
+                            run_config.creation_directory,
+                            entity_counts,
+                            generated_records,
+                        )
+                    except GenerationError as error:
+                        raise CommandError(
+                            f"Claim generation failed for entity {entity.name!r}: {error}"
+                        ) from error
+                    print(
+                        f"{entity.name}: {entity.count} records -> "
+                        f"{transaction.final_path(claim_path)}"
                     )
-                except GenerationError as error:
-                    raise CommandError(
-                        f"Claim generation failed for entity {entity.name!r}: {error}"
-                    ) from error
-                print(
-                    f"{entity.name}: {entity.count} records -> {transaction.final_path(claim_path)}"
-                )
-                print(
-                    f"{history_entity.name}: {history_entity.count} records -> "
-                    f"{transaction.final_path(history_path)}"
-                )
-                generated_records[entity.name] = _read_jsonl_records(claim_path)
-                generated_records[history_entity.name] = _read_jsonl_records(history_path)
-                continue
+                    print(
+                        f"{history_entity.name}: {history_entity.count} records -> "
+                        f"{transaction.final_path(history_path)}"
+                    )
+                    generated_records[entity.name] = _read_jsonl_records(claim_path)
+                    generated_records[history_entity.name] = _read_jsonl_records(history_path)
+                    continue
             claim_source_name = _payment_claim_history_name(entity.name)
             if claim_source_name in generated_records:
                 try:
@@ -260,6 +282,7 @@ def generate(config: Path, mode: str = "all") -> None:
                     f"{transaction.final_path(paths['provider_nppes'])}"
                 )
                 generated_records[entity.name] = _read_jsonl_records(paths["provider_cdf"])
+                generated_records["provider_nppes"] = _read_jsonl_records(paths["provider_nppes"])
                 continue
             try:
                 output_path = run_entity(
@@ -281,20 +304,23 @@ def generate(config: Path, mode: str = "all") -> None:
             print(f"{entity.name}: {entity.count} records -> {transaction.final_path(output_path)}")
             generated_records[entity.name] = _read_jsonl_records(output_path)
         if run_config.nppes_count > 0 and not run_config.provider_linked:
-            try:
-                nppes_path = generate_nppes_file(
-                    run_config.creation_directory / run_config.nppes_filename,
-                    run_config.nppes_count,
-                    run_config.seed,
-                    run_config.nppes_individual_count,
-                    run_config.nppes_organizational_count,
+            nppes_path = run_config.creation_directory / run_config.nppes_filename
+            if "provider_nppes" not in generated_records:
+                try:
+                    nppes_path = generate_nppes_file(
+                        nppes_path,
+                        run_config.nppes_count,
+                        run_config.seed,
+                        run_config.nppes_individual_count,
+                        run_config.nppes_organizational_count,
+                    )
+                except (OSError, ValueError) as error:
+                    raise CommandError(f"NPPES generation failed: {error}") from error
+                print(
+                    f"provider_nppes: {run_config.nppes_count} records -> "
+                    f"{transaction.final_path(nppes_path)}"
                 )
-            except (OSError, ValueError) as error:
-                raise CommandError(f"NPPES generation failed: {error}") from error
-            print(
-                f"provider_nppes: {run_config.nppes_count} records -> "
-                f"{transaction.final_path(nppes_path)}"
-            )
+                generated_records["provider_nppes"] = _read_jsonl_records(nppes_path)
         if needs_match_fixtures:
             assert rules is not None
             try:
@@ -318,7 +344,14 @@ def generate(config: Path, mode: str = "all") -> None:
         entities_by_name = {entity.name: entity for entity in run_config.entities}
         propagated_payment_updates: set[str] = set()
         for entity in run_config.entities:
-            if entity.name in {"claim_history_professional", "claim_history_institutional"}:
+            if (
+                entity.name
+                in {
+                    "claim_history_professional",
+                    "claim_history_institutional",
+                }
+                and entity.linked_to_claim
+            ):
                 continue
             # Related streams are identical to their source by default. They
             # receive an update fixture only when that stream explicitly asks
@@ -326,6 +359,13 @@ def generate(config: Path, mode: str = "all") -> None:
             has_explicit_update = bool(
                 {"operation", "expected_outcome", "modifications"}.intersection(entity.update)
             )
+            if entity.name == "provider_nppes" and not has_explicit_update:
+                continue
+            if (
+                entity.name in {"claim_history_professional", "claim_history_institutional"}
+                and not has_explicit_update
+            ):
+                continue
             if entity.source_entity is not None and not has_explicit_update:
                 continue
             # A Claim update derives its related Payment update below. A direct
@@ -337,6 +377,14 @@ def generate(config: Path, mode: str = "all") -> None:
                 continue
             rules_entity = entity.source_entity or entity.name
             entity_rules = rules.get(rules_entity)
+            if entity_rules is None and entity.name == "provider_nppes":
+                bases = generated_records.get(entity.name, ())
+                entity_rules = rules_for_records(
+                    entity.name,
+                    entity.profile,
+                    bases,
+                    keys=("NPI",),
+                )
             if entity_rules is None:
                 raise CommandError(f"Update rule catalog has no rules for {rules_entity!r}")
             request = _update_request(run_config, entity)
@@ -420,68 +468,70 @@ def generate(config: Path, mode: str = "all") -> None:
                 }[entity.name]
                 history_entity = entities_by_name.get(history_name)
                 payment_entity = entities_by_name.get(payment_name)
-                if history_entity is None:
-                    raise CommandError(f"Claim stream {entity.name!r} has no Claims History stream")
-                try:
-                    history_bases = generated_records[history_name]
-                    updated_claims = _read_jsonl_records(output_path)
-                    changed_claim_fields = tuple(
-                        _changed_field_names(base, updated)
-                        for base, updated in zip(
-                            generated_records[entity.name], updated_claims, strict=True
+                if history_entity is not None and history_entity.linked_to_claim:
+                    try:
+                        history_bases = generated_records[history_name]
+                        updated_claims = _read_jsonl_records(output_path)
+                        changed_claim_fields = tuple(
+                            _changed_field_names(base, updated)
+                            for base, updated in zip(
+                                generated_records[entity.name], updated_claims, strict=True
+                            )
                         )
-                    )
-                    updated_history = _derive_claim_history_updates(
-                        updated_claims, history_bases, changed_claim_fields
-                    )
-                    schema_invalid_match_fixture = (
-                        request.expected_outcome == ExpectedOutcome.NO_MATCH
-                        and request.failure_mode
-                        in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
-                    )
-                    history_path = run_derived_update_records(
-                        history_entity,
-                        updated_history,
-                        run_config.update_directory,
-                        validate_schema=not schema_invalid_match_fixture
-                        and not may_violate_schema(request),
-                    )
-                    changed_history_fields = tuple(
-                        _changed_field_names(base, updated)
-                        for base, updated in zip(history_bases, updated_history, strict=True)
-                    )
-                    generated_records[history_name] = updated_history
+                        updated_history = _derive_claim_history_updates(
+                            updated_claims,
+                            history_bases,
+                            changed_claim_fields,
+                            _history_identifier_values(request),
+                        )
+                        schema_invalid_match_fixture = (
+                            request.expected_outcome == ExpectedOutcome.NO_MATCH
+                            and request.failure_mode
+                            in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
+                        )
+                        history_path = run_derived_update_records(
+                            history_entity,
+                            updated_history,
+                            run_config.update_directory,
+                            validate_schema=not schema_invalid_match_fixture
+                            and not may_violate_schema(request),
+                        )
+                        changed_history_fields = tuple(
+                            _changed_field_names(base, updated)
+                            for base, updated in zip(history_bases, updated_history, strict=True)
+                        )
+                        generated_records[history_name] = updated_history
+                        print(
+                            f"{history_entity.name}: {history_entity.count} updates -> "
+                            f"{transaction.final_path(history_path)}"
+                        )
+                        if payment_entity is None:
+                            continue
+                        payment_records = derive_payments_from_records(
+                            updated_history,
+                            payment_entity.profile,
+                            payment_entity.scenarios,
+                            run_config.seed,
+                            payment_entity.count,
+                            changed_history_fields,
+                        )
+                        payment_path = run_derived_update_records(
+                            payment_entity,
+                            payment_records,
+                            run_config.update_directory,
+                            validate_schema=not schema_invalid_match_fixture
+                            and not may_violate_schema(request),
+                        )
+                    except (GenerationError, ValueError) as error:
+                        raise CommandError(
+                            f"Claim update propagation failed for entity {entity.name!r}: {error}"
+                        ) from error
+                    generated_records[payment_name] = tuple(payment_records)
+                    propagated_payment_updates.add(payment_name)
                     print(
-                        f"{history_entity.name}: {history_entity.count} updates -> "
-                        f"{transaction.final_path(history_path)}"
+                        f"{payment_entity.name}: {payment_entity.count} updates -> "
+                        f"{transaction.final_path(payment_path)}"
                     )
-                    if payment_entity is None:
-                        continue
-                    payment_records = derive_payments_from_records(
-                        updated_history,
-                        payment_entity.profile,
-                        payment_entity.scenarios,
-                        run_config.seed,
-                        payment_entity.count,
-                        changed_history_fields,
-                    )
-                    payment_path = run_derived_update_records(
-                        payment_entity,
-                        payment_records,
-                        run_config.update_directory,
-                        validate_schema=not schema_invalid_match_fixture
-                        and not may_violate_schema(request),
-                    )
-                except (GenerationError, ValueError) as error:
-                    raise CommandError(
-                        f"Claim update propagation failed for entity {entity.name!r}: {error}"
-                    ) from error
-                generated_records[payment_name] = tuple(payment_records)
-                propagated_payment_updates.add(payment_name)
-                print(
-                    f"{payment_entity.name}: {payment_entity.count} updates -> "
-                    f"{transaction.final_path(payment_path)}"
-                )
         _remove_unrequested_payment_updates(run_config, propagated_payment_updates)
         _remove_unrequested_related_updates(run_config)
     _remove_disabled_outputs(run_config)
@@ -639,27 +689,52 @@ def _derive_claim_history_updates(
     updated_claims: tuple[Mapping[str, object], ...],
     history_bases: tuple[Mapping[str, object], ...],
     changed_fields: tuple[frozenset[str], ...],
+    identifier_values: Mapping[str, object] | None = None,
 ) -> tuple[Mapping[str, object], ...]:
     """Derive CH updates from their corresponding 837 updates exactly.
 
     Claims History is the paired representation of a Claim, not a second
     independently-randomized update.  History preserves its populated client
-    identifiers when those fields were not part of the Claim update and always
-    keeps the CH envelope discriminator.
+    identifiers, unless the claim update explicitly supplied a replacement
+    value.  837 output intentionally blanks these client identifiers; CH must
+    nevertheless always keep a populated value and its own discriminator.
     """
     if len(updated_claims) != len(history_bases) or len(updated_claims) != len(changed_fields):
         raise CommandError("Claim and Claims History update record counts differ")
     records: list[Mapping[str, object]] = []
-    for claim, history_base, changed in zip(
+    for claim, history_base, _changed in zip(
         updated_claims, history_bases, changed_fields, strict=True
     ):
         history = deepcopy(dict(claim))
         for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
-            if field not in changed and field in history_base:
+            if identifier_values is not None and field in identifier_values:
+                history[field] = deepcopy(identifier_values[field])
+            elif field in history_base:
                 history[field] = history_base[field]
         history["FILE_TYPE"] = "CH"
         records.append(history)
     return tuple(records)
+
+
+def _history_identifier_values(request: UpdateRequest) -> Mapping[str, object]:
+    """Return explicitly configured valid CH identifier replacements only.
+
+    Claims layouts deliberately hide their client claim IDs.  A configured
+    value is therefore the sole reliable source for propagating an intentional
+    ID change to the linked CH record; absent one, the established CH ID is
+    preserved instead of fabricating a random replacement.
+    """
+    configured: dict[str, object] = {}
+    for values in (
+        request.values,
+        *(modification.values for modification in request.modifications),
+    ):
+        if values is None:
+            continue
+        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+            if field in values:
+                configured[field] = deepcopy(values[field])
+    return configured
 
 
 def _payment_claim_history_name(name: str) -> str:
@@ -680,9 +755,23 @@ def _materialize_update_bases(
         entity.name: entity
         for entity in run_config.entities
         if entity.name in {"claim_history_professional", "claim_history_institutional"}
+        and entity.linked_to_claim
     }
     for entity in run_config.entities:
         if entity.name in generated_records or entity.name in histories:
+            continue
+        if entity.name == "provider_nppes":
+            if run_config.provider_linked:
+                # The provider branch builds the linked CDF/NPPES pair.
+                continue
+            generated_records[entity.name] = tuple(
+                generate_nppes_records(
+                    entity.count,
+                    run_config.seed,
+                    run_config.nppes_individual_count,
+                    run_config.nppes_organizational_count,
+                )
+            )
             continue
         if entity.source_entity is not None:
             source_records = generated_records.get(entity.source_entity)
@@ -707,18 +796,21 @@ def _materialize_update_bases(
                 entity.header_order,
             )
             generated_records[entity.name] = tuple(records["provider_cdf"])
+            generated_records["provider_nppes"] = tuple(records["provider_nppes"])
             continue
         history_name = {
             "claim_professional": "claim_history_professional",
             "claim_institutional": "claim_history_institutional",
         }.get(entity.name)
         if history_name is not None:
-            current, history = build_claim_pair_records(
-                entity, run_config.seed, entity_counts, generated_records
-            )
-            generated_records[entity.name] = tuple(current)
-            generated_records[history_name] = tuple(history)
-            continue
+            history_entity = histories.get(history_name)
+            if history_entity is not None:
+                current, history = build_claim_pair_records(
+                    entity, run_config.seed, entity_counts, generated_records
+                )
+                generated_records[entity.name] = tuple(current)
+                generated_records[history_name] = tuple(history)
+                continue
         generated_records[entity.name] = tuple(
             build_entity_records(entity, run_config.seed, entity_counts, generated_records)
         )
@@ -778,6 +870,7 @@ def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
         threshold=parsed_threshold,
         operation=operation_type,
         condition=operation_condition,
+        values=_field_values(operation_config, "operation"),
         invalid_values=(
             load_invalid_values(run_config.invalid_values_catalog)
             if needs_invalid_catalog and run_config.invalid_values_catalog is not None
@@ -810,8 +903,27 @@ def _field_modifications(raw: Mapping[str, object]) -> tuple[FieldModification, 
         condition = str(definition["condition"]) if "condition" in definition else None
         if operation == OperationType.WEIGHT_CHANGE and condition is None:
             raise CommandError("WEIGHT_CHANGE modification requires a condition")
-        result.append(FieldModification(operation, _string_tuple(definition, "fields"), condition))
+        result.append(
+            FieldModification(
+                operation,
+                _string_tuple(definition, "fields"),
+                condition,
+                _field_values(definition, "modification"),
+            )
+        )
     return tuple(result)
+
+
+def _field_values(values: Mapping[str, object], label: str) -> Mapping[str, object] | None:
+    """Read exact field replacements for a deterministic UPDATE operation."""
+    configured = values.get("values")
+    if configured is None:
+        return None
+    if not isinstance(configured, Mapping) or not all(
+        isinstance(name, str) and name.strip() for name in configured
+    ):
+        raise CommandError(f"{label}.values must be an object keyed by field name")
+    return {name: deepcopy(value) for name, value in configured.items()}
 
 
 def _string_tuple(values: Mapping[str, object], key: str) -> tuple[str, ...]:
@@ -861,6 +973,12 @@ def _remove_disabled_outputs(run_config: RunConfig) -> None:
     """
     output_directory = run_config.output_directory
     enabled_filenames = {entity.filename for entity in run_config.entities}
+    # NPPES has a code-defined source shape and supports a creation-only
+    # shortcut when it has no update operation.  That shortcut deliberately
+    # does not add a generic EntityConfig, but its emitted file is still an
+    # enabled output and must not be removed as stale.
+    if run_config.nppes_count > 0:
+        enabled_filenames.add(run_config.nppes_filename)
     for filename in run_config.disabled_filenames:
         if filename in enabled_filenames:
             continue

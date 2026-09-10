@@ -67,6 +67,7 @@ class EntityConfig:
     update_ingestion_date: str = field(default_factory=current_ingestion_date)
     source_entity: str | None = None
     file_type: str | None = None
+    linked_to_claim: bool = False
 
 
 @dataclass(frozen=True)
@@ -154,7 +155,7 @@ class ExecutionConfig:
 
 
 _EXECUTION_ENTITY_GROUPS = {
-    "provider": frozenset({"provider"}),
+    "provider": frozenset({"provider", "provider_nppes"}),
     "member": frozenset({"member", "member_mr"}),
     "claims": frozenset(
         {
@@ -360,6 +361,7 @@ def load_config(path: Path) -> RunConfig:
                     if isinstance(raw_entity.get("file_type"), str)
                     else None
                 ),
+                linked_to_claim=bool(raw_entity.get("linked_to_claim", False)),
             )
         )
     _validate_unique_filenames(entities)
@@ -667,6 +669,8 @@ def _normalize_entity_scenarios(config: dict[str, Any]) -> None:
         if not isinstance(entity, dict):
             continue
         _normalize_entity_scenario(entity, entity_name)
+        if entity_name == "provider" and isinstance(entity.get("nppes"), dict):
+            _normalize_entity_scenario(entity["nppes"], f"{entity_name}.nppes")
         roster = entity.get("mr")
         if isinstance(roster, dict):
             _normalize_entity_scenario(roster, f"{entity_name}.mr")
@@ -678,6 +682,11 @@ def _normalize_entity_scenarios(config: dict[str, Any]) -> None:
             entity = domain.get(stream)
             if isinstance(entity, dict):
                 _normalize_entity_scenario(entity, f"{domain_name}.{stream}")
+                if domain_name == "claims" and isinstance(entity.get("history"), dict):
+                    _normalize_entity_scenario(entity["history"], f"{domain_name}.{stream}.history")
+    nppes = config.get("provider_nppes")
+    if isinstance(nppes, dict):
+        _normalize_entity_scenario(nppes, "provider_nppes")
 
 
 def _normalize_entity_scenario(entity: dict[str, object], label: str) -> None:
@@ -737,19 +746,13 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 }
                 selection["count"] = int(nppes_count) + int(additional_count)
                 entities[name] = _selected_entity(entities[name], selection)
-                normalized_nppes = {
-                    "count": int(nppes_count),
-                    **(
-                        {
-                            key: int(nppes[key])
-                            for key in ("individual", "organizational")
-                            if key in nppes
-                        }
-                        if isinstance(nppes, dict)
-                        else {}
-                    ),
-                }
-                raw_config["provider_nppes"] = normalized_nppes
+                nppes_selection = dict(nppes) if isinstance(nppes, Mapping) else {}
+                nppes_selection["count"] = int(nppes_count)
+                if _has_explicit_update_selection(nppes_selection):
+                    entities["provider_nppes"] = _selected_entity(
+                        entities["provider_nppes"], nppes_selection
+                    )
+                raw_config["provider_nppes"] = nppes_selection
                 continue
             selection = {key: item for key, item in value.items() if key != "mr"}
             entities[name] = _selected_entity(entities[name], selection)
@@ -775,10 +778,31 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
         ):
             value = claims.get(stream)
             if isinstance(value, dict):
-                entities[entity_name] = _selected_entity(entities[entity_name], value)
+                claim_selection = {key: item for key, item in value.items() if key != "history"}
+                entities[entity_name] = _selected_entity(entities[entity_name], claim_selection)
+                history_value = value.get("history")
+                if isinstance(history_value, Mapping):
+                    history_selection = dict(history_value)
+                    history_selection.setdefault("linked", False)
+                else:
+                    # Preserve the legacy paired 837/CH behavior when no
+                    # explicit history selection is supplied.
+                    history_selection = {
+                        "count": claim_selection.get("count", 0),
+                        "linked": True,
+                    }
                 entities[history_entity_name] = _selected_entity(
-                    entities[history_entity_name], value
+                    entities[history_entity_name], history_selection
                 )
+
+    top_level_nppes = raw_config.get("provider_nppes")
+    if isinstance(top_level_nppes, Mapping):
+        nppes_selection = dict(top_level_nppes)
+        nppes_selection["count"] = _nppes_total(nppes_selection)
+        if _has_explicit_update_selection(nppes_selection):
+            entities["provider_nppes"] = _selected_entity(
+                entities["provider_nppes"], nppes_selection
+            )
 
     payments = raw_config.get("payments")
     if isinstance(payments, dict):
@@ -816,6 +840,14 @@ def _nppes_total(value: object) -> int:
     return int(value.get("individual", 0)) + int(value.get("organizational", 0))
 
 
+def _has_explicit_update_selection(selection: Mapping[str, object]) -> bool:
+    """Return whether NPPES needs the generic update-entity execution path."""
+    update = selection.get("updates")
+    return isinstance(update, Mapping) and bool(
+        {"operation", "expected_outcome", "modifications"}.intersection(update)
+    )
+
+
 def _selected_entity(
     defaults: Mapping[str, object], selection: Mapping[str, object]
 ) -> dict[str, object]:
@@ -850,6 +882,11 @@ def _selected_entity(
         result["frequencies"] = selection["frequencies"]
     if "claim_frequency" in selection:
         result["claim_frequency"] = selection["claim_frequency"]
+    if "linked" in selection:
+        result["linked_to_claim"] = bool(selection["linked"])
+    for key in ("individual", "organizational"):
+        if key in selection:
+            result[key] = selection[key]
     if "layout" in selection:
         result["profile"] = selection["layout"]
     output_order = selection.get("output_order")
@@ -958,6 +995,7 @@ _INGESTION_ENTITY_GROUPS = {
     "member": "member",
     "member_mr": "member",
     "provider": "provider",
+    "provider_nppes": "provider",
     "claim_professional": "claims",
     "claim_institutional": "claims",
     "claim_history_professional": "claims_history",
@@ -1062,6 +1100,8 @@ def _effective_record_count(
     ):
         raise ConfigurationError(f"Count for {entity!r} must be between 0 and {MAX_RECORD_COUNT:,}")
     if entity in {"claim_history_professional", "claim_history_institutional"}:
+        if not raw_entity.get("linked_to_claim", False):
+            return count
         paired_entity = {
             "claim_history_professional": "claim_professional",
             "claim_history_institutional": "claim_institutional",
@@ -1069,6 +1109,12 @@ def _effective_record_count(
         paired = raw_entities.get(paired_entity)
         if not isinstance(paired, Mapping):
             raise ConfigurationError(f"Claims History {entity!r} has no paired Claim stream")
+        paired_configured_count = paired.get("count", 0)
+        if count != paired_configured_count:
+            raise ConfigurationError(
+                f"Linked Claims History {entity!r} count must equal its configured "
+                f"Claim count {paired_configured_count}"
+            )
         return _effective_record_count(paired_entity, paired, raw_entities)
     if (
         entity in {"claim_professional", "claim_institutional"}
@@ -1219,6 +1265,20 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "updates": {},
             "header_order": None,
         },
+        "provider_nppes": {
+            "enabled": False,
+            "count": 0,
+            # NPPES emits two explicit source shapes and therefore bypasses
+            # layout/schema projection in the shared engine.  This profile and
+            # schema only satisfy the normal entity contract for configuration
+            # and client-value loading.
+            "profile": "provider",
+            "schema": str(schema_root / "provider/provider.schema.json"),
+            "module": "test_data_generator.entities.provider_nppes",
+            "filename": "provider_nppes.jsonl",
+            "updates": {},
+            "header_order": None,
+        },
         "member": {
             "enabled": False,
             "count": 0,
@@ -1260,6 +1320,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "filename": "claims_history_professional.jsonl",
             "updates": {},
             "header_order": None,
+            "file_type": "CH",
         },
         "claim_institutional": {
             "enabled": False,
@@ -1280,6 +1341,7 @@ def _entity_defaults() -> dict[str, dict[str, object]]:
             "filename": "claims_history_institutional.jsonl",
             "updates": {},
             "header_order": None,
+            "file_type": "CH",
         },
         "payment_professional": {
             "enabled": False,
@@ -1347,6 +1409,7 @@ def _validate_profile(entity: str, profile: object) -> None:
     """
     permitted_profiles = {
         "provider": frozenset({"provider"}),
+        "provider_nppes": frozenset({"provider"}),
         "member": frozenset({"member"}),
         "member_mr": frozenset({"member"}),
         "claim_professional": frozenset({"claim-professional"}),

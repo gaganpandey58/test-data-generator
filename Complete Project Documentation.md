@@ -231,7 +231,9 @@ To add a client, add complete `headers` and `values` entries for Provider, Membe
 - [`rules/claims.json`](src/test_data_generator/configuration/rules/claims.json)
 - [`rules/payments.json`](src/test_data_generator/configuration/rules/payments.json)
 
-Claims History aliases the corresponding Claim rules. It has no standalone History matching configuration.
+Claims History reuses the corresponding Claim matching rules; it does not define
+a separate History match code. It can nevertheless be generated and updated as
+a standalone CH stream, or linked one-to-one to an 837 Claim stream.
 
 ### 5.7 Invalid values
 
@@ -308,18 +310,20 @@ Counts are integers from `0` through `1,000,000`.
 - Unrelated files in the output directory are not deleted.
 - Member Roster count cannot exceed Member count.
 - Provider CDF total is `nppes.count + cdf.additional_count` in linked mode.
-- Claims History count is automatically the corresponding Claim count.
+- Linked Claims History count follows the corresponding effective Claim count.
+  A standalone History stream instead uses its own `history.count`.
 - Payment count is the final number of payment records after scenario normalization.
 
 Public entity/stream properties are:
 
 | Property | Applies to | Meaning |
 | --- | --- | --- |
-| `count` | Provider, Member, MR, Claims, Payments | Exact requested count, subject to relationship guardrails. |
+| `count` | Provider, NPPES, Member, MR, Claims, History, Payments | Exact requested count, subject to relationship guardrails. |
 | `nppes.count` | Linked Provider | Total NPPES rows; split automatically by type. |
 | `nppes.individual` / `nppes.organizational` | Linked Provider | Explicit type counts; their sum is the NPPES total. |
 | `cdf.additional_count` | Linked Provider | CDF-only rows whose NPIs do not exist in NPPES. |
 | `mr` | Member | Derived Member Roster selection and optional MR-specific updates. |
+| `history` | Professional/Institutional Claims | `count`, `linked`, and an optional independent operation plan for CH. |
 | `layout` | Any normal entity stream | Selects an allowed layout profile for that data type; invalid cross-type profiles are rejected. |
 | `output_order.headers` | Any normal entity stream | Overrides global `source`, `first`, or `last` header ordering. |
 | `operations` / `modifications` | Any update-capable stream | Direct ordered mutation plan for that domain or variant. |
@@ -340,7 +344,7 @@ An entity file is the sole place to configure that domain's cases. Put its count
     "matching_method": "configured_weighted_c",
     "expected_outcome": "NO_MATCH",
     "operations": [
-      {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]},
+      {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"], "values": {"CM_MEMBER_FIRST_NAME": "AMELIA"}},
       {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
       {"type": "INVALID", "fields": ["CM_MEMBER_ZIP"]},
       {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
@@ -349,7 +353,7 @@ An entity file is the sole place to configure that domain's cases. Put its count
 }
 ```
 
-Operations are applied in order to a copy of the generated original. Untargeted fields retain their original values. `UPDATE` already means “replace with a valid value different from the original”; there is no `DIFFERENT` operation. Invalid values are always selected from the shared `invalid-values.json` catalog.
+Operations are applied in order to a copy of the generated original. Untargeted fields retain their original values. `UPDATE` already means “replace with a valid value different from the original”; there is no `DIFFERENT` operation. Use an operation-level `values` object to supply exact field replacements. Otherwise the update engine uses a deterministic realistic value for the field's domain; it never chooses a random replacement value. Invalid values are always selected from the shared `invalid-values.json` catalog.
 
 | Operation | Result |
 | --- | --- |
@@ -364,7 +368,7 @@ Operations are applied in order to a copy of the generated original. Untargeted 
 
 | Property | Meaning |
 | --- | --- |
-| `operations` / `modifications` | Ordered `{type, fields, condition}` objects. Fields can be a list or omitted for eligible automatic selection. |
+| `operations` / `modifications` | Ordered `{type, fields, condition, values}` objects. `values` maps field names to exact valid UPDATE values. Fields can be omitted for eligible automatic selection. |
 | `matching_method` | Rule-catalog method used for weights or verified matching. |
 | `threshold` | Optional decimal override for a weight comparison. |
 | `expected_outcome` | `MATCH` or `NO_MATCH`; verifies the related pair against its method. |
@@ -516,7 +520,31 @@ Or use a total count:
 
 An unspecified split is divided approximately in half, with the extra record assigned to Individual.
 
-In the normal configuration workflow, NPPES is a creation/reference stream; Provider updates are emitted for CDF. No `provider_nppes.update.jsonl` is produced.
+NPPES is a first-class update-capable entity. Its code-defined Individual and
+Organizational shapes are combined only at the JSONL-stream boundary; every
+root and nested field that actually exists on a shape can be selected by an
+ordinary `operations` plan. Provide exact valid replacements through `values`.
+When a selected field is type-specific, it is updated on the applicable shape
+and remains absent on the other shape.
+
+```json
+"provider_nppes": {
+  "count": 2,
+  "individual": 1,
+  "organizational": 1,
+  "operations": [{
+    "type": "UPDATE",
+    "fields": ["PROVIDER_FIRST_NAME", "LICENSE_NUMBER"],
+    "values": {
+      "PROVIDER_FIRST_NAME": "AMELIA",
+      "LICENSE_NUMBER": "AZ123456"
+    }
+  }]
+}
+```
+
+This emits `provider_nppes.update.jsonl`. NPPES does not use a sample file to
+derive its supported fields, and no external sample is required at runtime.
 
 The modular nested `provider.nppes` + `provider.cdf` form is intentionally linked and therefore emits a corresponding CDF row for every NPPES row. NPPES-only generation remains available through the backward-compatible direct configuration form `provider_nppes: {"count": n}` with no `provider` selection, or by calling the NPPES entity API. A zero NPPES count skips `provider_nppes.jsonl`.
 
@@ -601,15 +629,42 @@ Outputs:
 - `claims_history_professional.jsonl`
 - `claims_history_institutional.jsonl`
 
-Claims History is not independently generated. For each base Claim, the generator creates a deep-copied pair:
+Claims History supports both linked and standalone generation. By default it
+is linked: for each base Claim, the generator creates a deep-copied pair:
 
 - Current 837: client unique/claim/original IDs are blank.
 - CH: those IDs retain generated values and `FILE_TYPE = "CH"`.
 - All other business attributes are copied from the same base.
 
+For a standalone CH stream, configure `count` and `linked: false` under the
+relevant Claim type. It uses the existing Claim generator and structure, emits
+`FILE_TYPE = "CH"`, and does not create an 837 record. The three client claim
+identifier fields are required to be populated in both linked and standalone
+CH output.
+
+```json
+"claims": {
+  "professional": {
+    "count": 0,
+    "history": {
+      "count": 2,
+      "linked": false,
+      "operations": [{
+        "type": "UPDATE",
+        "fields": ["CH_PAYER_ORGANIZATION_NAME"],
+        "values": {"CH_PAYER_ORGANIZATION_NAME": "RIVERSTONE HEALTH PLAN"}
+      }]
+    }
+  }
+}
+```
+
 Claims History uses the corresponding Claims matching rules through aliases in `rules/claims.json`; there is no `history.config.json`.
 
-When a Claim update is generated, the History update is copied from that exact Claim update. It does not perform a second random mutation. History keeps its populated identity fields unless they were specifically part of the propagated change and always restores `FILE_TYPE = "CH"`.
+When a linked Claim update is generated, the History update is copied from that
+exact Claim update. It does not perform a second mutation. History always keeps
+populated identity fields, uses an explicitly configured replacement when one
+was supplied for an identifier, and restores `FILE_TYPE = "CH"`.
 
 ### 7.8 Professional and Institutional Payments (835)
 
@@ -985,13 +1040,17 @@ Empty, null, or missing related values are never populated merely because the co
 
 If `CP_PROVIDER_NPI` itself is explicitly changed/invalidated, a populated and originally equivalent `CP_PRESCRIBING_PROVIDER_NPI` may follow it. Updating only the prescribing NPI never flows backward and silently changes the Provider matching key.
 
+For NPPES, `ENTITY_TYPE_DESCRIPTION` is derived from an updated populated
+`ENTITY_TYPE_CODE` (`1` → `Individual`, `2` → `Organization`). No empty,
+missing, or type-specific sibling field is created during synchronization.
+
 ### 13.4 Claim → Claims History → Payment
 
 When a Claim update runs:
 
 1. The current Claim update is generated once.
-2. The corresponding History update is copied from that exact result.
-3. History restores its populated Claim identity fields and `FILE_TYPE = "CH"` according to the paired base.
+2. The corresponding linked History update is copied from that exact result.
+3. History restores its populated Claim identity fields (or an explicitly supplied identifier replacement) and `FILE_TYPE = "CH"` according to the paired base.
 4. If the corresponding Payment stream is enabled, Payment updates are re-derived from updated History rows.
 5. Payment fields affected by Claim changes use the propagated values, not another random mutation.
 6. Payment financials are reconciled after propagation.
