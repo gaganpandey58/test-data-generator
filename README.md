@@ -196,6 +196,42 @@ Use `history` under a Claim type to choose the History lifecycle explicitly.
 `linked: false` produces a standalone CH stream without creating Claims. In
 both cases the three `CH_CLIENT_*CLAIM*ID` fields above must be populated.
 
+### Grouped Claim and Claims History operations
+
+Put an operation shared by 837P and 837I directly under `claims.operations`.
+Put an operation shared by both CH streams under `claims.claims_history.operations`.
+Each stream can still declare its own `operations`, which replaces the shared
+operation plan for that stream. A separately grouped Claims History stream is
+standalone by default; set `linked: true` and use the same count as its Claim
+stream when a one-to-one relationship is intended.
+
+```json
+{
+  "claims": {
+    "operations": [
+      {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}
+    ],
+    "professional": {"count": 7},
+    "institutional": {"count": 7},
+    "claims_history": {
+      "operations": [
+        {
+          "type": "UPDATE",
+          "fields": ["CH_PAYER_ORGANIZATION_NAME"],
+          "values": {"CH_PAYER_ORGANIZATION_NAME": "RIVERSTONE HEALTH PLAN"}
+        }
+      ],
+      "professional": {"count": 8},
+      "institutional": {"count": 8}
+    }
+  }
+}
+```
+
+This configuration generates seven current Claims per type and eight
+independent Claims History records per type. It does not create linked CH rows
+for those current Claims because the separate History streams are standalone.
+
 ```json
 "claims": {
   "professional": {
@@ -401,6 +437,8 @@ NPPES supports the same direct `operations` plan as other entities. Every
 emitted root or nested field is independently selectable, and `UPDATE` may
 provide an exact replacement through `values`. Type-specific fields update only
 the NPPES shape that contains them; they are never created on the other shape.
+Use NPPES field names (for example, `PROVIDER_FIRST_NAME`), not CDF field names
+such as `CP_PROVIDER_FIRST_NAME`.
 
 ```json
 "provider_nppes": {

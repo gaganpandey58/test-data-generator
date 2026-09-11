@@ -99,8 +99,11 @@
       "minProperties": 1,
       "additionalProperties": false,
       "properties": {
+        "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+        "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
         "professional": {"$ref": "#/$defs/claim_entity"},
-        "institutional": {"$ref": "#/$defs/claim_entity"}
+        "institutional": {"$ref": "#/$defs/claim_entity"},
+        "claims_history": {"$ref": "#/$defs/history_domain"}
       }
     },
     "payments": {
@@ -108,6 +111,8 @@
       "minProperties": 1,
       "additionalProperties": false,
       "properties": {
+        "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+        "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
         "professional": {"$ref": "#/$defs/counted_entity"},
         "institutional": {"$ref": "#/$defs/counted_entity"}
       }
@@ -236,6 +241,22 @@
         {"$ref": "#/$defs/entity"},
         {"required": ["count"]},
         {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}}
+      ]
+    },
+    "history_domain": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+        "modifications": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/modification"}},
+        "linked": {"type": "boolean"},
+        "professional": {"$ref": "#/$defs/history_entity"},
+        "institutional": {"$ref": "#/$defs/history_entity"}
+      },
+      "anyOf": [
+        {"required": ["professional"]},
+        {"required": ["institutional"]}
       ]
     },
     "member_entity": {

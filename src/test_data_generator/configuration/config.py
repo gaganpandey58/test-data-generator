@@ -620,13 +620,20 @@ def _expand_domain_defaults(entity_name: str, document: Mapping[str, object]) ->
     defaults = result.pop("defaults", {})
     if not isinstance(defaults, Mapping):
         raise ConfigurationError(f"{entity_name}.defaults must be an object")
+    # ``defaults`` remains a compatibility alias.  New configurations put
+    # common operations directly under their data-domain section, for example
+    # ``claims.operations``.  Resolve both forms before the individual
+    # professional/institutional streams are normalized.
+    domain_defaults = _merge_configuration(dict(defaults), _pop_domain_scenario_values(result))
     for stream in ("professional", "institutional"):
         configured = result.get(stream)
         if configured is None:
             continue
         if not isinstance(configured, Mapping):
             raise ConfigurationError(f"{entity_name}.{stream} must be an object")
-        result[stream] = _merge_configuration(dict(defaults), dict(configured))
+        result[stream] = _merge_configuration(dict(domain_defaults), dict(configured))
+    if entity_name == "claims":
+        _expand_claim_history_domain(result)
     return result
 
 
@@ -640,6 +647,54 @@ def _merge_configuration(base: dict[str, object], override: dict[str, object]) -
         else:
             merged[key] = deepcopy(value)
     return merged
+
+
+_DOMAIN_SCENARIO_ATTRIBUTES = frozenset(
+    {
+        "operations",
+        "modifications",
+        "updates",
+        "matching_method",
+        "threshold",
+        "expected_outcome",
+        "failure_mode",
+        "failure_field",
+        "collision_method",
+        "elasticity_boundary",
+        "include",
+        "exclude",
+        "linked",
+    }
+)
+
+
+def _pop_domain_scenario_values(domain: dict[str, object]) -> dict[str, object]:
+    """Remove and return scenario values shared by sibling stream sections."""
+    return {key: deepcopy(domain.pop(key)) for key in _DOMAIN_SCENARIO_ATTRIBUTES if key in domain}
+
+
+def _inherit_domain_scenario_values(domain: dict[str, object], label: str) -> None:
+    """Apply direct domain scenarios to Professional and Institutional streams."""
+    defaults = _pop_domain_scenario_values(domain)
+    if not defaults:
+        return
+    for stream in ("professional", "institutional"):
+        configured = domain.get(stream)
+        if configured is None:
+            continue
+        if not isinstance(configured, Mapping):
+            raise ConfigurationError(f"{label}.{stream} must be an object")
+        domain[stream] = _merge_configuration(dict(defaults), dict(configured))
+
+
+def _expand_claim_history_domain(claims: dict[str, object]) -> None:
+    """Expand common Claims History settings without coupling them to 837 rules."""
+    history = claims.get("claims_history")
+    if history is None:
+        return
+    if not isinstance(history, dict):
+        raise ConfigurationError("claims.claims_history must be an object")
+    _inherit_domain_scenario_values(history, "claims.claims_history")
 
 
 _SCENARIO_ATTRIBUTES = frozenset(
@@ -678,12 +733,20 @@ def _normalize_entity_scenarios(config: dict[str, Any]) -> None:
         domain = config.get(domain_name)
         if not isinstance(domain, dict):
             continue
+        _inherit_domain_scenario_values(domain, domain_name)
         for stream in ("professional", "institutional"):
             entity = domain.get(stream)
             if isinstance(entity, dict):
                 _normalize_entity_scenario(entity, f"{domain_name}.{stream}")
                 if domain_name == "claims" and isinstance(entity.get("history"), dict):
                     _normalize_entity_scenario(entity["history"], f"{domain_name}.{stream}.history")
+        if domain_name == "claims" and isinstance(domain.get("claims_history"), dict):
+            history = domain["claims_history"]
+            _inherit_domain_scenario_values(history, "claims.claims_history")
+            for stream in ("professional", "institutional"):
+                entity = history.get(stream)
+                if isinstance(entity, dict):
+                    _normalize_entity_scenario(entity, f"claims.claims_history.{stream}")
     nppes = config.get("provider_nppes")
     if isinstance(nppes, dict):
         _normalize_entity_scenario(nppes, "provider_nppes")
@@ -772,6 +835,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
 
     claims = raw_config.get("claims")
     if isinstance(claims, dict):
+        claims_history = claims.get("claims_history")
         for stream, entity_name, history_entity_name in (
             ("professional", "claim_professional", "claim_history_professional"),
             ("institutional", "claim_institutional", "claim_history_institutional"),
@@ -791,6 +855,29 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                         "count": claim_selection.get("count", 0),
                         "linked": True,
                     }
+                entities[history_entity_name] = _selected_entity(
+                    entities[history_entity_name], history_selection
+                )
+        if isinstance(claims_history, Mapping):
+            for stream, history_entity_name in (
+                ("professional", "claim_history_professional"),
+                ("institutional", "claim_history_institutional"),
+            ):
+                history_value = claims_history.get(stream)
+                if not isinstance(history_value, Mapping):
+                    continue
+                claim_value = claims.get(stream)
+                if isinstance(claim_value, Mapping) and isinstance(
+                    claim_value.get("history"), Mapping
+                ):
+                    raise ConfigurationError(
+                        f"Claims History {stream!r} may be configured either under "
+                        f"claims.{stream}.history or claims.claims_history.{stream}, not both"
+                    )
+                history_selection = dict(history_value)
+                # A separately grouped Claims History stream is independent
+                # unless the config expressly requests one-to-one Claim links.
+                history_selection.setdefault("linked", False)
                 entities[history_entity_name] = _selected_entity(
                     entities[history_entity_name], history_selection
                 )

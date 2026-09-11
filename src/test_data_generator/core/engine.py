@@ -57,10 +57,17 @@ def build_entity_records(
 ) -> list[dict[str, object]]:
     """Materialize one entity stream without publishing files."""
     generate_record = _load_generator(entity.module)
-    return [
+    records = [
         _build_record(entity, seed, index, counts, generate_record, related_records)
         for index in range(entity.count)
     ]
+    # Current 837 Claim output always exposes empty client claim identifiers.
+    # Paired CH construction intentionally bypasses this post-processing so it
+    # can retain the generated identifiers for the corresponding History row.
+    if entity.name in {"claim_professional", "claim_institutional"}:
+        for record in records:
+            _blank_current_claim_identifiers(record)
+    return records
 
 
 def build_related_records(
@@ -124,8 +131,7 @@ def build_claim_pair_records(
             claim_entity, seed, index, counts, generate_record, related_records
         )
         current_claim = deepcopy(history_record)
-        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
-            current_claim[field] = ""
+        _blank_current_claim_identifiers(current_claim)
         claim_records.append(current_claim)
         # Claims History is the existing-claim (CH) stream. It shares the
         # Claim layout and business attributes with its paired 837 record but
@@ -329,6 +335,12 @@ def _ensure_claim_history_identifiers(entity: EntityConfig, record: Mapping[str,
             f"Claims History field {missing!r} must be populated; CH identifiers cannot be empty, "
             "missing, or invalid"
         )
+
+
+def _blank_current_claim_identifiers(record: dict[str, object]) -> None:
+    """Apply the current-837 contract for client Claim identifier fields."""
+    for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+        record[field] = ""
 
 
 def _order_headers(record: dict[str, object], entity: EntityConfig) -> dict[str, object]:

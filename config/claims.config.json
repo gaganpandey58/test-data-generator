@@ -1,10 +1,8 @@
 {
   "claims": {
-    "defaults": {
-      "operations": [
-        {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}
-      ]
-    },
+    "operations": [
+      {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}
+    ],
     "professional": {
       "count": 7
     },

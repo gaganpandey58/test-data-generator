@@ -111,7 +111,7 @@ flowchart TD
 1. Loads `runconfig.json`.
 2. Validates its global settings, entity-config references, domain selection, and requested phases.
 3. Loads exactly one Provider, Member, Claims, and Payments domain file.
-4. Merges Claims/Payments `defaults` into their Professional and Institutional stream settings.
+4. Inherits direct Claims/Payments domain operations into their Professional and Institutional stream settings. The older `defaults` block remains a compatibility alias.
 5. Normalizes each direct domain `operations` or `modifications` plan into the common internal update request.
 6. Expands the public configuration into internal stream definitions. Schema paths, modules, and filenames are internal safe defaults and cannot be redirected to arbitrary code by configuration.
 7. Refreshes JSON Schemas from the newest `.xlsx` workbook in `schema/gdf/`.
@@ -324,6 +324,7 @@ Public entity/stream properties are:
 | `cdf.additional_count` | Linked Provider | CDF-only rows whose NPIs do not exist in NPPES. |
 | `mr` | Member | Derived Member Roster selection and optional MR-specific updates. |
 | `history` | Professional/Institutional Claims | `count`, `linked`, and an optional independent operation plan for CH. |
+| `claims_history` | Claims domain | Separate Professional/Institutional CH streams with shared operations; independent by default unless `linked: true`. |
 | `layout` | Any normal entity stream | Selects an allowed layout profile for that data type; invalid cross-type profiles are rejected. |
 | `output_order.headers` | Any normal entity stream | Overrides global `source`, `first`, or `last` header ordering. |
 | `operations` / `modifications` | Any update-capable stream | Direct ordered mutation plan for that domain or variant. |
@@ -336,6 +337,27 @@ Public entity/stream properties are:
 ### 6.4 One scenario configuration per entity
 
 An entity file is the sole place to configure that domain's cases. Put its count, matching method, expected outcome, optional weight settings, and ordered mutation list together. `operations` and `modifications` are aliases; use `operations` in new configuration.
+
+For Claims, an `operations` plan at the `claims` level is inherited by both
+837 streams. A plan at `claims.claims_history` is inherited independently by
+both CH streams. A stream-level plan takes precedence over the inherited plan.
+The following is valid and produces seven 837P/837I records plus eight
+standalone CH records of each type:
+
+```json
+{
+  "claims": {
+    "operations": [{"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}],
+    "professional": {"count": 7},
+    "institutional": {"count": 7},
+    "claims_history": {
+      "operations": [{"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}],
+      "professional": {"count": 8},
+      "institutional": {"count": 8}
+    }
+  }
+}
+```
 
 ```json
 {
