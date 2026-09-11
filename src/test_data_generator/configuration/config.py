@@ -724,11 +724,15 @@ def _normalize_entity_scenarios(config: dict[str, Any]) -> None:
         if not isinstance(entity, dict):
             continue
         _normalize_entity_scenario(entity, entity_name)
-        if entity_name == "provider" and isinstance(entity.get("nppes"), dict):
-            _normalize_entity_scenario(entity["nppes"], f"{entity_name}.nppes")
-            nppes_cdf = entity["nppes"].get("cdf")
-            if isinstance(nppes_cdf, dict):
-                _normalize_entity_scenario(nppes_cdf, f"{entity_name}.nppes.cdf")
+        if entity_name == "provider":
+            if isinstance(entity.get("nppes"), dict):
+                _normalize_entity_scenario(entity["nppes"], f"{entity_name}.nppes")
+                nppes_cdf = entity["nppes"].get("cdf")
+                if isinstance(nppes_cdf, dict):
+                    _normalize_entity_scenario(nppes_cdf, f"{entity_name}.nppes.cdf")
+            cdf = entity.get("cdf")
+            if isinstance(cdf, dict):
+                _normalize_entity_scenario(cdf, f"{entity_name}.cdf")
         roster = entity.get("mr")
         if isinstance(roster, dict):
             _normalize_entity_scenario(roster, f"{entity_name}.mr")
@@ -808,7 +812,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     if isinstance(legacy_nppes, Mapping) and "additional_count" in legacy_nppes:
         raise ConfigurationError(
             "provider_nppes.additional_count is not supported; use "
-            "provider.nppes.cdf.additional_count for CDF-only records"
+            "provider.cdf.additional_count for CDF-only records"
         )
     for name in ("provider", "member"):
         value = raw_config.get(name)
@@ -847,16 +851,16 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                         "Configure CDF-only records in one location: provider.nppes.cdf, "
                         "provider.nppes.additional_count, or provider.cdf.additional_count"
                     )
-                # The nested CDF block owns the linked CDF stream in the
-                # preferred public form. The older two compatibility spellings
-                # remain valid when that block is absent.
+                # Either CDF block owns the linked CDF stream.  The sibling
+                # form mirrors the public provider/NPPES split, while the
+                # nested form remains a supported compatibility spelling.
                 additional_count = (
                     nested_cdf_additional_count
                     or nppes_additional_count
                     or legacy_cdf_additional_count
                 )
                 if isinstance(nested_cdf, Mapping):
-                    selection = {
+                    cdf_selection = {
                         key: item for key, item in nested_cdf.items() if key != "additional_count"
                     }
                     direct_selection = {
@@ -864,10 +868,29 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                         for key, item in value.items()
                         if key not in {"nppes", "cdf", "count"}
                     }
-                    if _has_explicit_update_selection(direct_selection):
+                    if _has_explicit_update_selection(
+                        cdf_selection
+                    ) and _has_explicit_update_selection(direct_selection):
                         raise ConfigurationError(
                             "Configure linked CDF operations under provider.nppes.cdf, not provider"
                         )
+                    selection = {**direct_selection, **cdf_selection}
+                elif isinstance(legacy_cdf, Mapping):
+                    cdf_selection = {
+                        key: item for key, item in legacy_cdf.items() if key != "additional_count"
+                    }
+                    direct_selection = {
+                        key: item
+                        for key, item in value.items()
+                        if key not in {"nppes", "cdf", "count"}
+                    }
+                    if _has_explicit_update_selection(
+                        cdf_selection
+                    ) and _has_explicit_update_selection(direct_selection):
+                        raise ConfigurationError(
+                            "Configure linked CDF operations under provider.cdf, not provider"
+                        )
+                    selection = {**direct_selection, **cdf_selection}
                 else:
                     selection = {
                         key: item for key, item in value.items() if key not in {"nppes", "cdf"}
@@ -1078,22 +1101,39 @@ def _payment_source_path(
         return explicit
     if entity not in {"payment_professional", "payment_institutional"}:
         return None
-    claim_entity_name = {
-        "payment_professional": "claim_history_professional",
-        "payment_institutional": "claim_history_institutional",
-    }[entity]
-    claim_entity = raw_entities.get(claim_entity_name)
-    if not isinstance(claim_entity, dict) or not claim_entity.get("enabled"):
-        if raw_entity.get("enabled") and _payment_requires_claim_source(entity, raw_entity):
-            raise ConfigurationError(
-                f"Payment stream {entity!r} requires source_claims or an enabled "
-                f"{claim_entity_name!r} stream"
-            )
-        return None
-    filename = claim_entity.get("filename")
-    if not isinstance(filename, str) or not filename:
-        return None
-    return creation_directory / filename
+    source_entity_names = _payment_source_entity_names(entity)
+    for source_entity_name in source_entity_names:
+        source_entity = raw_entities.get(source_entity_name)
+        if not isinstance(source_entity, dict) or not source_entity.get("enabled"):
+            continue
+        filename = source_entity.get("filename")
+        if isinstance(filename, str) and filename:
+            return creation_directory / filename
+    if raw_entity.get("enabled") and _payment_requires_claim_source(entity, raw_entity):
+        supported_sources = " or ".join(repr(name) for name in source_entity_names)
+        raise ConfigurationError(
+            f"Payment stream {entity!r} requires source_claims or an enabled "
+            f"{supported_sources} stream"
+        )
+    return None
+
+
+def _payment_source_entity_names(entity: str) -> tuple[str, ...]:
+    """Return preferred same-run Claim sources for a Payment stream.
+
+    Claims History remains the preferred source when it is enabled.  A normal
+    837 Claim is an equally valid source when History is intentionally disabled.
+    """
+    return {
+        "payment_professional": (
+            "claim_history_professional",
+            "claim_professional",
+        ),
+        "payment_institutional": (
+            "claim_history_institutional",
+            "claim_institutional",
+        ),
+    }.get(entity, ())
 
 
 def _scenario_counts(entity: str, raw_entity: Mapping[str, object]) -> Mapping[str, int]:

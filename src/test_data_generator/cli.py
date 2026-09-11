@@ -194,8 +194,8 @@ def generate(config: Path, mode: str = "all") -> None:
                     generated_records[entity.name] = _read_jsonl_records(claim_path)
                     generated_records[history_entity.name] = _read_jsonl_records(history_path)
                     continue
-            claim_source_name = _payment_claim_history_name(entity.name)
-            if claim_source_name in generated_records:
+            claim_source_name = _payment_claim_source_name(entity.name, generated_records)
+            if claim_source_name:
                 try:
                     records = derive_payments_from_records(
                         generated_records[claim_source_name],
@@ -383,9 +383,11 @@ def generate(config: Path, mode: str = "all") -> None:
                         request,
                         entity_rules,
                     )
-                elif _payment_claim_history_name(entity.name) in generated_records:
+                elif claim_source_name := _payment_claim_source_name(
+                    entity.name, generated_records
+                ):
                     records = derive_payments_from_records(
-                        generated_records[_payment_claim_history_name(entity.name)],
+                        generated_records[claim_source_name],
                         entity.profile,
                         entity.scenarios,
                         run_config.seed,
@@ -722,12 +724,19 @@ def _history_identifier_values(request: UpdateRequest) -> Mapping[str, object]:
     return configured
 
 
-def _payment_claim_history_name(name: str) -> str:
-    """Return the in-run Claims History source for a Payment stream."""
-    return {
-        "payment_professional": "claim_history_professional",
-        "payment_institutional": "claim_history_institutional",
-    }.get(name, "")
+def _payment_claim_source_name(name: str, generated_records: Mapping[str, object]) -> str:
+    """Return the preferred in-run History or Claim source for a Payment stream."""
+    candidates = {
+        "payment_professional": (
+            "claim_history_professional",
+            "claim_professional",
+        ),
+        "payment_institutional": (
+            "claim_history_institutional",
+            "claim_institutional",
+        ),
+    }.get(name, ())
+    return next((candidate for candidate in candidates if candidate in generated_records), "")
 
 
 def _materialize_update_bases(

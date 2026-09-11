@@ -619,8 +619,31 @@ def _set_source_payment_defaults(
         _first_value(claim, ("CH_CLAIM_PAID_DATE", "CH_CHECK_DATE", "CH_CLAIM_SERVICE_TO_DATE"))
         or service_to
     )
-    claim_id = str(claim.get("CH_CLIENT_CLAIM_ID") or f"{prefix}CLM{index + 1:09d}")
-    original_claim_id = str(claim.get("CH_CLIENT_ORIGINAL_CLAIM_ID") or claim_id)
+    # Current 837 output intentionally leaves the client claim identifiers
+    # blank; Claims History supplies them when it is available.  When a
+    # Payment is derived directly from 837, use the existing root claim
+    # identity instead of inventing an unrelated identifier.
+    claim_id = str(
+        _first_value(
+            claim,
+            (
+                "CH_CLIENT_CLAIM_ID",
+                "CH_CLIENT_ROOT_CLAIM_ID",
+                "CH_BILLING_PROVIDER_CLAIM_ID",
+            ),
+        )
+        or f"{prefix}CLM{index + 1:09d}"
+    )
+    original_claim_id = str(
+        _first_value(
+            claim,
+            (
+                "CH_CLIENT_ORIGINAL_CLAIM_ID",
+                "CH_CLIENT_ROOT_CLAIM_ID",
+            ),
+        )
+        or claim_id
+    )
     billing_npi = claim.get("CH_BILLING_PROVIDER_NPI") or "1234567893"
     rendering_npi = claim.get("CH_RENDERING_PROVIDER_NPI") or billing_npi
     billing_tax_id = str(claim.get("CH_BILLING_PROVIDER_FEDERAL_TAX_ID") or "521234567")
@@ -993,6 +1016,7 @@ def _validate_source_relationship(
         if (
             field in claim
             and field in payment
+            and _present(claim[field])
             and not _same_logical_value(claim[field], payment[field])
         ):
             raise ValueError(f"Payment relationship field {field!r} differs from the source Claim")

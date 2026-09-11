@@ -174,8 +174,9 @@ Professional Claims. The paired rows are identical except for
 `CH_CLIENT_CLAIM_UNIQUE_ID`, `CH_CLIENT_CLAIM_ID`, and
 `CH_CLIENT_ORIGINAL_CLAIM_ID`: current Claim rows emit those required fields as
 empty strings, while the corresponding Claims History row always carries
-populated values. Same-run Payments derive from linked History rows so their claim matching
-identifiers and both provider NPIs remain populated.
+populated values. Same-run Payments prefer linked History rows; when History is
+disabled, they derive from the matching 837 Claim and use its root claim identity
+to populate the required Payment claim identifiers. Both provider NPIs remain populated.
 
 Use `history` under a Claim type to choose the History lifecycle explicitly.
 `linked: true` produces CH rows paired one-to-one with the selected 837 stream;
@@ -439,24 +440,24 @@ such as `CP_PROVIDER_FIRST_NAME`.
         "PROVIDER_FIRST_NAME": "AMELIA",
         "LICENSE_NUMBER": "AZ123456"
       }
-    }],
-    "cdf": {
-      "additional_count": 5,
-      "operations": [{
-        "type": "UPDATE",
-        "fields": ["CP_PROVIDER_FIRST_NAME"]
-      }]
-    }
+    }]
+  },
+  "cdf": {
+    "additional_count": 5,
+    "operations": [{
+      "type": "UPDATE",
+      "fields": ["CP_PROVIDER_FIRST_NAME"]
+    }]
   }
 }
 ```
 
-`nppes.cdf.additional_count` controls only the additional CDF rows whose NPIs
-are not present in NPPES; it does not add NPPES records. The `nppes` and
-`nppes.cdf` operation lists apply independently to `provider_nppes.jsonl` and
-`provider_cdf.jsonl`. The legacy `nppes.additional_count` and
-`provider.cdf.additional_count` spellings remain accepted for existing runs,
-but do not combine them with `provider.nppes.cdf`.
+`provider.cdf.additional_count` controls only the additional CDF rows whose
+NPIs are not present in NPPES; it does not add NPPES records. The `nppes` and
+`cdf` operation lists apply independently to `provider_nppes.jsonl` and
+`provider_cdf.jsonl`. `provider.nppes.cdf` remains accepted for existing
+configurations, but it cannot be combined with the sibling `provider.cdf`
+block.
 
 Updates use five generic operations instead of a separate operation per field or field
 combination:
@@ -482,9 +483,9 @@ keys are excluded from weight changes.
 ```json
 "provider": {
   "nppes": {
-    "count": 10,
-    "cdf": {"additional_count": 5}
-  }
+    "count": 10
+  },
+  "cdf": {"additional_count": 5}
 }
 ```
 
