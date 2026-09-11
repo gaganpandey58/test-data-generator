@@ -288,7 +288,7 @@ Counts are integers from `0` through `1,000,000`.
 - A successful run removes stale known output for a disabled stream.
 - Unrelated files in the output directory are not deleted.
 - Member Roster count cannot exceed Member count.
-- Provider CDF total is `nppes.count + nppes.additional_count` in linked mode.
+- Provider CDF total is `nppes.count + nppes.cdf.additional_count` in linked mode.
 - Linked Claims History count follows the corresponding effective Claim count.
   A standalone History stream instead uses its own `history.count`.
 - Payment count is the final number of payment records after scenario normalization.
@@ -300,7 +300,7 @@ Public entity/stream properties are:
 | `count` | Provider, NPPES, Member, MR, Claims, History, Payments | Exact requested count, subject to relationship guardrails. |
 | `nppes.count` | Linked Provider | Total NPPES rows; split automatically by type. |
 | `nppes.individual` / `nppes.organizational` | Linked Provider | Explicit type counts; their sum is the NPPES total. |
-| `nppes.additional_count` | Linked Provider | CDF-only rows whose NPIs do not exist in NPPES. It does not increase NPPES output count. |
+| `nppes.cdf.additional_count` | Linked Provider | CDF-only rows whose NPIs do not exist in NPPES. It does not increase NPPES output count. |
 | `mr` | Member | Derived Member Roster selection and optional MR-specific updates. |
 | `history` | Professional/Institutional Claims | `count`, `linked`, and an optional independent operation plan for CH. |
 | `claims_history` | Claims domain | Separate Professional/Institutional CH streams with shared operations; independent by default unless `linked: true`. |
@@ -481,7 +481,7 @@ Linked Provider configuration:
 ```json
 {
   "provider": {
-    "nppes": {"count": 10, "additional_count": 2}
+    "nppes": {"count": 10, "cdf": {"additional_count": 2}}
   }
 }
 ```
@@ -533,7 +533,6 @@ and remains absent on the other shape.
     "count": 2,
     "individual": 1,
     "organizational": 1,
-    "additional_count": 2,
     "operations": [{
       "type": "UPDATE",
       "fields": ["PROVIDER_FIRST_NAME", "LICENSE_NUMBER"],
@@ -541,7 +540,14 @@ and remains absent on the other shape.
         "PROVIDER_FIRST_NAME": "AMELIA",
         "LICENSE_NUMBER": "AZ123456"
       }
-    }]
+    }],
+    "cdf": {
+      "additional_count": 2,
+      "operations": [{
+        "type": "UPDATE",
+        "fields": ["CP_PROVIDER_FIRST_NAME"]
+      }]
+    }
   }
 }
 ```
@@ -549,13 +555,13 @@ and remains absent on the other shape.
 This emits `provider_nppes.update.jsonl`. NPPES does not use a sample file to
 derive its supported fields, and no external sample is required at runtime.
 
-The nested `provider.nppes` form owns the NPPES count, the CDF-only
-`additional_count`, and NPPES operations. It emits one corresponding CDF row
-for every NPPES row plus the requested CDF-only rows. NPPES-only generation
-remains available through the backward-compatible direct configuration form
-`provider_nppes: {"count": n}` with no `provider` selection, or by calling the
-NPPES entity API. The direct and nested forms cannot be combined. A zero NPPES
-count skips `provider_nppes.jsonl`.
+The nested `provider.nppes` form owns the NPPES count and NPPES operations;
+its `cdf` child owns CDF-only count and CDF operations. It emits one
+corresponding CDF row for every NPPES row plus the requested CDF-only rows.
+NPPES-only generation remains available through the backward-compatible direct
+configuration form `provider_nppes: {"count": n}` with no `provider`
+selection, or by calling the NPPES entity API. The direct and nested forms
+cannot be combined. A zero NPPES count skips `provider_nppes.jsonl`.
 
 ### 7.3 Member 834
 
@@ -1537,10 +1543,16 @@ Configuration:
 ```json
 {
   "provider": {
-    "nppes": {"individual": 2, "organizational": 1, "additional_count": 2},
-    "operations": [
-      {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
-    ]
+    "nppes": {
+      "individual": 2,
+      "organizational": 1,
+      "cdf": {
+        "additional_count": 2,
+        "operations": [
+          {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
+        ]
+      }
+    }
   }
 }
 ```

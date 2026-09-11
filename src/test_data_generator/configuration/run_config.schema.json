@@ -235,8 +235,15 @@
     "nppes_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}},
+        {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["history"]}]}},
         {"anyOf": [{"required": ["count"]}, {"required": ["individual"]}, {"required": ["organizational"]}]}
+      ]
+    },
+    "cdf_entity": {
+      "allOf": [
+        {"$ref": "#/$defs/entity"},
+        {"required": ["additional_count"]},
+        {"not": {"anyOf": [{"required": ["count"]}, {"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}}
       ]
     },
     "history_entity": {
@@ -278,18 +285,7 @@
         "nppes": {"$ref": "#/$defs/nppes_entity"},
         "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000},
-        "cdf": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["additional_count"],
-          "properties": {
-            "additional_count": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1000000
-            }
-          }
-        },
+        "cdf": {"$ref": "#/$defs/cdf_entity"},
         "layout": {"type": "string", "minLength": 1},
         "mr": {
           "type": "object",

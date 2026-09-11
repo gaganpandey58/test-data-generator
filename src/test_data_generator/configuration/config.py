@@ -726,6 +726,9 @@ def _normalize_entity_scenarios(config: dict[str, Any]) -> None:
         _normalize_entity_scenario(entity, entity_name)
         if entity_name == "provider" and isinstance(entity.get("nppes"), dict):
             _normalize_entity_scenario(entity["nppes"], f"{entity_name}.nppes")
+            nppes_cdf = entity["nppes"].get("cdf")
+            if isinstance(nppes_cdf, dict):
+                _normalize_entity_scenario(nppes_cdf, f"{entity_name}.nppes.cdf")
         roster = entity.get("mr")
         if isinstance(roster, dict):
             _normalize_entity_scenario(roster, f"{entity_name}.mr")
@@ -805,7 +808,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     if isinstance(legacy_nppes, Mapping) and "additional_count" in legacy_nppes:
         raise ConfigurationError(
             "provider_nppes.additional_count is not supported; use "
-            "provider.nppes.additional_count for CDF-only records"
+            "provider.nppes.cdf.additional_count for CDF-only records"
         )
     for name in ("provider", "member"):
         value = raw_config.get(name)
@@ -814,30 +817,66 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 isinstance(value.get("nppes"), dict) or isinstance(value.get("cdf"), dict)
             ):
                 nppes = value.get("nppes", {})
-                cdf = value.get("cdf", {})
+                legacy_cdf = value.get("cdf")
+                nested_cdf = nppes.get("cdf") if isinstance(nppes, Mapping) else None
+                if isinstance(nested_cdf, Mapping) and isinstance(legacy_cdf, Mapping):
+                    raise ConfigurationError(
+                        "Configure linked CDF settings either under provider.nppes.cdf or "
+                        "provider.cdf, not both"
+                    )
                 nppes_count = _nppes_total(nppes)
                 nppes_additional_count = (
                     nppes.get("additional_count", 0) if isinstance(nppes, Mapping) else 0
                 )
-                legacy_cdf_additional_count = (
-                    cdf.get("additional_count", 0) if isinstance(cdf, Mapping) else 0
+                nested_cdf_additional_count = (
+                    nested_cdf.get("additional_count", 0) if isinstance(nested_cdf, Mapping) else 0
                 )
-                if nppes_additional_count and legacy_cdf_additional_count:
-                    raise ConfigurationError(
-                        "Configure CDF-only records with provider.nppes.additional_count; "
-                        "provider.cdf.additional_count cannot also be non-zero"
+                legacy_cdf_additional_count = (
+                    legacy_cdf.get("additional_count", 0) if isinstance(legacy_cdf, Mapping) else 0
+                )
+                configured_additional_counts = sum(
+                    count > 0
+                    for count in (
+                        nppes_additional_count,
+                        nested_cdf_additional_count,
+                        legacy_cdf_additional_count,
                     )
-                # ``provider.cdf.additional_count`` remains a compatibility
-                # fallback. New configurations keep all linked NPPES/CDF
-                # settings together under ``provider.nppes``.
-                additional_count = nppes_additional_count or legacy_cdf_additional_count
-                selection = {
-                    key: item for key, item in value.items() if key not in {"nppes", "cdf"}
-                }
+                )
+                if configured_additional_counts > 1:
+                    raise ConfigurationError(
+                        "Configure CDF-only records in one location: provider.nppes.cdf, "
+                        "provider.nppes.additional_count, or provider.cdf.additional_count"
+                    )
+                # The nested CDF block owns the linked CDF stream in the
+                # preferred public form. The older two compatibility spellings
+                # remain valid when that block is absent.
+                additional_count = (
+                    nested_cdf_additional_count
+                    or nppes_additional_count
+                    or legacy_cdf_additional_count
+                )
+                if isinstance(nested_cdf, Mapping):
+                    selection = {
+                        key: item for key, item in nested_cdf.items() if key != "additional_count"
+                    }
+                    direct_selection = {
+                        key: item
+                        for key, item in value.items()
+                        if key not in {"nppes", "cdf", "count"}
+                    }
+                    if _has_explicit_update_selection(direct_selection):
+                        raise ConfigurationError(
+                            "Configure linked CDF operations under provider.nppes.cdf, not provider"
+                        )
+                else:
+                    selection = {
+                        key: item for key, item in value.items() if key not in {"nppes", "cdf"}
+                    }
                 selection["count"] = int(nppes_count) + int(additional_count)
                 entities[name] = _selected_entity(entities[name], selection)
                 nppes_selection = dict(nppes) if isinstance(nppes, Mapping) else {}
                 nppes_selection.pop("additional_count", None)
+                nppes_selection.pop("cdf", None)
                 nppes_selection["count"] = int(nppes_count)
                 if _has_explicit_update_selection(nppes_selection):
                     entities["provider_nppes"] = _selected_entity(

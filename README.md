@@ -432,7 +432,6 @@ such as `CP_PROVIDER_FIRST_NAME`.
     "count": 2,
     "individual": 1,
     "organizational": 1,
-    "additional_count": 5,
     "operations": [{
       "type": "UPDATE",
       "fields": ["PROVIDER_FIRST_NAME", "LICENSE_NUMBER"],
@@ -440,16 +439,24 @@ such as `CP_PROVIDER_FIRST_NAME`.
         "PROVIDER_FIRST_NAME": "AMELIA",
         "LICENSE_NUMBER": "AZ123456"
       }
-    }]
+    }],
+    "cdf": {
+      "additional_count": 5,
+      "operations": [{
+        "type": "UPDATE",
+        "fields": ["CP_PROVIDER_FIRST_NAME"]
+      }]
+    }
   }
 }
 ```
 
-`nppes.additional_count` controls only the additional CDF rows whose NPIs are
-not present in NPPES; it does not add NPPES records. The legacy
-`provider.cdf.additional_count` spelling is accepted for existing runs, but new
-configuration should use the nested NPPES section. Do not combine the nested
-form with the legacy top-level `provider_nppes` section.
+`nppes.cdf.additional_count` controls only the additional CDF rows whose NPIs
+are not present in NPPES; it does not add NPPES records. The `nppes` and
+`nppes.cdf` operation lists apply independently to `provider_nppes.jsonl` and
+`provider_cdf.jsonl`. The legacy `nppes.additional_count` and
+`provider.cdf.additional_count` spellings remain accepted for existing runs,
+but do not combine them with `provider.nppes.cdf`.
 
 Updates use five generic operations instead of a separate operation per field or field
 combination:
@@ -476,7 +483,7 @@ keys are excluded from weight changes.
 "provider": {
   "nppes": {
     "count": 10,
-    "additional_count": 5
+    "cdf": {"additional_count": 5}
   }
 }
 ```
