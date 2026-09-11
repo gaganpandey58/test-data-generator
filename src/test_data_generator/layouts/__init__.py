@@ -1,4 +1,4 @@
-"""Load immutable, checked-in GDF source-layout metadata.
+"""Load immutable, checked-in source-layout metadata.
 
 Layout JSON files capture the supported root fields and nested field groups for
 each healthcare entity profile.  They are package resources rather than user
@@ -14,11 +14,11 @@ from typing import Mapping
 
 @dataclass(frozen=True)
 class LayoutField:
-    """Describe one canonical source field from a GDF layout.
+    """Describe one canonical source field from a checked-in layout.
 
     Attributes:
         name: Field name used in the generated source-shaped record.
-        type: GDF field type label retained for layout consumers.
+        type: Source field type label retained for layout consumers.
         max_length: Maximum allowed field length from the source layout.
     """
 
@@ -48,7 +48,7 @@ class LayoutProfile:
 
 
 def available_profiles() -> frozenset[str]:
-    """Return identifiers for every checked-in GDF layout profile.
+    """Return identifiers for every checked-in layout profile.
 
     The package-resource scan keeps the supported-profile list synchronized
     with the versioned registry without exposing arbitrary filesystem paths.
@@ -64,7 +64,7 @@ def available_profiles() -> frozenset[str]:
 
 
 def load_layout(profile: str) -> LayoutProfile:
-    """Load one layout profile from the packaged GDF registry.
+    """Load one layout profile from the packaged layout registry.
 
     Args:
         profile: Checked-in profile identifier.

@@ -1,7 +1,7 @@
 """Generate deterministic medical claims with embedded payment information.
 
 This module produces professional or institutional claim envelopes from the
-checked-in GDF layouts. A claim references generated member and provider
+checked-in layouts. A claim references generated member and provider
 records and contains its line-level detail and payment fields in the same JSON
 object.
 """
@@ -29,7 +29,7 @@ def generate_record(
     lifecycle: tuple[str, int | None] | None = None,
     related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
 ) -> dict[str, object]:
-    """Generate one GDF claim/payment happy-path envelope.
+    """Generate one claim/payment happy-path envelope.
 
     Args:
         seed: Shared deterministic generation seed.
@@ -322,7 +322,7 @@ def _line(
     frequency: str,
     place_of_service: str,
 ) -> dict[str, object]:
-    """Build one EIP/GDF claim-detail row whose payment amounts reconcile.
+    """Build one EIP claim-detail row whose payment amounts reconcile.
 
     Args:
         claim_id: Parent claim client ID.
@@ -430,12 +430,12 @@ def _claim_id(profile_code: str, index: int, frequency: str) -> str:
 
 
 def _adjustment_type(frequency: str) -> str:
-    """Map GDF Claim frequency values to their adjustment lifecycle code."""
+    """Map Claim frequency values to their adjustment lifecycle code."""
     return {"1": "0", "7": "2", "8": "1"}[frequency]
 
 
 def _query_code(frequency: str) -> str:
-    """Emit a deterministic GDF payment-processing query code per lifecycle."""
+    """Emit a deterministic payment-processing query code per lifecycle."""
     return {"1": "3", "7": "5", "8": "0"}[frequency]
 
 
@@ -530,7 +530,7 @@ def _profile_blanks(profile: str) -> dict[str, object]:
     """Initialize the selected profile's root fields as blanks.
 
     Args:
-        profile: Checked-in GDF claim profile to load.
+        profile: Checked-in Claim profile to load.
 
     Returns:
         A field-name-to-blank-value mapping for the selected profile.
@@ -540,7 +540,7 @@ def _profile_blanks(profile: str) -> dict[str, object]:
 
 
 def _claim_type(profile: str) -> str:
-    """Resolve a source profile to its GDF professional/institutional type.
+    """Resolve a source profile to its professional/institutional type.
 
     Args:
         profile: Explicit claim layout profile.
@@ -667,7 +667,7 @@ def _diagnoses(claim_type: str, patient_index: int, accident: bool) -> tuple[str
 
 
 def _compact_date(value: date) -> str:
-    """Format a date as the GDF compact date value.
+    """Format a date as a compact source date value.
 
     Args:
         value: Date to format.

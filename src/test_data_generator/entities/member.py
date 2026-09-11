@@ -1,7 +1,7 @@
 """Generate deterministic, source-shaped member records.
 
 The generator builds member roots and their address, enrollment, and COB
-groups from the checked-in GDF member layout. It resolves PCP references to
+groups from the checked-in member layout. It resolves PCP references to
 the provider rows selected for the same run.
 """
 
@@ -39,7 +39,7 @@ def generate_record(
     client_values: Mapping[str, object],
     profile: str,
 ) -> dict[str, object]:
-    """Generate one GDF-profile member happy-path record.
+    """Generate one checked-in-profile member happy-path record.
 
     Args:
         seed: Shared deterministic generation seed.
@@ -137,7 +137,7 @@ def _profile_blanks(profile: str) -> dict[str, object]:
     """Create blank root fields for one checked-in layout profile.
 
     Args:
-        profile: Name of the GDF layout profile to load.
+        profile: Name of the checked-in layout profile to load.
 
     Returns:
         A field-name-to-blank-value mapping for the profile root.
@@ -151,8 +151,8 @@ def _transport_headers(
 ) -> dict[str, object]:
     """Build the flattened Cotiviti envelope used by EIP member samples.
 
-    The member source examples place transport attributes beside the GDF
-    member body, rather than inside a nested envelope. Deterministic UUIDv4
+    The member source examples place transport attributes beside the member
+    body, rather than inside a nested envelope. Deterministic UUIDv4
     identifiers remain stable for a given seed and output position while the
     generator never repeats a sample value.
 
@@ -313,7 +313,7 @@ def _record_seed(seed: int, index: int) -> int:
 
 
 def _date(value: date) -> str:
-    """Format a date as an eight-digit GDF date.
+    """Format a date as an eight-digit compact source date.
 
     Args:
         value: Date to format.

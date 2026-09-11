@@ -1,7 +1,7 @@
 """Generate deterministic, source-shaped provider records.
 
 This module owns provider root, address, and network field construction for
-the checked-in GDF provider layout and its source-shaped happy-path values.
+the checked-in provider layout and its source-shaped happy-path values.
 """
 
 from collections.abc import Mapping
@@ -43,7 +43,7 @@ def generate_record(
     client_values: Mapping[str, object],
     profile: str,
 ) -> dict[str, object]:
-    """Generate one GDF-profile provider happy-path record.
+    """Generate one checked-in-profile provider happy-path record.
 
     Args:
         seed: Shared deterministic generation seed.
@@ -63,7 +63,7 @@ def generate_record(
     state, city, zip_code, county, region = randomizer.choice(_LOCATIONS)
     start = _date(date(2020, 1, 1) + timedelta(days=randomizer.randrange(1800)))
     individual = randomizer.choice((True, False))
-    # CDF/GDF uses P/F provider codes. NPPES alone uses entity type 1/2.
+    # CDF uses P/F provider codes. NPPES alone uses entity type 1/2.
     record_type = "P" if individual else "F"
     first = faker.first_name().upper() if individual else ""
     middle = faker.first_name()[0].upper() if individual else ""
@@ -249,8 +249,8 @@ def _transport_headers(
 ) -> dict[str, object]:
     """Build the flattened Cotiviti envelope used by EIP provider samples.
 
-    Provider roster samples carry their EIP transport and GDF ingestion
-    attributes at the root of the provider record. Deterministic UUIDv4-format
+    Provider roster samples carry their EIP transport and ingestion attributes
+    at the root of the provider record. Deterministic UUIDv4-format
     identifiers preserve the source wire format without copying sample values.
 
     Args:
@@ -286,7 +286,7 @@ def _transport_headers(
 
 
 def _date(value: date) -> str:
-    """Format a date as an eight-digit GDF date.
+    """Format a date as an eight-digit compact source date.
 
     Args:
         value: Date to format.

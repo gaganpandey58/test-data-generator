@@ -9,9 +9,8 @@ import argparse
 import json
 import re
 from pathlib import Path
-from zipfile import ZipFile
 from xml.etree import ElementTree
-
+from zipfile import ZipFile
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -51,7 +50,7 @@ def extract_source(path: Path) -> dict[str, object]:
 
 
 def validate_catalog_coverage(source: dict[str, object], catalog_path: Path) -> list[str]:
-    """Return GDF fields named by the DOCX but absent from catalog source_fields."""
+    """Return source-document fields absent from catalog source_fields."""
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     catalog_fields = {
         field

@@ -54,7 +54,7 @@ _UPDATE_PROTECTED_FIELDS = frozenset(
     }
 )
 
-# The Claim GDF declares this field as an integer even when a source fixture
+# The Claim schema declares this field as an integer even when a source fixture
 # happens to serialize the source tax identifier as text.  Payment uses the
 # same logical field name but its 835 schema requires a string, so the rule is
 # profile-specific rather than a global field-name exception.
@@ -116,7 +116,7 @@ _STATE_CODES = (
     "WY",
 )
 
-# These are source-domain code sets, not arbitrary text fallbacks.  The GDF
+# These are source-domain code sets, not arbitrary text fallbacks. The JSON
 # schemas intentionally leave many clinical values as ``string`` because they
 # are validated by the receiving application.  Updates must nevertheless keep
 # those values in their healthcare code domains.
@@ -735,7 +735,7 @@ def _changed_date_like(value: str) -> str:
 def _semantic_code_candidate(
     field: str, value: str, randomizer: Random, force_change: bool = False
 ) -> str | None:
-    """Choose a valid-looking GDF/healthcare code for a constrained field.
+    """Choose a valid-looking healthcare code for a constrained field.
 
     The schemas do not carry every external code system.  This classifier is
     intentionally based on stable semantic suffixes/prefixes rather than a
@@ -864,7 +864,7 @@ def _is_constrained_field(field: str) -> bool:
 
 
 def _is_compact_date_field(field: str, value: str) -> bool:
-    """Return whether a string is an emitted compact GDF date."""
+    """Return whether a string is an emitted compact source date."""
     return ("DATE" in field or field.endswith("_AT")) and len(value) == 8 and value.isdigit()
 
 

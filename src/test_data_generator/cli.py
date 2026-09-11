@@ -9,7 +9,6 @@ details of parsing, validation, and atomic file publication.
 import argparse
 import json
 import shutil
-import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
@@ -89,7 +88,6 @@ def generate(config: Path, mode: str = "all") -> None:
     """
     if mode not in {"all", "creation", "updates"}:
         raise CommandError(f"Unknown generation mode {mode!r}")
-    _refresh_gdf_schemas()
     try:
         execution = load_execution_config(config)
         run_config = select_execution_entities(load_config(execution.config_path), execution)
@@ -1041,27 +1039,3 @@ def run_default() -> int:
         print(error, file=sys.stderr)
         return 2
     return 0
-
-
-def _refresh_gdf_schemas() -> None:
-    """Synchronize schemas with the newest workbook under ``schema/gdf``.
-
-    Replacing the existing workbook or adding a newer ``.xlsx`` file is enough:
-    the next generation run refreshes available GDF properties before records
-    are produced. Layouts still decide which fields appear in JSONL.
-    """
-    project_root = Path(__file__).resolve().parents[2]
-    gdf_directory = project_root / "schema" / "gdf"
-    workbooks = sorted(gdf_directory.glob("*.xlsx"), key=lambda path: path.stat().st_mtime)
-    if not workbooks:
-        return
-    command = [
-        sys.executable,
-        str(project_root / "schema" / "tools" / "extract-gdf-catalogs.py"),
-        str(workbooks[-1]),
-    ]
-    result = subprocess.run(command, cwd=project_root, check=False, capture_output=True, text=True)
-    if result.returncode:
-        raise CommandError(
-            "GDF schema refresh failed. Check schema/gdf for a valid Excel workbook."
-        )

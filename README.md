@@ -23,12 +23,11 @@ Professional and institutional claims and payments are distinct streams and are 
 
 ## Design
 
-The project separates the fields that *can* be generated from the fields that are *currently emitted*. This avoids losing GDF coverage while keeping output identical in shape to the selected source layouts.
+The project separates the fields that *can* be generated from the fields that are *currently emitted*. Checked-in JSON Schemas define the available fields, while layouts keep output identical in shape to the selected source layouts.
 
 ```mermaid
 flowchart LR
-    A["schema/gdf workbook"] --> B["Complete GDF field catalog<br/>all available attributes"]
-    B --> C["JSON Schemas<br/>validate all available fields"]
+    A["Checked-in JSON Schemas<br/>all available attributes"] --> C["Schema validation"]
     D["Simple client profile file<br/>headers and client values"] --> F["Entity builder"]
     E["Layout profile<br/>selected headers, root fields, groups"] --> G["Layout projection"]
     F --> G
@@ -38,28 +37,13 @@ flowchart LR
     K["config/*.json<br/>global + domain settings"] --> F
 ```
 
-### GDF fields and schemas
+### JSON Schemas
 
-The Excel workbook in [`schema/gdf/`](schema/gdf/) is the complete field
-catalog. Replace it with an updated workbook, or add a newer `.xlsx` file; the
-next generation run automatically detects the newest workbook and refreshes
-the JSON Schemas under [`schema/json/`](schema/json/). This keeps every
-available provider, member, and claim field—even fields not emitted today.
-
-From the repository root, refresh schema properties with:
-
-```sh
-uv run python schema/tools/extract-gdf-catalogs.py schema/gdf/GDF\ Request\ File\ Layouts\ Standard.xlsx
-```
-
-Or verify that no GDF field is missing without writing files:
-
-```sh
-uv run python schema/tools/extract-gdf-catalogs.py schema/gdf/GDF\ Request\ File\ Layouts\ Standard.xlsx --verify
-```
-
-The schemas are the extension point for future layouts. A field is not removed
-merely because a current source sample does not use it.
+The checked-in files under [`schema/json/`](schema/json/) are the complete
+field catalog and validation contract. They are loaded directly at runtime;
+there is no workbook refresh step or Excel dependency. The schemas remain the
+extension point for future layouts, so a field is not removed merely because a
+current source sample does not use it.
 
 ### Layouts control output
 
@@ -70,7 +54,9 @@ The JSON files under [src/test_data_generator/layouts/](src/test_data_generator/
 - nested groups and their child fields; and
 - parent references that must stay in a nested group.
 
-Only fields selected by a layout are emitted. This is why a complete GDF catalog does not cause extra attributes to appear in generated JSONL. For example, the member layout explicitly selects the `CM_MEMBER_COB` nested group.
+Only fields selected by a layout are emitted. This is why the complete schema
+catalog does not cause extra attributes to appear in generated JSONL. For
+example, the member layout explicitly selects the `CM_MEMBER_COB` nested group.
 
 Nested projection is generic. If a nested object repeats a value already held by its parent, it is removed unless that group declares the field as a required parent reference. The layout—not entity-specific code—decides which structural links such as member or provider identifiers remain duplicated.
 
@@ -701,8 +687,7 @@ To audit the DOCX revision and preserve its tables as source evidence:
 make extract-source
 ```
 
-`generate-data` automatically refreshes schemas from `schema/gdf/` first. To
-use another configuration file:
+To use another configuration file:
 
 ```sh
 uv run python -m test_data_generator generate --config path/to/config.json
@@ -744,9 +729,8 @@ make verify
 runconfig.json                                 # Execution scope and selected phases
 config/                                        # Modular global, domain, and common settings
 schema/
-├── gdf/                                      # Replaceable GDF Excel source
-├── json/                                     # Complete GDF-aware JSON Schemas
-└── tools/                                    # GDF schema refresh utility
+├── json/                                     # Runtime JSON Schemas
+└── tools/                                    # Source-document audit utilities
 src/test_data_generator/
 ├── configuration/                            # Client profiles and config loading
 ├── core/                                     # Generation, validation, identifiers

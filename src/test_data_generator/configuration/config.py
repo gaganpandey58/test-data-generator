@@ -44,7 +44,7 @@ class EntityConfig:
         client_headers: Immutable client-specific envelope values for this
             output stream.
         client_values: Immutable client-specific non-header generation values.
-        profile: GDF source-layout profile applied to generated records.
+        profile: Source-layout profile applied to generated records.
         schema: Absolute JSON Schema path used to validate each output row.
         module: Dotted module path exposing the entity record generator.
         filename: Safe JSONL filename relative to the output directory.

@@ -21,7 +21,6 @@ This document describes the current implementation in this repository. The autho
 
 - Python 3.12 or newer.
 - `uv` installed and available on `PATH`.
-- A valid GDF workbook under `schema/gdf/`. The repository already includes one.
 
 Install runtime and development dependencies:
 
@@ -55,9 +54,8 @@ test-data-generator/
 │   ├── claims.config.json                 837P/837I selection and updates
 │   ├── payments.config.json               835P/835I scenarios and updates
 ├── schema/
-│   ├── gdf/                               GDF Excel source
 │   ├── json/                              Runtime JSON Schemas
-│   └── tools/                             Schema extraction/verification scripts
+│   └── tools/                             Source-document audit utilities
 ├── src/test_data_generator/
 │   ├── cli.py                             CLI orchestration and atomic publication
 │   ├── configuration/
@@ -93,7 +91,7 @@ flowchart TD
     EC --> N[Normalized internal entity definitions]
     CP[Client profiles] --> B[Entity builders]
     N --> B
-    GDF[GDF workbook] --> S[JSON Schemas]
+    S[Checked-in JSON Schemas] --> V
     B --> L[Layout projection]
     L --> V[Schema and relationship validation]
     R[Domain matching/update rules] --> U[Update engine]
@@ -114,14 +112,13 @@ flowchart TD
 4. Inherits direct Claims/Payments domain operations into their Professional and Institutional stream settings. The older `defaults` block remains a compatibility alias.
 5. Normalizes each direct domain `operations` or `modifications` plan into the common internal update request.
 6. Expands the public configuration into internal stream definitions. Schema paths, modules, and filenames are internal safe defaults and cannot be redirected to arbitrary code by configuration.
-7. Refreshes JSON Schemas from the newest `.xlsx` workbook in `schema/gdf/`.
-8. Creates a temporary, same-filesystem staging area and copies the previous requested output directories into it.
-9. Generates creation streams in dependency order.
-10. Optionally derives per-record, per-match-code cases from those creation records.
-11. Generates updates from creation/base records when updates are enabled.
-12. Propagates Claim changes to corresponding Claims History and enabled Payment streams.
-13. Removes stale output only for known disabled streams.
-14. Atomically swaps the completed staged directories into place. On failure, the previous complete output is restored.
+7. Creates a temporary, same-filesystem staging area and copies the previous requested output directories into it.
+8. Generates creation streams in dependency order.
+9. Optionally derives per-record, per-match-code cases from those creation records.
+10. Generates updates from creation/base records when updates are enabled.
+11. Propagates Claim changes to corresponding Claims History and enabled Payment streams.
+12. Removes stale output only for known disabled streams.
+13. Atomically swaps the completed staged directories into place. On failure, the previous complete output is restored.
 
 ### 4.3 Creation dependency order
 
@@ -162,29 +159,11 @@ The project validates data at several points:
 
 ## 5. Data sources and contracts
 
-### 5.1 GDF workbook
+### 5.1 JSON Schemas
 
-The newest workbook in `schema/gdf/` is used to refresh the available schema properties before generation. The checked-in workbook is:
-
-[`schema/gdf/GDF Request File Layouts Standard.xlsx`](schema/gdf/GDF%20Request%20File%20Layouts%20Standard.xlsx)
-
-Refresh explicitly:
-
-```sh
-uv run python schema/tools/extract-gdf-catalogs.py \
-  "schema/gdf/GDF Request File Layouts Standard.xlsx"
-```
-
-Verify without writing:
-
-```sh
-uv run python schema/tools/extract-gdf-catalogs.py \
-  "schema/gdf/GDF Request File Layouts Standard.xlsx" --verify
-```
-
-### 5.2 JSON Schemas
-
-Schemas define allowed fields, required fields, types, patterns, lengths, and entity-specific constraints:
+The checked-in schemas are loaded directly at runtime. They define allowed
+fields, required fields, types, patterns, lengths, and entity-specific
+constraints:
 
 - [`schema/json/provider/provider.schema.json`](schema/json/provider/provider.schema.json)
 - [`schema/json/provider/provider_nppes_individual.schema.json`](schema/json/provider/provider_nppes_individual.schema.json)
@@ -193,7 +172,7 @@ Schemas define allowed fields, required fields, types, patterns, lengths, and en
 - [`schema/json/claim/claim.schema.json`](schema/json/claim/claim.schema.json)
 - [`schema/json/payment/payment.schema.json`](schema/json/payment/payment.schema.json)
 
-### 5.3 Layouts
+### 5.2 Layouts
 
 Layouts are the exact emitted-field contracts:
 
@@ -212,17 +191,17 @@ jq -r '.headers[].name, .root[].name, (.groups[] | .[].name)' \
 
 If a configured update field exists in the broad schema/rule catalog but not in the generated layout, the update fails early with a clear “not present in generated record” message.
 
-### 5.4 Client profiles
+### 5.3 Client profiles
 
 [`client_profiles.json`](src/test_data_generator/configuration/client_profiles.json) supplies client-owned envelope values such as payer, platform, product, dataset, source format, and publisher. The current selectable client is `chc`.
 
 To add a client, add complete `headers` and `values` entries for Provider, Member, Professional Claim, and Institutional Claim profiles, then set `client` in the global config. No entity generator should be forked merely to change client headers.
 
-### 5.5 Sample shapes
+### 5.4 Sample shapes
 
 [`sample_shapes.json`](src/test_data_generator/samples/sample_shapes.json) stores type-only shape information. It fills remaining sample fields with type-compatible defaults. It is not a source of real values and external sample files are not required at runtime.
 
-### 5.6 Matching and update rules
+### 5.5 Matching and update rules
 
 [`update-rule-catalog.json`](src/test_data_generator/configuration/update-rule-catalog.json) is a manifest for four domain files:
 
@@ -235,7 +214,7 @@ Claims History reuses the corresponding Claim matching rules; it does not define
 a separate History match code. It can nevertheless be generated and updated as
 a standalone CH stream, or linked one-to-one to an 837 Claim stream.
 
-### 5.7 Invalid values
+### 5.6 Invalid values
 
 [`invalid-values.json`](src/test_data_generator/configuration/invalid-values.json) is the only shared invalid-value source. Resolution first tries the exact field name, then semantic/type keys such as `NPI`, `SSN`, `DATE`, `AMOUNT`, `CODE`, `STRING`, `NUMBER`, `INTEGER`, `BOOLEAN`, and `DEFAULT`.
 
@@ -1772,10 +1751,6 @@ Counts may be lower; the remainder becomes MATCHED. They may not be higher. Redu
 
 Check the field's generated type, allowed enum/code, length, and layout. Normal updates should be schema-compatible. `INVALID`, `MISSING`, and `EMPTY` failures may be intentional.
 
-### GDF schema refresh fails
-
-Ensure the newest workbook in `schema/gdf/` is a readable `.xlsx` file. Run the extractor manually to see detailed workbook errors.
-
 ### `uv` cache permission error
 
 Use a writable cache directory:
@@ -1872,7 +1847,7 @@ When requirements change, update the correct layer:
 
 | Change | Correct location |
 | --- | --- |
-| New/changed GDF field/type/length | GDF workbook, then schema refresh. |
+| New/changed field/type/length | Entity JSON Schema and its focused tests. |
 | Emit or omit a field | Entity layout. |
 | Client-specific envelope/default | `client_profiles.json`. |
 | Matching anchor, priority, requiredness, elasticity, or weight | Domain rule JSON. |
@@ -1882,7 +1857,7 @@ When requirements change, update the correct layer:
 | New field-generation semantics | Appropriate entity/shared generation code plus tests. |
 | New dependency synchronization | Shared synchronization/relationship logic plus tests. |
 
-Never add fields to a generator merely because they appear in a sample omission/presence pattern. The GDF/schema/layout/rule combination determines the complete supported contract.
+Never add fields to a generator merely because they appear in a sample omission/presence pattern. The schema/layout/rule combination determines the complete supported contract.
 
 ## 23. Operational checklist
 
@@ -1939,7 +1914,4 @@ uv run python -m test_data_generator provider-cdf \
 uv run python -m unittest discover -s tests -v
 make verify
 
-# GDF verification
-uv run python schema/tools/extract-gdf-catalogs.py \
-  "schema/gdf/GDF Request File Layouts Standard.xlsx" --verify
 ```

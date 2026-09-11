@@ -70,7 +70,7 @@ def rules_for_records(
 ) -> EntityRules:
     """Build update eligibility from a code-defined record shape.
 
-    NPPES has two intentionally separate source shapes and no GDF layout or
+    NPPES has two intentionally separate source shapes and no shared layout or
     JSON Schema in this project.  This adapter lets those records use the same
     shared operation resolver as every other entity without turning a sample
     file into a field catalog.  Every field actually emitted by either shape
@@ -223,7 +223,7 @@ def _add_layout_fields(fields: dict[str, FieldRule], profile: str) -> None:
     The survivorship catalog remains authoritative for matching keys,
     requiredness, weights, and matching methods.  Layouts are authoritative
     for the complete emitted field surface.  Adding absent layout fields here
-    prevents the catalog from becoming a partial allowlist whenever the GDF
+    prevents the catalog from becoming a partial allowlist whenever the
     layout grows, while leaving all curated matching semantics intact.
     """
     try:
