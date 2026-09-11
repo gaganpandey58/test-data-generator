@@ -353,27 +353,14 @@ def generate(config: Path, mode: str = "all") -> None:
                 and entity.linked_to_claim
             ):
                 continue
-            # Related streams are identical to their source by default. They
-            # receive an update fixture only when that stream explicitly asks
-            # for an operation.
+            # Update generation is opt-in per stream. A global enabled flag
+            # permits updates; it does not manufacture a default mutation for
+            # every created entity. Related streams can still be propagated
+            # from an explicitly updated Claim below.
             has_explicit_update = bool(
                 {"operation", "expected_outcome", "modifications"}.intersection(entity.update)
             )
-            if entity.name == "provider_nppes" and not has_explicit_update:
-                continue
-            if (
-                entity.name in {"claim_history_professional", "claim_history_institutional"}
-                and not has_explicit_update
-            ):
-                continue
-            if entity.source_entity is not None and not has_explicit_update:
-                continue
-            # A Claim update derives its related Payment update below. A direct
-            # Payment operation remains an independent adjudication fixture.
-            if (
-                entity.name in {"payment_professional", "payment_institutional"}
-                and not has_explicit_update
-            ):
+            if not has_explicit_update:
                 continue
             rules_entity = entity.source_entity or entity.name
             entity_rules = rules.get(rules_entity)

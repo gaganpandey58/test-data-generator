@@ -794,6 +794,19 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     """
     defaults = _entity_defaults()
     entities = {name: dict(default) for name, default in defaults.items()}
+    provider_config = raw_config.get("provider")
+    nested_nppes = provider_config.get("nppes") if isinstance(provider_config, Mapping) else None
+    legacy_nppes = raw_config.get("provider_nppes")
+    if isinstance(nested_nppes, Mapping) and isinstance(legacy_nppes, Mapping):
+        raise ConfigurationError(
+            "Configure NPPES only under provider.nppes; provider_nppes cannot be used "
+            "at the same time"
+        )
+    if isinstance(legacy_nppes, Mapping) and "additional_count" in legacy_nppes:
+        raise ConfigurationError(
+            "provider_nppes.additional_count is not supported; use "
+            "provider.nppes.additional_count for CDF-only records"
+        )
     for name in ("provider", "member"):
         value = raw_config.get(name)
         if isinstance(value, dict):
@@ -803,13 +816,28 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 nppes = value.get("nppes", {})
                 cdf = value.get("cdf", {})
                 nppes_count = _nppes_total(nppes)
-                additional_count = cdf.get("additional_count", 0) if isinstance(cdf, dict) else 0
+                nppes_additional_count = (
+                    nppes.get("additional_count", 0) if isinstance(nppes, Mapping) else 0
+                )
+                legacy_cdf_additional_count = (
+                    cdf.get("additional_count", 0) if isinstance(cdf, Mapping) else 0
+                )
+                if nppes_additional_count and legacy_cdf_additional_count:
+                    raise ConfigurationError(
+                        "Configure CDF-only records with provider.nppes.additional_count; "
+                        "provider.cdf.additional_count cannot also be non-zero"
+                    )
+                # ``provider.cdf.additional_count`` remains a compatibility
+                # fallback. New configurations keep all linked NPPES/CDF
+                # settings together under ``provider.nppes``.
+                additional_count = nppes_additional_count or legacy_cdf_additional_count
                 selection = {
                     key: item for key, item in value.items() if key not in {"nppes", "cdf"}
                 }
                 selection["count"] = int(nppes_count) + int(additional_count)
                 entities[name] = _selected_entity(entities[name], selection)
                 nppes_selection = dict(nppes) if isinstance(nppes, Mapping) else {}
+                nppes_selection.pop("additional_count", None)
                 nppes_selection["count"] = int(nppes_count)
                 if _has_explicit_update_selection(nppes_selection):
                     entities["provider_nppes"] = _selected_entity(
@@ -882,9 +910,8 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                     entities[history_entity_name], history_selection
                 )
 
-    top_level_nppes = raw_config.get("provider_nppes")
-    if isinstance(top_level_nppes, Mapping):
-        nppes_selection = dict(top_level_nppes)
+    if isinstance(legacy_nppes, Mapping):
+        nppes_selection = dict(legacy_nppes)
         nppes_selection["count"] = _nppes_total(nppes_selection)
         if _has_explicit_update_selection(nppes_selection):
             entities["provider_nppes"] = _selected_entity(
@@ -1187,6 +1214,11 @@ def _effective_record_count(
     ):
         raise ConfigurationError(f"Count for {entity!r} must be between 0 and {MAX_RECORD_COUNT:,}")
     if entity in {"claim_history_professional", "claim_history_institutional"}:
+        # A disabled CH stream has no source dependency. In particular, a
+        # zero-count linked selection must not require an otherwise disabled
+        # paired 837 stream.
+        if count == 0:
+            return 0
         if not raw_entity.get("linked_to_claim", False):
             return count
         paired_entity = {

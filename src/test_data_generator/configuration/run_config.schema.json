@@ -198,6 +198,7 @@
       "allOf": [
         {"$ref": "#/$defs/entity"},
         {"not": {"required": ["mr"]}},
+        {"not": {"required": ["additional_count"]}},
         {"anyOf": [{"required": ["count"]}, {"required": ["nppes"]}, {"required": ["cdf"]}]}
       ]
     },
@@ -219,14 +220,16 @@
       "allOf": [
         {"$ref": "#/$defs/entity"},
         {"required": ["count"]},
-        {"not": {"required": ["mr"]}}
+        {"not": {"required": ["mr"]}},
+        {"not": {"required": ["additional_count"]}}
       ]
     },
     "claim_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
         {"required": ["count"]},
-        {"not": {"required": ["mr"]}}
+        {"not": {"required": ["mr"]}},
+        {"not": {"required": ["additional_count"]}}
       ]
     },
     "nppes_entity": {
@@ -240,7 +243,7 @@
       "allOf": [
         {"$ref": "#/$defs/entity"},
         {"required": ["count"]},
-        {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}}
+        {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}, {"required": ["additional_count"]}]}}
       ]
     },
     "history_domain": {
@@ -262,7 +265,8 @@
     "member_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"required": ["count"]}
+        {"required": ["count"]},
+        {"not": {"required": ["additional_count"]}}
       ]
     },
     "entity": {
@@ -270,6 +274,7 @@
       "additionalProperties": false,
       "properties": {
         "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "additional_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "nppes": {"$ref": "#/$defs/nppes_entity"},
         "individual": {"type": "integer", "minimum": 0, "maximum": 1000000},
         "organizational": {"type": "integer", "minimum": 0, "maximum": 1000000},

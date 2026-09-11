@@ -1,7 +1,6 @@
 {
   "provider": {
-    "nppes": {"count": 10},
-    "cdf": {"additional_count": 90},
+    "nppes": {"count": 10, "additional_count": 90},
     "operations": [
       {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
     ]

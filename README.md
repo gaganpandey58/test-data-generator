@@ -441,20 +441,29 @@ Use NPPES field names (for example, `PROVIDER_FIRST_NAME`), not CDF field names
 such as `CP_PROVIDER_FIRST_NAME`.
 
 ```json
-"provider_nppes": {
-  "count": 2,
-  "individual": 1,
-  "organizational": 1,
-  "operations": [{
-    "type": "UPDATE",
-    "fields": ["PROVIDER_FIRST_NAME", "LICENSE_NUMBER"],
-    "values": {
-      "PROVIDER_FIRST_NAME": "AMELIA",
-      "LICENSE_NUMBER": "AZ123456"
-    }
-  }]
+"provider": {
+  "nppes": {
+    "count": 2,
+    "individual": 1,
+    "organizational": 1,
+    "additional_count": 5,
+    "operations": [{
+      "type": "UPDATE",
+      "fields": ["PROVIDER_FIRST_NAME", "LICENSE_NUMBER"],
+      "values": {
+        "PROVIDER_FIRST_NAME": "AMELIA",
+        "LICENSE_NUMBER": "AZ123456"
+      }
+    }]
+  }
 }
 ```
+
+`nppes.additional_count` controls only the additional CDF rows whose NPIs are
+not present in NPPES; it does not add NPPES records. The legacy
+`provider.cdf.additional_count` spelling is accepted for existing runs, but new
+configuration should use the nested NPPES section. Do not combine the nested
+form with the legacy top-level `provider_nppes` section.
 
 Updates use five generic operations instead of a separate operation per field or field
 combination:
@@ -481,8 +490,8 @@ keys are excluded from weight changes.
 "provider": {
   "nppes": {
     "count": 10,
-  },
-  "cdf": {"additional_count": 5}
+    "additional_count": 5
+  }
 }
 ```
 
