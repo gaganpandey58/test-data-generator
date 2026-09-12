@@ -871,6 +871,125 @@ def _reconciled_payment_financials(
     }
 
 
+def reconcile_financials(
+    record: dict[str, object], profile: str, changed_fields: frozenset[str]
+) -> dict[str, object]:
+    """Rebalance a directly updated 835 Payment and its adjustment slots."""
+    financial_fields = {
+        f"{prefix}_{suffix}"
+        for prefix in ("CH", "CD")
+        for suffix in (
+            "CHARGE_AMOUNT",
+            "ALLOWED_AMOUNT",
+            "PAID_AMOUNT",
+            "COINSURANCE_AMOUNT",
+            "COPAY_AMOUNT",
+            "DEDUCTIBLE_AMOUNT",
+            "PATIENT_LIABILITY_AMOUNT",
+        )
+    }
+    adjustment_fields = {
+        f"CD_{kind}_{number}"
+        for number in range(1, 7)
+        for kind in (
+            "ADJUSTMENT_AMOUNT",
+            "CLAIM_ADJUSTMENT_GROUP_CODE",
+            "CLAIM_ADJUSTMENT_REASON_CODE",
+        )
+    }
+    if not changed_fields.intersection(financial_fields | adjustment_fields):
+        return record
+    details = record.get("CLAIM_DETAIL")
+    if not isinstance(details, list) or len(details) != 1 or not isinstance(details[0], dict):
+        raise ValueError("Financial Payment updates require exactly one generated CLAIM_DETAIL row")
+    detail = details[0]
+    financials = _reconciled_payment_financials(record, detail, changed_fields)
+
+    adjustment_amounts = [
+        _number(detail.get(f"CD_ADJUSTMENT_AMOUNT_{number}")) for number in range(1, 7)
+    ]
+    for number in range(1, 7):
+        amount_field = f"CD_ADJUSTMENT_AMOUNT_{number}"
+        group_field = f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}"
+        reason_field = f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}"
+        if (
+            changed_fields.intersection({group_field, reason_field})
+            and adjustment_amounts[number - 1] == 0
+        ):
+            adjustment_amounts[number - 1] = 1
+        if adjustment_amounts[number - 1] > 0:
+            defaults = (
+                ("CO", "45")
+                if number == 1
+                else ("PR", str(number - 1))
+                if number <= 4
+                else ("OA", "97")
+            )
+            if not _present(detail.get(group_field)):
+                detail[group_field] = defaults[0]
+            if not _present(detail.get(reason_field)):
+                detail[reason_field] = defaults[1]
+        elif amount_field in changed_fields:
+            detail[group_field] = ""
+            detail[reason_field] = ""
+
+    if "CD_ADJUSTMENT_AMOUNT_2" in changed_fields:
+        financials["deductible"] = adjustment_amounts[1]
+    if "CD_ADJUSTMENT_AMOUNT_3" in changed_fields:
+        financials["coinsurance"] = adjustment_amounts[2]
+    if "CD_ADJUSTMENT_AMOUNT_4" in changed_fields:
+        financials["copay"] = adjustment_amounts[3]
+    if changed_fields.intersection(
+        {"CD_ADJUSTMENT_AMOUNT_2", "CD_ADJUSTMENT_AMOUNT_3", "CD_ADJUSTMENT_AMOUNT_4"}
+    ):
+        financials["liability"] = (
+            financials["deductible"] + financials["coinsurance"] + financials["copay"]
+        )
+        financials["allowed"] = max(financials["allowed"], financials["liability"])
+        financials["paid"] = financials["allowed"] - financials["liability"]
+
+    extras = adjustment_amounts[4] + adjustment_amounts[5]
+    if "CD_ADJUSTMENT_AMOUNT_1" in changed_fields:
+        financials["charge"] = financials["allowed"] + adjustment_amounts[0] + extras
+    elif changed_fields.intersection(
+        {
+            "CD_ADJUSTMENT_AMOUNT_5",
+            "CD_ADJUSTMENT_AMOUNT_6",
+            "CD_CLAIM_ADJUSTMENT_GROUP_CODE_5",
+            "CD_CLAIM_ADJUSTMENT_REASON_CODE_5",
+            "CD_CLAIM_ADJUSTMENT_GROUP_CODE_6",
+            "CD_CLAIM_ADJUSTMENT_REASON_CODE_6",
+        }
+    ):
+        financials["charge"] = max(financials["charge"], financials["allowed"] + extras)
+
+    adjustment_amounts[0] = max(financials["charge"] - financials["allowed"] - extras, 0)
+    adjustment_amounts[1] = financials["deductible"]
+    adjustment_amounts[2] = financials["coinsurance"]
+    adjustment_amounts[3] = financials["copay"]
+    financials["charge"] = financials["paid"] + sum(adjustment_amounts)
+
+    for prefix in ("CH", "CD"):
+        target = record if prefix == "CH" else detail
+        for suffix, key in (
+            ("CHARGE_AMOUNT", "charge"),
+            ("ALLOWED_AMOUNT", "allowed"),
+            ("PAID_AMOUNT", "paid"),
+            ("COINSURANCE_AMOUNT", "coinsurance"),
+            ("COPAY_AMOUNT", "copay"),
+            ("DEDUCTIBLE_AMOUNT", "deductible"),
+            ("PATIENT_LIABILITY_AMOUNT", "liability"),
+        ):
+            target[f"{prefix}_{suffix}"] = financials[key]
+    for number, amount in enumerate(adjustment_amounts, start=1):
+        detail[f"CD_ADJUSTMENT_AMOUNT_{number}"] = amount
+        if amount == 0:
+            detail[f"CD_CLAIM_ADJUSTMENT_GROUP_CODE_{number}"] = ""
+            detail[f"CD_CLAIM_ADJUSTMENT_REASON_CODE_{number}"] = ""
+    _validate_payment_record(record, profile)
+    return record
+
+
 def _allocate_liability(
     liability: int | float, copay: int | float, deductible: int | float
 ) -> tuple[int | float, int | float, int | float]:

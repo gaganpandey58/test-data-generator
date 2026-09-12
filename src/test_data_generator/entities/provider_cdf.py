@@ -9,7 +9,13 @@ from typing import Mapping
 from test_data_generator.configuration.profiles import load_client_headers, load_client_values
 from test_data_generator.core.identifiers import valid_npi
 from test_data_generator.entities.provider import generate_record
-from test_data_generator.entities.provider_nppes import generate_record_from_cdf, generate_records
+from test_data_generator.entities.provider_nppes import (
+    generate_record_from_cdf,
+    generate_records,
+)
+from test_data_generator.entities.provider_nppes import (
+    validate_record as validate_nppes_record,
+)
 from test_data_generator.layouts import load_layout, project_record
 
 
@@ -30,6 +36,8 @@ def generate_linked_provider_fixtures(
     individual_count: int | None = None,
     organizational_count: int | None = None,
     header_order: str = "source",
+    cdf_ingestion_date: str | None = None,
+    nppes_ingestion_date: str | None = None,
 ) -> dict[str, Path]:
     """Generate linked NPPES/CDF rows plus configurable CDF-only rows."""
     records = build_linked_provider_records(
@@ -41,6 +49,8 @@ def generate_linked_provider_fixtures(
         individual_count,
         organizational_count,
         header_order,
+        cdf_ingestion_date,
+        nppes_ingestion_date,
     )
     output_directory.mkdir(parents=True, exist_ok=True)
     paths = {
@@ -61,6 +71,8 @@ def build_linked_provider_records(
     individual_count: int | None = None,
     organizational_count: int | None = None,
     header_order: str = "source",
+    cdf_ingestion_date: str | None = None,
+    nppes_ingestion_date: str | None = None,
 ) -> dict[str, list[dict[str, object]]]:
     """Materialize linked NPPES/CDF records without publishing files."""
     if nppes_count < 1:
@@ -98,6 +110,12 @@ def build_linked_provider_records(
         )
         for index in range(additional_cdf_count)
     )
+    if cdf_ingestion_date is not None:
+        for record in cdf_records:
+            record["INGESTION_DATE"] = cdf_ingestion_date
+    if nppes_ingestion_date is not None:
+        for record in nppes_records:
+            record["INGESTION_DATE"] = nppes_ingestion_date
     cdf_records = [_order_headers(record, header_order) for record in cdf_records]
     return {"provider_nppes": nppes_records, "provider_cdf": cdf_records}
 
@@ -108,9 +126,10 @@ def generate_nppes_file(
     seed: int,
     individual_count: int | None = None,
     organizational_count: int | None = None,
+    ingestion_date: str | None = None,
 ) -> Path:
     """Generate one configured NPPES JSONL file from the code-defined entity."""
-    records = generate_records(count, seed, individual_count, organizational_count)
+    records = generate_records(count, seed, individual_count, organizational_count, ingestion_date)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _write_jsonl(output_path, records)
     return output_path
@@ -244,6 +263,9 @@ def _set_existing(record: dict[str, object], field: str, value: object) -> None:
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
+    for record in records:
+        if "NPI" in record and "ENTITY_TYPE_CODE" in record:
+            validate_nppes_record(record)
     path.write_text(
         "".join(
             json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"

@@ -189,11 +189,7 @@ def resolve_match_fixture(
         (rules.fields[field].weight for field in scenario_changed if field in rules.fields),
         Decimal("0"),
     )
-    applied_plan = plan
-    if scenario_changed:
-        applied_plan += (FieldModification(OperationType.UPDATE, scenario_changed),)
-    if scenario_removed:
-        applied_plan += (FieldModification(OperationType.MISSING, scenario_removed),)
+    applied_plan = _complete_modification_plan(plan, request, scenario_changed, scenario_removed)
     return ResolvedUpdate(
         record=result,
         changed_fields=tuple(dict.fromkeys(changed)),
@@ -215,6 +211,40 @@ def resolve_match_fixture(
         variation_requested_count=request.variation_count,
         variation_fields=variation.applied_fields,
     )
+
+
+def _complete_modification_plan(
+    plan: tuple[FieldModification, ...],
+    request: UpdateRequest,
+    changed: tuple[str, ...],
+    removed: tuple[str, ...],
+) -> tuple[FieldModification, ...]:
+    """Add only implicit mutations that are not already represented in ``plan``."""
+    covered = {
+        field.strip()
+        for modification in plan
+        for configured in modification.fields
+        for field in configured.split(",")
+        if field.strip()
+    }
+    additions: list[FieldModification] = []
+    remaining_changed = tuple(field for field in changed if field not in covered)
+    failure_operation = OperationType.UPDATE
+    if request.failure_mode == FailureMode.INVALID_VALUE:
+        failure_operation = OperationType.INVALID
+    elif request.failure_mode == FailureMode.MISSING_VALUE:
+        failure_operation = OperationType.MISSING
+    if request.failure_field in remaining_changed:
+        additions.append(FieldModification(failure_operation, (request.failure_field,)))
+        remaining_changed = tuple(
+            field for field in remaining_changed if field != request.failure_field
+        )
+    if remaining_changed:
+        additions.append(FieldModification(OperationType.UPDATE, remaining_changed))
+    remaining_removed = tuple(field for field in removed if field not in covered)
+    if remaining_removed:
+        additions.append(FieldModification(OperationType.MISSING, remaining_removed))
+    return (*plan, *additions)
 
 
 def _method(rules: EntityRules, name: str | None) -> MatchingMethod:

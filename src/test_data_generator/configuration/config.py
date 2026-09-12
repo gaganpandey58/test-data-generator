@@ -188,7 +188,10 @@ def load_execution_config(path: Path) -> ExecutionConfig:
     global generator configuration.  The former ``{\"config\": ...}`` wrapper
     is still accepted for a migration window, but no longer required.
     """
-    request_path = path.resolve()
+    try:
+        request_path = path.resolve()
+    except (OSError, ValueError) as error:
+        raise ConfigurationError("Execution configuration path is invalid") from error
     raw = _load_json(request_path, "execution configuration")
     if "config" in raw:
         _validate_execution_schema(raw)
@@ -260,7 +263,10 @@ def load_config(path: Path) -> RunConfig:
     Raises:
         ConfigurationError: If the configuration or an enabled schema is invalid.
     """
-    config_path = path.resolve()
+    try:
+        config_path = path.resolve()
+    except (OSError, ValueError) as error:
+        raise ConfigurationError("Configuration path is invalid") from error
     raw_config = _load_json(config_path, "configuration")
     if "config" in raw_config:
         execution = load_execution_config(config_path)
@@ -1080,7 +1086,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
                 nppes_selection.pop("additional_count", None)
                 nppes_selection.pop("cdf", None)
                 nppes_selection["count"] = int(nppes_count)
-                if _has_explicit_update_selection(nppes_selection):
+                if nppes_count > 0 or _has_explicit_update_selection(nppes_selection):
                     entities["provider_nppes"] = _selected_entity(
                         entities["provider_nppes"], nppes_selection
                     )
@@ -1154,7 +1160,7 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     if isinstance(legacy_nppes, Mapping):
         nppes_selection = dict(legacy_nppes)
         nppes_selection["count"] = _nppes_total(nppes_selection)
-        if _has_explicit_update_selection(nppes_selection):
+        if int(nppes_selection["count"]) > 0 or _has_explicit_update_selection(nppes_selection):
             entities["provider_nppes"] = _selected_entity(
                 entities["provider_nppes"], nppes_selection
             )
@@ -1937,6 +1943,8 @@ def resolve_output_path(output_directory: Path, filename: str) -> Path:
     Raises:
         ValueError: If the filename is absolute or escapes the output directory.
     """
+    if "\x00" in filename:
+        raise ValueError("must not contain NUL bytes")
     path = Path(filename)
     components = filename.replace("\\", "/").split("/")
     if path.is_absolute() or PureWindowsPath(filename).is_absolute():
@@ -2005,5 +2013,14 @@ def _resolve_path(value: str, config_directory: Path) -> Path:
         Absolute resolved filesystem path. Relative values are interpreted from
         the configuration file rather than the process working directory.
     """
-    candidate = Path(value)
-    return candidate if candidate.is_absolute() else (config_directory / candidate).resolve()
+    if "\x00" in value:
+        raise ConfigurationError("Configuration paths must not contain NUL bytes")
+    try:
+        candidate = Path(value)
+        return (
+            candidate.resolve()
+            if candidate.is_absolute()
+            else (config_directory / candidate).resolve()
+        )
+    except (OSError, ValueError) as error:
+        raise ConfigurationError("Configuration path is invalid") from error

@@ -2,6 +2,7 @@
 
 import json
 import re
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -11,8 +12,9 @@ from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 from random import Random
-from typing import Mapping
+from uuid import UUID
 
+from test_data_generator.core.identifiers import valid_ein, valid_npi, valid_phone_number, valid_ssn
 from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.synchronization import synchronize_record
 
@@ -292,6 +294,7 @@ def resolve_fields(
     seed: int = 0,
     index: int = 0,
     available_fields: set[str] | None = None,
+    available_values: Mapping[str, object] | None = None,
 ) -> tuple[str, ...]:
     """Resolve fields from the catalog and the selected output shape.
 
@@ -322,6 +325,12 @@ def resolve_fields(
         if request.operation == OperationType.MISSING:
             required = [name for name in selected if known[name].required]
             selected = required or selected
+        if available_values is not None:
+            selected = [
+                name
+                for name in selected
+                if _supports_automatic_mutation(available_values, name, request.operation)
+            ]
         selected = [Random(seed * 1_000_003 + index).choice(selected)] if selected else []
     else:
         selected = [
@@ -347,12 +356,13 @@ def resolve_fields(
         unknown_field = next(field for field in selected if field not in known)
         raise ValueError(f"Update selection contains an unknown field {unknown_field!r}")
     if any(field in rules.keys for field in selected) and not (
-        request.operation in {OperationType.INVALID, OperationType.MISSING}
+        request.operation in {OperationType.INVALID, OperationType.MISSING, OperationType.EMPTY}
         or (request.operation == OperationType.UPDATE and explicit_selection)
     ):
         matching = next(field for field in selected if field in rules.keys)
         raise ValueError(
-            f"Matching key {matching!r} requires an explicit UPDATE, INVALID, or MISSING operation"
+            f"Matching key {matching!r} requires an explicit UPDATE, INVALID, MISSING, "
+            "or EMPTY operation"
         )
     if request.operation not in {OperationType.INVALID, OperationType.MISSING}:
         protected = next((field for field in selected if field in _UPDATE_PROTECTED_FIELDS), None)
@@ -368,6 +378,24 @@ def resolve_fields(
             return ()
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))
+
+
+def _supports_automatic_mutation(
+    record: Mapping[str, object], field: str, operation: OperationType
+) -> bool:
+    """Return whether an inferred field can visibly perform an operation."""
+    value = _find_field(record, field)
+    if operation == OperationType.EMPTY:
+        return (
+            not isinstance(value, (list, Mapping))
+            and value is not None
+            and value != ""
+            and value != 0
+            and value is not False
+        )
+    if operation == OperationType.UPDATE and isinstance(value, (list, Mapping)):
+        return bool(value)
+    return True
 
 
 def _is_mutable_for_operation(field: str, operation: OperationType) -> bool:
@@ -427,14 +455,14 @@ def resolve_update(
         )
         if method is None:
             raise ValueError(f"Unknown matching method {request.matching_method!r}")
-        selected_fields = resolve_fields(request, rules, seed, index, _field_names(base))
+        selected_fields = resolve_fields(request, rules, seed, index, _field_names(base), base)
         protected = set(selected_fields).intersection(method.mandatory_fields)
         if protected:
             raise ValueError(
                 f"{request.operation} on mandatory anchor {sorted(protected)[0]!r} "
                 "requires expected_outcome=NO_MATCH"
             )
-    selected = resolve_fields(request, rules, seed, index, _field_names(base))
+    selected = resolve_fields(request, rules, seed, index, _field_names(base), base)
     operation = request.operation
     if operation == OperationType.WEIGHT_CHANGE and not request.fields and not request.include:
         selection_threshold = _weight_threshold(request, rules)
@@ -472,6 +500,8 @@ def resolve_update(
                 _replace_field(result, field, empty_value)
                 if empty_value != old:
                     changed.append(field)
+                if field in rules.keys:
+                    invalidated.append(field)
         elif operation == OperationType.INVALID:
             catalog = request.invalid_values or {}
             for field in selected:
@@ -658,34 +688,70 @@ def _changed_value(value: object, field: str, randomizer: Random, profile: str =
     free-text, demographic, address, identifier, and metadata fields use a
     small, realistic synthetic-value catalog.
     """
-    del randomizer  # Kept in the private signature while matching callers migrate.
     upper_field = field.upper()
-    enum_candidate = _schema_enum_candidate(profile, field, value, Random(0))
+    enum_candidate = _schema_enum_candidate(profile, field, value, randomizer)
     if enum_candidate is not None:
         return enum_candidate
     if upper_field in _INTEGER_IDENTIFIER_FIELDS_BY_PROFILE.get(profile, frozenset()):
-        return int(str(_first_distinct(("753267439", "196010245"), value)))
+        return int(_distinct_generated(valid_ein, value, randomizer))
+    if "NPI" in upper_field:
+        npi_candidate = _distinct_generated(valid_npi, value, randomizer)
+        return (
+            int(npi_candidate)
+            if isinstance(value, int) and not isinstance(value, bool)
+            else npi_candidate
+        )
+    if "SSN" in upper_field:
+        ssn_candidate = _distinct_generated(valid_ssn, value, randomizer)
+        return (
+            int(ssn_candidate)
+            if isinstance(value, int) and not isinstance(value, bool)
+            else ssn_candidate
+        )
+    if "FEDERAL_TAX_ID" in upper_field or "TIN" in upper_field or upper_field.endswith("_EIN"):
+        tax_candidate = _distinct_generated(valid_ein, value, randomizer)
+        return (
+            int(tax_candidate)
+            if isinstance(value, int) and not isinstance(value, bool)
+            else tax_candidate
+        )
+    if (
+        "UUID" in upper_field
+        or any(token in upper_field for token in ("ROWID", "MESSAGE_ID", "CORRELATION_ID"))
+        or _is_uuid(value)
+    ):
+        return _distinct_uuid(value, randomizer)
+    if upper_field in {
+        "CH_CLIENT_CLAIM_UNIQUE_ID",
+        "CH_CLIENT_CLAIM_ID",
+        "CH_CLIENT_ORIGINAL_CLAIM_ID",
+    }:
+        return _changed_client_claim_identifier(value, upper_field, profile, randomizer)
     if isinstance(value, bool):
         return not value
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        code_candidate = _semantic_code_candidate(upper_field, str(value), Random(0))
+        code_candidate = _semantic_code_candidate(upper_field, str(value), randomizer)
         if code_candidate is not None and code_candidate.isdigit():
-            return int(code_candidate) if isinstance(value, int) else float(code_candidate)
+            numeric_candidate: int | float = (
+                int(code_candidate) if isinstance(value, int) else float(code_candidate)
+            )
+            if numeric_candidate == value:
+                second = _semantic_code_candidate(
+                    upper_field, code_candidate, randomizer, force_change=True
+                )
+                if second is not None and second.isdigit():
+                    numeric_candidate = int(second) if isinstance(value, int) else float(second)
+            if numeric_candidate != value:
+                return numeric_candidate
         increment = 1 if isinstance(value, int) else 1.0
         return value + increment
     if isinstance(value, list):
-        return _changed_collection(value, field, profile)
+        return _changed_collection(value, field, profile, randomizer)
     if isinstance(value, Mapping):
-        return _changed_mapping(value, field, profile)
+        return _changed_mapping(value, field, profile, randomizer)
     if isinstance(value, str):
-        if "NPI" in upper_field:
-            return _first_distinct(("7240073479", "2590976199", "8669683897"), value)
-        if "SSN" in upper_field:
-            return _first_distinct(("596258835", "152875870", "732593521"), value)
-        if "FEDERAL_TAX_ID" in upper_field or "TIN" in upper_field or upper_field.endswith("_EIN"):
-            return _first_distinct(("753267439", "196010245", "927655415"), value)
         if "PHONE" in upper_field or "FAX" in upper_field:
-            return _first_distinct(("5697590794", "4867219083", "9925881278"), value)
+            return _distinct_generated(valid_phone_number, value, randomizer)
         if "EMAIL" in upper_field:
             return _first_distinct(
                 ("amelia.parker@example.test", "noah.bennett@example.test"), value
@@ -713,16 +779,13 @@ def _changed_value(value: object, field: str, randomizer: Random, profile: str =
         if "ZIP" in upper_field or "POSTAL" in upper_field:
             return _first_distinct(("78701", "53703"), value)
         if upper_field.endswith("CLIENT_ROOT_CLAIM_ID"):
-            return _changed_root_claim_id(value, Random(0))
-        if (coded_candidate := _semantic_code_candidate(upper_field, value, Random(0))) is not None:
+            return _changed_root_claim_id(value, randomizer)
+        if (
+            coded_candidate := _semantic_code_candidate(upper_field, value, randomizer)
+        ) is not None:
             return coded_candidate
-        if "UUID" in upper_field or "ROWID" in upper_field or "MESSAGE_ID" in upper_field:
-            return _first_distinct(
-                ("3fa85f64-5717-4562-b3fc-2c963f66afa6", "6fa459ea-ee8a-3ca4-894e-db77e160355e"),
-                value,
-            )
         if "ID" in upper_field or "NUMBER" in upper_field or "CONTROL" in upper_field:
-            return _changed_identifier(value, upper_field)
+            return _changed_identifier(value, upper_field, randomizer)
         if "DESCRIPTION" in upper_field:
             return _first_distinct(("PROVIDER UPDATE", "REVISED RECORD"), value)
         if "TITLE" in upper_field or "POSITION" in upper_field:
@@ -738,25 +801,59 @@ def _first_distinct(values: tuple[object, ...], current: object) -> object:
     return next((candidate for candidate in values if candidate != current), values[0])
 
 
-def _changed_collection(value: list[object], field: str, profile: str) -> list[object]:
+def _distinct_generated(
+    generator: Callable[[Random], str], current: object, randomizer: Random
+) -> str:
+    """Generate a valid field-domain value that differs from the source value."""
+    for _ in range(100):
+        candidate = generator(randomizer)
+        if str(candidate) != str(current):
+            return str(candidate)
+    raise ValueError("Could not generate a distinct valid identifier")
+
+
+def _is_uuid(value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _distinct_uuid(value: object, randomizer: Random) -> str:
+    """Generate a deterministic UUIDv4-format replacement from record-local state."""
+    for _ in range(100):
+        candidate = str(UUID(int=randomizer.getrandbits(128), version=4))
+        if candidate != value:
+            return candidate
+    raise ValueError("Could not generate a distinct UUID")
+
+
+def _changed_collection(
+    value: list[object], field: str, profile: str, randomizer: Random
+) -> list[object]:
     """Change a populated nested collection without inventing unrelated rows."""
     if not value:
         raise ValueError(f"UPDATE of empty collection {field!r} requires an explicit field value")
     updated = deepcopy(value)
     first = updated[0]
     if isinstance(first, Mapping):
-        updated[0] = _changed_mapping(first, field, profile)
+        updated[0] = _changed_mapping(first, field, profile, randomizer)
         return updated
-    updated[0] = _changed_value(first, field, Random(0), profile)
+    updated[0] = _changed_value(first, field, randomizer, profile)
     return updated
 
 
-def _changed_mapping(value: Mapping[str, object], field: str, profile: str) -> dict[str, object]:
+def _changed_mapping(
+    value: Mapping[str, object], field: str, profile: str, randomizer: Random
+) -> dict[str, object]:
     """Change the first populated scalar in a nested object deterministically."""
     updated = deepcopy(dict(value))
     for child_name, child_value in updated.items():
         if child_value not in (None, "", [], {}):
-            updated[child_name] = _changed_value(child_value, child_name, Random(0), profile)
+            updated[child_name] = _changed_value(child_value, child_name, randomizer, profile)
             return updated
     raise ValueError(f"UPDATE of empty object {field!r} requires an explicit field value")
 
@@ -1054,7 +1151,7 @@ def _same_shape_identifier(value: str, randomizer: Random) -> str:
     return candidate
 
 
-def _changed_identifier(value: str, field: str) -> str:
+def _changed_identifier(value: str, field: str, randomizer: Random) -> str:
     """Return a deterministic identifier, including when the source is empty.
 
     Empty optional identifiers are common in source records.  An explicit
@@ -1064,24 +1161,25 @@ def _changed_identifier(value: str, field: str) -> str:
     source value is available.
     """
     if value:
-        return _same_shape_identifier(value, Random(0))
+        return _same_shape_identifier(value, randomizer)
+    token = f"{randomizer.randrange(1_000_000_000):09d}"
     if "GROUP_NUMBER" in field:
-        return "GRP-48291"
+        return f"GRP-{token}"
     if "ACCOUNT_CONTROL" in field:
-        return "ACC-482910"
+        return f"ACC-{token}"
     if "MASTER_ID" in field:
-        return "MASTER-482910"
+        return f"MASTER-{token}"
     if "CLAIM" in field:
-        return "CLM-482910"
+        return f"CLM-{token}"
     if "PAYMENT" in field:
-        return "PAY-482910"
+        return f"PAY-{token}"
     if "NETWORK" in field:
-        return "NET-482910"
+        return f"NET-{token}"
     if "CLIENT_ID" in field:
-        return "CLIENT-482910"
+        return f"CLIENT-{token}"
     if "RECORD" in field:
-        return "REC-482910"
-    return "ID-482910"
+        return f"REC-{token}"
+    return f"ID-{token}"
 
 
 def _changed_root_claim_id(value: str, randomizer: Random) -> str:
@@ -1093,6 +1191,26 @@ def _changed_root_claim_id(value: str, randomizer: Random) -> str:
     del randomizer
     replacement = f"{(int(original) + 1) % 100_000_000:08d}"
     return match.group(1) + replacement
+
+
+def _changed_client_claim_identifier(
+    value: object,
+    field: str,
+    profile: str,
+    randomizer: Random,
+) -> str:
+    """Return a Claim identifier that preserves the P/I layout contract."""
+    profile_prefix = "I" if profile == "claim-institutional" else "P"
+    if field == "CH_CLIENT_CLAIM_UNIQUE_ID":
+        prefix, width = f"{profile_prefix}CLU", 11
+    else:
+        prefix, width = f"{profile_prefix}CLM", 9
+
+    for _ in range(100):
+        candidate = f"{prefix}{randomizer.randrange(10**width):0{width}d}"
+        if candidate != value:
+            return candidate
+    raise ValueError(f"Could not generate a distinct valid value for {field}")
 
 
 def _find_field(record: Mapping[str, object], field: str) -> object:

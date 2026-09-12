@@ -7,11 +7,14 @@ details of parsing, validation, and atomic file publication.
 """
 
 import argparse
+import fcntl
+import hashlib
 import json
 import shutil
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
@@ -59,6 +62,7 @@ from test_data_generator.update.scenarios import (
     FailureMode,
     FieldModification,
     OperationType,
+    ResolvedUpdate,
     UpdateRequest,
     load_invalid_values,
     may_violate_schema,
@@ -78,10 +82,10 @@ class CommandError(RuntimeError):
 def generate(config: Path, mode: str = "all") -> None:
     """Generate every enabled entity described by one configuration file.
 
-    The function loads and validates the supplied configuration once, passes
-    shared entity-count context to each enabled generator, prints
-    the resulting JSONL path, and removes only stale output files belonging to
-    disabled known entities.
+    The function loads and validates the supplied configuration once, acquires
+    an output-root lock, removes the prior output root, passes shared
+    entity-count context to each enabled generator, and prints each resulting
+    JSONL path. If generation fails, the prior complete output root is restored.
 
     Args:
         config: Path to the root JSON generation configuration.
@@ -90,15 +94,32 @@ def generate(config: Path, mode: str = "all") -> None:
     Raises:
         CommandError: If configuration loading or entity generation fails.
     """
+    run_config, resolved_mode = _load_run_config(config, mode)
+    try:
+        with _exclusive_output_run(run_config.output_directory):
+            with _fresh_output_root(run_config.output_directory):
+                _generate_loaded(run_config, resolved_mode)
+    except OSError as error:
+        raise CommandError(
+            f"Could not prepare output directory {run_config.output_directory}: {error}"
+        ) from error
+
+
+def _load_run_config(config: Path, mode: str) -> tuple[RunConfig, str]:
+    """Load and validate one execution request before touching prior output."""
     if mode not in {"all", "creation", "updates"}:
         raise CommandError(f"Unknown generation mode {mode!r}")
     try:
         execution = load_execution_config(config)
         run_config = select_execution_entities(load_config(execution.config_path), execution)
-        mode = resolve_execution_mode(mode, execution)
+        resolved_mode = resolve_execution_mode(mode, execution)
     except ConfigurationError as error:
-        raise CommandError(f"Configuration failed for {config.resolve()}: {error}") from error
+        raise CommandError(f"Configuration failed for {config}: {error}") from error
+    return run_config, resolved_mode
 
+
+def _generate_loaded(run_config: RunConfig, mode: str) -> None:
+    """Generate a validated run while its output-root lock is held."""
     rules = None
     needs_match_fixtures = (
         mode in {"all", "creation"}
@@ -116,6 +137,7 @@ def generate(config: Path, mode: str = "all") -> None:
     transaction = _begin_output_transaction(run_config, mode)
     run_config = transaction.staged_config
     entity_counts = {entity.name: entity.count for entity in run_config.entities}
+    entities_by_name = {entity.name: entity for entity in run_config.entities}
     generated_records: dict[str, tuple[Mapping[str, object], ...]] = {}
     if mode in {"all", "creation"} and run_config.creation_enabled:
         histories = {
@@ -141,6 +163,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.seed,
                         run_config.nppes_individual_count,
                         run_config.nppes_organizational_count,
+                        entity.ingestion_date,
                     )
                 except (OSError, ValueError) as error:
                     raise CommandError(f"NPPES generation failed: {error}") from error
@@ -274,6 +297,8 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.nppes_individual_count,
                         run_config.nppes_organizational_count,
                         entity.header_order,
+                        entity.ingestion_date,
+                        entities_by_name["provider_nppes"].ingestion_date,
                     )
                 except (OSError, ValueError) as error:
                     raise CommandError(f"Linked provider generation failed: {error}") from error
@@ -317,6 +342,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.seed,
                         run_config.nppes_individual_count,
                         run_config.nppes_organizational_count,
+                        entities_by_name["provider_nppes"].ingestion_date,
                     )
                 except (OSError, ValueError) as error:
                     raise CommandError(f"NPPES generation failed: {error}") from error
@@ -346,8 +372,8 @@ def generate(config: Path, mode: str = "all") -> None:
     if mode in {"all", "updates"} and run_config.updates_enabled:
         assert rules is not None
         _materialize_update_bases(run_config, entity_counts, generated_records)
-        entities_by_name = {entity.name: entity for entity in run_config.entities}
         propagated_payment_updates: set[str] = set()
+        propagated_history_updates: set[str] = set()
         for entity in run_config.entities:
             if entity.count == 0:
                 continue
@@ -358,15 +384,14 @@ def generate(config: Path, mode: str = "all") -> None:
                     "claim_history_institutional",
                 }
                 and entity.linked_to_claim
+                and entity.name in propagated_history_updates
             ):
                 continue
             # Update generation is opt-in per stream. A global enabled flag
             # permits updates; it does not manufacture a default mutation for
             # every created entity. Related streams can still be propagated
             # from an explicitly updated Claim below.
-            has_explicit_update = bool(
-                {"operation", "expected_outcome", "modifications"}.intersection(entity.update)
-            )
+            has_explicit_update = _has_explicit_update(entity)
             if not has_explicit_update:
                 continue
             rules_entity = entity.source_entity or entity.name
@@ -386,6 +411,7 @@ def generate(config: Path, mode: str = "all") -> None:
             if entity_rules is None:
                 raise CommandError(f"Update rule catalog has no rules for {rules_entity!r}")
             request = _update_request(run_config, entity)
+            resolved_entity_updates: list[ResolvedUpdate] = []
             try:
                 if entity.name in generated_records:
                     output_path = run_update_records(
@@ -395,6 +421,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.update_directory,
                         request,
                         entity_rules,
+                        resolved_entity_updates,
                     )
                 elif claim_source_name := _payment_claim_source_name(
                     entity.name, generated_records
@@ -413,6 +440,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.update_directory,
                         request,
                         entity_rules,
+                        resolved_entity_updates,
                     )
                 elif entity.source_claims is not None:
                     records = derive_payments_from_claims(
@@ -429,6 +457,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.update_directory,
                         request,
                         entity_rules,
+                        resolved_entity_updates,
                     )
                 elif _is_orphan_only_payment(entity.name, entity.scenarios):
                     records = generate_orphan_payments(
@@ -441,6 +470,7 @@ def generate(config: Path, mode: str = "all") -> None:
                         run_config.update_directory,
                         request,
                         entity_rules,
+                        resolved_entity_updates,
                     )
                 else:
                     output_path = run_update_entity(
@@ -451,12 +481,16 @@ def generate(config: Path, mode: str = "all") -> None:
                         request,
                         entity_rules,
                         generated_records,
+                        resolved_entity_updates,
                     )
             except (GenerationError, ValueError) as error:
                 raise CommandError(
                     f"Update generation failed for entity {entity.name!r}: {error}"
                 ) from error
-            print(f"{entity.name}: {entity.count} updates -> {transaction.final_path(output_path)}")
+            written_updates = len(_read_jsonl_records(output_path))
+            print(
+                f"{entity.name}: {written_updates} updates -> {transaction.final_path(output_path)}"
+            )
             if entity.name in {"claim_professional", "claim_institutional"}:
                 history_name = {
                     "claim_professional": "claim_history_professional",
@@ -482,30 +516,52 @@ def generate(config: Path, mode: str = "all") -> None:
                             updated_claims,
                             history_bases,
                             changed_claim_fields,
-                            _history_identifier_values(request),
+                            _history_identifier_values(resolved_entity_updates, request),
                         )
                         schema_invalid_match_fixture = (
                             request.expected_outcome == ExpectedOutcome.NO_MATCH
                             and request.failure_mode
                             in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
                         )
-                        history_path = run_derived_update_records(
-                            history_entity,
-                            updated_history,
-                            run_config.update_directory,
-                            validate_schema=not schema_invalid_match_fixture
-                            and not may_violate_schema(request),
+                        propagation_schema_valid = (
+                            not schema_invalid_match_fixture and not may_violate_schema(request)
                         )
+                        history_request: UpdateRequest | None = None
+                        if _has_explicit_update(history_entity):
+                            history_rules = rules.get(history_name)
+                            if history_rules is None:
+                                raise ValueError(
+                                    f"Update rule catalog has no rules for {history_name!r}"
+                                )
+                            history_request = _update_request(run_config, history_entity)
+                            history_path = run_update_records(
+                                history_entity,
+                                updated_history,
+                                run_config.seed,
+                                run_config.update_directory,
+                                history_request,
+                                history_rules,
+                                validate_schema=propagation_schema_valid,
+                            )
+                            updated_history = _read_jsonl_records(history_path)
+                        else:
+                            history_path = run_derived_update_records(
+                                history_entity,
+                                updated_history,
+                                run_config.update_directory,
+                                validate_schema=propagation_schema_valid,
+                            )
                         changed_history_fields = tuple(
                             _changed_field_names(base, updated)
                             for base, updated in zip(history_bases, updated_history, strict=True)
                         )
                         generated_records[history_name] = updated_history
+                        propagated_history_updates.add(history_name)
                         print(
                             f"{history_entity.name}: {history_entity.count} updates -> "
                             f"{transaction.final_path(history_path)}"
                         )
-                        if payment_entity is None:
+                        if payment_entity is None or payment_entity.count == 0:
                             continue
                         payment_records = derive_payments_from_records(
                             updated_history,
@@ -519,8 +575,10 @@ def generate(config: Path, mode: str = "all") -> None:
                             payment_entity,
                             payment_records,
                             run_config.update_directory,
-                            validate_schema=not schema_invalid_match_fixture
-                            and not may_violate_schema(request),
+                            validate_schema=propagation_schema_valid
+                            and (
+                                history_request is None or not may_violate_schema(history_request)
+                            ),
                         )
                     except (GenerationError, ValueError) as error:
                         raise CommandError(
@@ -532,10 +590,124 @@ def generate(config: Path, mode: str = "all") -> None:
                         f"{payment_entity.name}: {payment_entity.count} updates -> "
                         f"{transaction.final_path(payment_path)}"
                     )
+            elif (
+                entity.name
+                in {
+                    "claim_history_professional",
+                    "claim_history_institutional",
+                }
+                and entity.linked_to_claim
+            ):
+                payment_name = {
+                    "claim_history_professional": "payment_professional",
+                    "claim_history_institutional": "payment_institutional",
+                }[entity.name]
+                payment_entity = entities_by_name.get(payment_name)
+                history_bases = generated_records[entity.name]
+                updated_history = _read_jsonl_records(output_path)
+                generated_records[entity.name] = updated_history
+                propagated_history_updates.add(entity.name)
+                if payment_entity is None or payment_entity.count == 0:
+                    continue
+                try:
+                    changed_history_fields = tuple(
+                        _changed_field_names(base, updated)
+                        for base, updated in zip(history_bases, updated_history, strict=True)
+                    )
+                    payment_records = derive_payments_from_records(
+                        updated_history,
+                        payment_entity.profile,
+                        payment_entity.scenarios,
+                        run_config.seed,
+                        payment_entity.count,
+                        changed_history_fields,
+                    )
+                    payment_path = run_derived_update_records(
+                        payment_entity,
+                        payment_records,
+                        run_config.update_directory,
+                        validate_schema=not may_violate_schema(request),
+                    )
+                except (GenerationError, ValueError) as error:
+                    raise CommandError(
+                        f"Claims History update propagation failed for entity {entity.name!r}: "
+                        f"{error}"
+                    ) from error
+                generated_records[payment_name] = tuple(payment_records)
+                propagated_payment_updates.add(payment_name)
+                print(
+                    f"{payment_entity.name}: {payment_entity.count} updates -> "
+                    f"{transaction.final_path(payment_path)}"
+                )
         _remove_unrequested_payment_updates(run_config, propagated_payment_updates)
         _remove_unrequested_related_updates(run_config)
     _remove_disabled_outputs(run_config)
     transaction.commit()
+
+
+@contextmanager
+def _exclusive_output_run(output_directory: Path) -> Iterator[None]:
+    """Serialize complete runs that publish to the same configured output root."""
+    lock_directory = Path(tempfile.gettempdir()) / "test-data-generator-locks"
+    lock_directory.mkdir(parents=True, exist_ok=True)
+    output_key = hashlib.sha256(str(output_directory.resolve()).encode()).hexdigest()
+    lock_path = lock_directory / f"{output_key}.lock"
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _clear_existing_output(output_directory: Path) -> None:
+    """Delete exactly one validated output root before starting a fresh run."""
+    target = output_directory.resolve()
+    protected = {Path("/").resolve(), Path.home().resolve(), Path.cwd().resolve()}
+    if target in protected or target.name in {"", ".", ".."}:
+        raise OSError(f"refusing to remove unsafe output root {target}")
+    if (target / ".git").exists():
+        raise OSError(f"refusing to remove Git working tree {target}")
+    if target.is_symlink():
+        target.unlink()
+    elif target.exists():
+        if not target.is_dir():
+            raise OSError(f"configured output root is not a directory: {target}")
+        shutil.rmtree(target)
+
+
+@contextmanager
+def _fresh_output_root(output_directory: Path) -> Iterator[None]:
+    """Remove stale output before generation and restore it only after failure.
+
+    Every successful invocation starts from an empty output root, so artifacts
+    omitted by the current configuration cannot survive from an older run.
+    A private backup preserves the last complete generation if the new run
+    fails before publication; consumers therefore never observe a partial
+    replacement as the durable result.
+    """
+    target = output_directory.resolve()
+    backup_directory: tempfile.TemporaryDirectory[str] | None = None
+    backup_path: Path | None = None
+    if target.exists():
+        if not target.is_dir():
+            raise OSError(f"configured output root is not a directory: {target}")
+        backup_directory = tempfile.TemporaryDirectory(
+            prefix=f".{target.name}-previous-", dir=target.parent
+        )
+        backup_path = Path(backup_directory.name) / "output"
+        shutil.copytree(target, backup_path)
+    _clear_existing_output(target)
+    try:
+        yield
+    except Exception:
+        _clear_existing_output(target)
+        if backup_path is not None and backup_path.is_dir():
+            shutil.copytree(backup_path, target)
+        raise
+    finally:
+        if backup_directory is not None:
+            backup_directory.cleanup()
 
 
 @dataclass
@@ -650,7 +822,9 @@ def _materialize_match_fixture_bases(
                 f"Match-fixture entity {fixture.entity!r} has no resolved stream configuration"
             )
         if entity.name == "provider_nppes":
-            generated_records[entity.name] = tuple(generate_nppes_records(2, run_config.seed, 1, 1))
+            generated_records[entity.name] = tuple(
+                generate_nppes_records(2, run_config.seed, 1, 1, entity.ingestion_date)
+            )
             continue
         fixture_entity = replace(entity, count=1, source_entity=None)
         try:
@@ -726,7 +900,7 @@ def _derive_claim_history_updates(
     updated_claims: tuple[Mapping[str, object], ...],
     history_bases: tuple[Mapping[str, object], ...],
     changed_fields: tuple[frozenset[str], ...],
-    identifier_values: Mapping[str, object] | None = None,
+    identifier_values: tuple[Mapping[str, object], ...] = (),
 ) -> tuple[Mapping[str, object], ...]:
     """Derive CH updates from their corresponding 837 updates exactly.
 
@@ -739,13 +913,14 @@ def _derive_claim_history_updates(
     if len(updated_claims) != len(history_bases) or len(updated_claims) != len(changed_fields):
         raise CommandError("Claim and Claims History update record counts differ")
     records: list[Mapping[str, object]] = []
-    for claim, history_base, _changed in zip(
-        updated_claims, history_bases, changed_fields, strict=True
+    for index, (claim, history_base, _changed) in enumerate(
+        zip(updated_claims, history_bases, changed_fields, strict=True)
     ):
         history = deepcopy(dict(claim))
+        replacements = identifier_values[index] if index < len(identifier_values) else {}
         for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
-            if identifier_values is not None and field in identifier_values:
-                history[field] = deepcopy(identifier_values[field])
+            if field in replacements:
+                history[field] = deepcopy(replacements[field])
             elif field in history_base:
                 history[field] = history_base[field]
         history["FILE_TYPE"] = "CH"
@@ -753,13 +928,14 @@ def _derive_claim_history_updates(
     return tuple(records)
 
 
-def _history_identifier_values(request: UpdateRequest) -> Mapping[str, object]:
-    """Return explicitly configured valid CH identifier replacements only.
+def _history_identifier_values(
+    resolved_updates: list[ResolvedUpdate], request: UpdateRequest
+) -> tuple[Mapping[str, object], ...]:
+    """Return each resolved Claim identifier replacement before 837 projection.
 
     Claims layouts deliberately hide their client claim IDs.  A configured
-    value is therefore the sole reliable source for propagating an intentional
-    ID change to the linked CH record; absent one, the established CH ID is
-    preserved instead of fabricating a random replacement.
+    or automatically generated replacement must therefore be captured from the
+    resolved record before those fields are blanked in the emitted 837 row.
     """
     configured: dict[str, object] = {}
     for values in (
@@ -771,7 +947,16 @@ def _history_identifier_values(request: UpdateRequest) -> Mapping[str, object]:
         for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
             if field in values:
                 configured[field] = deepcopy(values[field])
-    return configured
+    result: list[Mapping[str, object]] = []
+    for resolved in resolved_updates:
+        values = dict(configured)
+        changed = set(resolved.changed_fields)
+        for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
+            candidate = resolved.record.get(field)
+            if field in changed and isinstance(candidate, str) and candidate.strip():
+                values[field] = deepcopy(candidate)
+        result.append(values)
+    return tuple(result)
 
 
 def _payment_claim_source_name(name: str, generated_records: Mapping[str, object]) -> str:
@@ -814,6 +999,7 @@ def _materialize_update_bases(
                     run_config.seed,
                     run_config.nppes_individual_count,
                     run_config.nppes_organizational_count,
+                    entity.ingestion_date,
                 )
             )
             continue
@@ -838,6 +1024,12 @@ def _materialize_update_bases(
                 run_config.nppes_individual_count,
                 run_config.nppes_organizational_count,
                 entity.header_order,
+                entity.ingestion_date,
+                next(
+                    candidate.ingestion_date
+                    for candidate in run_config.entities
+                    if candidate.name == "provider_nppes"
+                ),
             )
             generated_records[entity.name] = tuple(records["provider_cdf"])
             generated_records["provider_nppes"] = tuple(records["provider_nppes"])
@@ -858,6 +1050,14 @@ def _materialize_update_bases(
         generated_records[entity.name] = tuple(
             build_entity_records(entity, run_config.seed, entity_counts, generated_records)
         )
+
+
+def _has_explicit_update(entity: object) -> bool:
+    """Return whether a resolved stream explicitly requests an update operation."""
+    update = getattr(entity, "update", {})
+    return isinstance(update, Mapping) and bool(
+        {"operation", "expected_outcome", "modifications"}.intersection(update)
+    )
 
 
 def _update_request(run_config: RunConfig, entity: object) -> UpdateRequest:
@@ -1092,6 +1292,8 @@ def run_default() -> int:
     normal use to one command while ``main`` remains available for an optional
     alternate configuration path.
     """
+    if len(sys.argv) > 1:
+        return main()
     try:
         generate(Path("runconfig.json"))
     except CommandError as error:

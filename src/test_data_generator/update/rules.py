@@ -258,7 +258,11 @@ def _add_layout_fields(fields: dict[str, FieldRule], profile: str) -> None:
         raise ConfigurationError(
             f"Update rules for profile {profile!r} have no valid layout"
         ) from error
-    for field in (*layout.root, *(group for fields in layout.groups.values() for group in fields)):
+    for field in (
+        *layout.headers,
+        *layout.root,
+        *(group for fields in layout.groups.values() for group in fields),
+    ):
         if field.name == "otherAttributes" or field.name.startswith("otherAttributes."):
             continue
         fields.setdefault(

@@ -5,6 +5,7 @@ import json
 import tempfile
 from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,11 +14,14 @@ from jsonschema import Draft202012Validator, ValidationError  # type: ignore[imp
 
 from test_data_generator.configuration.config import EntityConfig, resolve_output_path
 from test_data_generator.core.errors import GenerationError
+from test_data_generator.entities.provider_nppes import validate_record as validate_nppes_record
 from test_data_generator.layouts import load_layout, project_record
 from test_data_generator.update.rules import EntityRules
 from test_data_generator.update.scenarios import (
     ExpectedOutcome,
     FailureMode,
+    OperationType,
+    ResolvedUpdate,
     UpdateRequest,
     may_violate_schema,
     resolve_update,
@@ -202,11 +206,8 @@ def _publish_records(
                 normalized = dict(record)
                 normalized["INGESTION_DATE"] = ingestion_date
                 _ensure_claim_history_identifiers(entity, normalized)
-                if validate_schema and validator is not None:
-                    try:
-                        validator.validate(normalized)
-                    except ValidationError as error:
-                        raise GenerationError(_validation_detail(error)) from error
+                if validate_schema:
+                    _validate_emitted_record(entity, normalized, validator)
                 output_file.write(orjson.dumps(normalized))
                 output_file.write(b"\n")
         return temporary_path.replace(final_path)
@@ -224,10 +225,13 @@ def run_update_entity(
     request: UpdateRequest,
     rules: EntityRules,
     related_records: Mapping[str, tuple[Mapping[str, object], ...]] | None = None,
+    resolved_updates: list[ResolvedUpdate] | None = None,
 ) -> Path:
     """Generate update JSONL atomically without sidecar metadata files."""
     records = build_entity_records(entity, seed, counts, related_records)
-    return run_update_records(entity, records, seed, output_directory, request, rules)
+    return run_update_records(
+        entity, records, seed, output_directory, request, rules, resolved_updates
+    )
 
 
 def run_update_records(
@@ -237,6 +241,9 @@ def run_update_records(
     output_directory: Path,
     request: UpdateRequest,
     rules: EntityRules,
+    resolved_updates: list[ResolvedUpdate] | None = None,
+    *,
+    validate_schema: bool = True,
 ) -> Path:
     """Apply the shared update engine to already-derived base records."""
     update_filename = entity.filename.removesuffix(".jsonl") + ".update.jsonl"
@@ -253,9 +260,25 @@ def run_update_records(
             delete=False,
         ) as output_file:
             temporary_path = Path(output_file.name)
+            written = 0
             for index, base in enumerate(records):
                 base_record = dict(base)
                 resolved = resolve_update(base_record, request, rules, seed, index)
+                if (
+                    not resolved.changed_fields
+                    and not resolved.removed_fields
+                    and not _allows_unchanged_result(request)
+                ):
+                    if rules.catalog_version == "code-defined" or rules.allow_absent_fields:
+                        continue
+                    raise GenerationError("Requested update did not change an applicable field")
+                reconciled = (
+                    resolved.record
+                    if may_violate_schema(request)
+                    else _reconcile_update_record(entity, resolved.record, resolved.changed_fields)
+                )
+                if reconciled is not resolved.record:
+                    resolved = replace(resolved, record=reconciled)
                 updated = (
                     deepcopy(resolved.record)
                     if entity.name == "provider_nppes"
@@ -265,7 +288,13 @@ def run_update_records(
                     for field in _CLAIM_HISTORY_IDENTIFIER_FIELDS:
                         updated[field] = ""
                 validate_update_contract(base_record, updated, request, resolved, rules)
-                updated["INGESTION_DATE"] = entity.update_ingestion_date
+                # A configured recency date is the default for every update,
+                # but an explicit field-level INGESTION_DATE scenario must
+                # remain observable (including EMPTY/MISSING negative cases).
+                if "INGESTION_DATE" not in set(resolved.changed_fields).union(
+                    resolved.removed_fields
+                ):
+                    updated["INGESTION_DATE"] = entity.update_ingestion_date
                 _ensure_claim_history_identifiers(entity, updated)
                 schema_invalid_match_fixture = (
                     request.expected_outcome == ExpectedOutcome.NO_MATCH
@@ -273,21 +302,64 @@ def run_update_records(
                     in {FailureMode.INVALID_VALUE, FailureMode.MISSING_VALUE}
                 )
                 if (
-                    validator is not None
+                    validate_schema
                     and not may_violate_schema(request)
                     and not schema_invalid_match_fixture
                 ):
-                    try:
-                        validator.validate(updated)
-                    except ValidationError as error:
-                        raise GenerationError(_validation_detail(error)) from error
+                    _validate_emitted_record(entity, updated, validator)
                 output_file.write(orjson.dumps(updated))
                 output_file.write(b"\n")
+                written += 1
+                if resolved_updates is not None:
+                    resolved_updates.append(resolved)
+            if written == 0:
+                raise GenerationError("Requested operation is not applicable to any source record")
         return temporary_path.replace(final_path)
     except Exception:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
         raise
+
+
+def _allows_unchanged_result(request: UpdateRequest) -> bool:
+    """Return whether an unchanged record is the explicit fixture contract."""
+    if request.modifications:
+        return all(item.operation == OperationType.DUPLICATE for item in request.modifications)
+    return request.operation == OperationType.DUPLICATE
+
+
+def _reconcile_update_record(
+    entity: EntityConfig, record: dict[str, object], changed_fields: tuple[str, ...]
+) -> dict[str, object]:
+    """Apply entity business invariants after the generic field mutation pass."""
+    if entity.name in {"claim_professional", "claim_institutional"}:
+        from test_data_generator.entities.claim import reconcile_financials as reconcile_claim
+
+        return reconcile_claim(record, frozenset(changed_fields))
+    if entity.name in {"payment_professional", "payment_institutional"}:
+        from test_data_generator.entities.payment import reconcile_financials as reconcile_payment
+
+        return reconcile_payment(record, entity.profile, frozenset(changed_fields))
+    return record
+
+
+def _validate_emitted_record(
+    entity: EntityConfig,
+    record: Mapping[str, object],
+    validator: Draft202012Validator | None,
+) -> None:
+    """Validate ordinary JSON-schema streams and subtype-specific NPPES rows."""
+    if entity.name == "provider_nppes":
+        try:
+            validate_nppes_record(record)
+        except ValueError as error:
+            raise GenerationError(str(error)) from error
+        return
+    assert validator is not None
+    try:
+        validator.validate(record)
+    except ValidationError as error:
+        raise GenerationError(_validation_detail(error)) from error
 
 
 def _build_record(

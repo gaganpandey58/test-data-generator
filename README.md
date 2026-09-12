@@ -161,9 +161,11 @@ one automatically generated Claim: the Claim stream emits the required
 original and replacement pair (two Claims).
 
 An entity with `count: 0` is skipped by ordinary creation and update
-generation, and its stale known JSONL files are removed after a successful
-run. If the same stream has `match_codes`, only the requested matching fixtures
-are generated.
+generation. Every invocation removes the configured output root before it
+starts, so no artifact from a previous run survives a successful generation.
+If generation fails, the previous complete output root is restored. If the
+same stream has `match_codes`, only the requested matching fixtures are
+generated.
 
 `seed` is not a business date or source-layout version. Reusing the same
 configuration and explicit seed produces the same test records; changing it
@@ -800,12 +802,6 @@ such as `INGESTION_DATE`, `INGESTION_EPOCH`, `ROWID`, `cotiviti.message_id`,
 `cotiviti.produced_at`, `cotiviti.batch_id`, `cotiviti.message_seq`,
 `cotiviti.correlation_id`, `cotiviti.source.raw_file_ref`, and `FILE_TYPE`.
 
-To audit the DOCX revision and preserve its tables as source evidence:
-
-```sh
-make extract-source
-```
-
 To use another configuration file:
 
 ```sh
@@ -832,7 +828,7 @@ output/
     └── ...
 ```
 
-Each line is a complete JSON object. Records are validated against their JSON Schema before publication. Files are written atomically, so a failed entity run does not replace that entity's prior output. If an entity is omitted from a later successful run, only its known generated output is removed; unrelated output-directory files are not touched.
+Each line is a complete JSON object. Records are validated against their JSON Schema before publication. At the beginning of every invocation, the generator serializes access to the configured output root, copies any prior root to a private recovery location, deletes the configured output root, and starts from an empty one. A successful run publishes only the newly requested artifacts. If generation fails, the previous complete output root is restored; partial new output is not retained.
 
 ## Verify the generator
 

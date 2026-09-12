@@ -404,6 +404,100 @@ def _line(
     return line
 
 
+_FINANCIAL_SUFFIXES = (
+    "CHARGE_AMOUNT",
+    "ALLOWED_AMOUNT",
+    "PAID_AMOUNT",
+    "COINSURANCE_AMOUNT",
+    "COPAY_AMOUNT",
+    "DEDUCTIBLE_AMOUNT",
+    "PATIENT_LIABILITY_AMOUNT",
+)
+
+
+def reconcile_financials(
+    record: dict[str, object], changed_fields: frozenset[str]
+) -> dict[str, object]:
+    """Rebalance a directly updated 837 Claim while preserving its target value."""
+    if not changed_fields.intersection(
+        {f"{prefix}_{suffix}" for prefix in ("CH", "CD") for suffix in _FINANCIAL_SUFFIXES}
+    ):
+        return record
+    details = record.get("CLAIM_DETAIL")
+    if not isinstance(details, list) or len(details) != 1 or not isinstance(details[0], dict):
+        raise ValueError("Financial Claim updates require exactly one generated CLAIM_DETAIL row")
+    detail = details[0]
+
+    def amount(suffix: str) -> int | float:
+        value = record.get(f"CH_{suffix}", detail.get(f"CD_{suffix}", 0))
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError(f"Claim financial field {suffix!r} must be numeric")
+        return value
+
+    def targeted(suffix: str) -> bool:
+        return bool(changed_fields.intersection({f"CH_{suffix}", f"CD_{suffix}"}))
+
+    charge = max(amount("CHARGE_AMOUNT"), 0)
+    allowed = max(amount("ALLOWED_AMOUNT"), 0)
+    paid = max(amount("PAID_AMOUNT"), 0)
+    coinsurance = max(amount("COINSURANCE_AMOUNT"), 0)
+    copay = max(amount("COPAY_AMOUNT"), 0)
+    deductible = max(amount("DEDUCTIBLE_AMOUNT"), 0)
+    liability = max(amount("PATIENT_LIABILITY_AMOUNT"), 0)
+
+    components_changed = any(
+        targeted(suffix) for suffix in ("COINSURANCE_AMOUNT", "COPAY_AMOUNT", "DEDUCTIBLE_AMOUNT")
+    )
+    if targeted("PATIENT_LIABILITY_AMOUNT") and not components_changed:
+        copay, deductible, coinsurance = _allocate_claim_liability(liability, copay, deductible)
+    elif components_changed:
+        liability = coinsurance + copay + deductible
+
+    if targeted("CHARGE_AMOUNT"):
+        allowed = min(allowed, charge)
+        liability = min(liability, allowed)
+    elif targeted("PAID_AMOUNT"):
+        allowed = paid + liability
+        charge = max(charge, allowed)
+    elif targeted("ALLOWED_AMOUNT"):
+        charge = max(charge, allowed)
+        liability = min(liability, allowed)
+    else:
+        allowed = max(allowed, liability)
+        charge = max(charge, allowed)
+
+    copay, deductible, coinsurance = _allocate_claim_liability(
+        min(liability, allowed), copay, deductible
+    )
+    liability = copay + deductible + coinsurance
+    paid = allowed - liability
+    values = {
+        "CHARGE_AMOUNT": charge,
+        "ALLOWED_AMOUNT": allowed,
+        "PAID_AMOUNT": paid,
+        "COINSURANCE_AMOUNT": coinsurance,
+        "COPAY_AMOUNT": copay,
+        "DEDUCTIBLE_AMOUNT": deductible,
+        "PATIENT_LIABILITY_AMOUNT": liability,
+    }
+    for suffix, value in values.items():
+        record[f"CH_{suffix}"] = value
+        detail[f"CD_{suffix}"] = value
+    return record
+
+
+def _allocate_claim_liability(
+    liability: int | float, copay: int | float, deductible: int | float
+) -> tuple[int | float, int | float, int | float]:
+    """Allocate Claim liability across non-negative components."""
+    remaining = max(liability, 0)
+    allocated_copay = min(max(copay, 0), remaining)
+    remaining -= allocated_copay
+    allocated_deductible = min(max(deductible, 0), remaining)
+    remaining -= allocated_deductible
+    return allocated_copay, allocated_deductible, remaining
+
+
 def _set_existing_fields(record: dict[str, object], values: Mapping[str, object]) -> None:
     """Copy a related entity value only where the active Claim layout defines it."""
     for field, value in values.items():

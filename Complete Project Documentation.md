@@ -112,13 +112,13 @@ flowchart TD
 4. Inherits direct Claims/Payments domain operations into their Professional and Institutional stream settings. The older `defaults` block remains a compatibility alias.
 5. Normalizes each direct domain `operations` or `modifications` plan into the common internal update request.
 6. Expands the public configuration into internal stream definitions. Schema paths, modules, and filenames are internal safe defaults and cannot be redirected to arbitrary code by configuration.
-7. Creates a temporary, same-filesystem staging area and copies the previous requested output directories into it.
+7. Acquires an exclusive lock for the configured output root, copies any prior output root to a private recovery location, deletes the configured output root, and starts with an empty one.
 8. Generates creation streams in dependency order.
 9. Optionally derives per-record, per-match-code cases from those creation records.
 10. Generates updates from creation/base records when updates are enabled.
 11. Propagates Claim changes to corresponding Claims History and enabled Payment streams.
-12. Removes stale output only for known disabled streams.
-13. Atomically swaps the completed staged directories into place. On failure, the previous complete output is restored.
+12. Publishes only artifacts requested by the current run; no stale or unrelated file from the previous output root survives.
+13. On failure, removes partial new output and restores the previous complete output root.
 
 ### 4.3 Creation dependency order
 
@@ -290,8 +290,9 @@ Creation counts are integers from `0` through `1,000,000`.
   not publish that stream's normal creation JSONL file.
 - Counts under `match_codes.*.generate` are exact fixture totals. They are not
   multiplied by the stream's creation `count`.
-- A successful run removes stale known output for a disabled stream.
-- Unrelated files in the output directory are not deleted.
+- Every invocation removes the entire configured output root before generation.
+- A successful run therefore contains only artifacts produced by that invocation.
+- If generation fails, the previous complete output root is restored.
 - Member Roster count cannot exceed Member count.
 - Provider CDF total is `nppes.count + cdf.additional_count` in linked mode.
 - Linked Claims History count follows the corresponding effective Claim count.
@@ -2093,7 +2094,7 @@ Then use `AT_LIMIT`, then `ABOVE_LIMIT`. Keep the same explicit seed. Store each
 
 ### `count: 0` still appears to generate a file
 
-Confirm you ran with the intended `runconfig.json` and that another selected stream does not derive the file. After a successful run, known stale files for zero-count streams are removed. If the run failed before commit, the previous complete output is intentionally preserved.
+Confirm you ran with the intended `runconfig.json` and that another selected stream does not derive the file. The configured output root is cleared before every run, so a successful run cannot retain a stale zero-count artifact. If generation failed, the previous complete output is intentionally restored.
 
 ### “Update field ... is not present in generated record”
 

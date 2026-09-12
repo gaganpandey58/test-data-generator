@@ -19,6 +19,7 @@ def synchronize_record(
     changed = set(changed_fields)
     synchronized: set[str] = set()
     synchronized.update(_synchronize_names(original, updated, changed))
+    synchronized.update(_synchronize_self_patient_subscriber(original, updated, changed))
     synchronized.update(_synchronize_ch_cd_pairs(original, updated, changed))
     synchronized.update(
         _synchronize_provider_npi(
@@ -68,6 +69,12 @@ def synchronization_field_closure(record: Mapping[str, object], fields: set[str]
         if len(present) > 1:
             relationships.append(present)
 
+    if str(_value_at(record, "CH_PATIENT_RELATIONSHIP_TO_SUBSCRIBER", 0)) == "18":
+        for patient, subscriber in _PATIENT_SUBSCRIBER_PAIRS:
+            present = {patient, subscriber}.intersection(available)
+            if len(present) > 1:
+                relationships.append(present)
+
     result = set(fields)
     changed = True
     while changed:
@@ -109,14 +116,21 @@ def _synchronize_names(
 ) -> set[str]:
     result: set[str] = set()
     fields = _field_names(original)
-    for field in fields:
-        if not field.endswith(("_FIRST_NAME", "_MIDDLE_NAME", "_LAST_NAME")):
-            continue
-        prefix = field.rsplit("_", 2)[0]
-        if not any(name in changed for name in fields if name.startswith(prefix + "_")):
-            continue
+    prefixes = {
+        field.rsplit("_", 2)[0]
+        for field in fields
+        if field.endswith(("_FIRST_NAME", "_MIDDLE_NAME", "_LAST_NAME", "_FULL_NAME"))
+    }
+    for prefix in prefixes:
         full_name = f"{prefix}_FULL_NAME"
         if full_name not in fields:
+            continue
+        components = tuple(
+            f"{prefix}_{name}" for name in ("FIRST_NAME", "MIDDLE_NAME", "LAST_NAME")
+        )
+        component_changed = changed.intersection(components)
+        full_changed = full_name in changed
+        if not component_changed and not full_changed:
             continue
         original_targets = list(_locations(original, full_name))
         updated_targets = list(_locations(updated, full_name))
@@ -126,13 +140,88 @@ def _synchronize_names(
             original_value = original_targets[position][0][original_targets[position][1]]
             if not _populated(original_value):
                 continue
-            parts = []
-            for component in ("FIRST_NAME", "MIDDLE_NAME", "LAST_NAME"):
-                value = _value_at(updated, f"{prefix}_{component}", position)
-                if _populated(value):
-                    parts.append(str(value).strip())
-            parent[key] = " ".join(parts)
-            result.add(full_name)
+            if component_changed:
+                parts = []
+                for component in components:
+                    value = _value_at(updated, component, position)
+                    if _populated(value):
+                        parts.append(str(value).strip())
+                parent[key] = " ".join(parts)
+                result.add(full_name)
+            elif full_changed:
+                result.update(
+                    _synchronize_components_from_full_name(
+                        original, updated, prefix, position, parent[key]
+                    )
+                )
+    return result
+
+
+def _synchronize_components_from_full_name(
+    original: Mapping[str, object],
+    updated: dict[str, object],
+    prefix: str,
+    position: int,
+    full_value: object,
+) -> set[str]:
+    """Project an explicitly changed full name into populated existing components."""
+    components = tuple(f"{prefix}_{name}" for name in ("FIRST_NAME", "MIDDLE_NAME", "LAST_NAME"))
+    populated = [field for field in components if _populated(_value_at(original, field, position))]
+    if not populated:
+        return set()
+    parts = str(full_value).split() if _populated(full_value) else []
+    replacements: dict[str, str] = {}
+    first, middle, last = components
+    if populated == [last]:
+        replacements[last] = " ".join(parts)
+    elif populated == [first]:
+        replacements[first] = " ".join(parts)
+    else:
+        if first in populated:
+            replacements[first] = parts[0] if parts else ""
+        if last in populated:
+            replacements[last] = parts[-1] if len(parts) > 1 else ""
+        if middle in populated:
+            replacements[middle] = " ".join(parts[1:-1]) if len(parts) > 2 else ""
+    result: set[str] = set()
+    for field, value in replacements.items():
+        targets = list(_locations(updated, field))
+        if position < len(targets):
+            target, key = targets[position]
+            target[key] = value
+            result.add(field)
+    return result
+
+
+_PATIENT_SUBSCRIBER_PAIRS = tuple(
+    (f"CH_PATIENT_{suffix}", f"CH_SUBSCRIBER_{suffix}")
+    for suffix in (
+        "FIRST_NAME",
+        "MIDDLE_NAME",
+        "LAST_NAME",
+        "NAME_SUFFIX",
+        "ADDRESS_01",
+        "ADDRESS_02",
+        "CITY",
+        "STATE",
+        "ZIP",
+        "BIRTH_DATE",
+        "GENDER",
+    )
+)
+
+
+def _synchronize_self_patient_subscriber(
+    original: Mapping[str, object], updated: dict[str, object], changed: set[str]
+) -> set[str]:
+    """Keep populated demographics aligned when the Patient is the Subscriber."""
+    if str(_value_at(original, "CH_PATIENT_RELATIONSHIP_TO_SUBSCRIBER", 0)) != "18":
+        return set()
+    if str(_value_at(updated, "CH_PATIENT_RELATIONSHIP_TO_SUBSCRIBER", 0)) != "18":
+        return set()
+    result: set[str] = set()
+    for patient, subscriber in _PATIENT_SUBSCRIBER_PAIRS:
+        result.update(_synchronize_equivalent_pair(original, updated, changed, patient, subscriber))
     return result
 
 

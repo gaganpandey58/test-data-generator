@@ -6,18 +6,26 @@ prevents an organizational record from accidentally using an individual
 template, or vice versa, while retaining the single public NPPES output file.
 """
 
+import json
 from collections.abc import Mapping
 from datetime import date, timedelta
+from functools import lru_cache
+from importlib.resources import files
+from pathlib import Path
 from random import Random
+from typing import Any, cast
 
 from faker import Faker
+from jsonschema import Draft202012Validator, ValidationError  # type: ignore[import-untyped]
 
 from test_data_generator.core.identifiers import (
     deterministic_uuid4,
+    is_valid_npi,
     valid_ein,
     valid_npi,
     valid_phone_number,
 )
+from test_data_generator.layouts import LayoutField, load_layout
 
 INDIVIDUAL = "individual"
 ORGANIZATIONAL = "organizational"
@@ -35,6 +43,45 @@ _STATES = (
     ("TX", "Harlingen", "78550"),
 )
 _TAXONOMIES = ("207Q00000X", "208D00000X", "261QP2300X")
+
+_INDIVIDUAL_ONLY_FIELDS = frozenset(
+    {
+        "PROVIDER_LAST_NAME_LEGAL_NAME",
+        "PROVIDER_FIRST_NAME",
+        "PROVIDER_MIDDLE_NAME",
+        "PROVIDER_NAME_PREFIX_TEXT",
+        "PROVIDER_NAME_SUFFIX_TEXT",
+        "PROVIDER_CREDENTIAL_TEXT",
+        "PROVIDER_OTHER_LAST_NAME",
+        "PROVIDER_OTHER_FIRST_NAME",
+        "PROVIDER_OTHER_MIDDLE_NAME",
+        "PROVIDER_OTHER_NAME_PREFIX_TEXT",
+        "PROVIDER_OTHER_NAME_SUFFIX_TEXT",
+        "PROVIDER_OTHER_CREDENTIAL_TEXT",
+        "PROVIDER_OTHER_LAST_NAME_TYPE_CODE",
+        "PROVIDER_GENDER_CODE",
+        "IS_SOLE_PROPRIETOR",
+    }
+)
+_ORGANIZATIONAL_ONLY_FIELDS = frozenset(
+    {
+        "EMPLOYER_IDENTIFICATION_NUMBER_EIN",
+        "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+        "PROVIDER_OTHER_ORGANIZATION_NAME",
+        "PROVIDER_OTHER_ORGANIZATION_NAME_TYPE_CODE",
+        "IS_ORGANIZATION_SUBPART",
+        "PARENT_ORGANIZATION_LBN",
+        "PARENT_ORGANIZATION_TIN",
+        "AUTHORIZED_OFFICIAL_FIRST_NAME",
+        "AUTHORIZED_OFFICIAL_MIDDLE_NAME",
+        "AUTHORIZED_OFFICIAL_LAST_NAME",
+        "AUTHORIZED_OFFICIAL_TITLE_OR_POSITION",
+        "AUTHORIZED_OFFICIAL_NAME_PREFIX_TEXT",
+        "AUTHORIZED_OFFICIAL_NAME_SUFFIX_TEXT",
+        "AUTHORIZED_OFFICIAL_CREDENTIAL_TEXT",
+        "AUTHORIZED_OFFICIAL_TELEPHONE_NUMBER",
+    }
+)
 
 
 def generate_record(
@@ -140,41 +187,7 @@ def generate_record(
         "ROWID": deterministic_uuid4(seed + index, "provider-nppes"),
         "PUBLISHER_NAME": "client_provider_nppes",
     }
-    individual_only = {
-        "PROVIDER_LAST_NAME_LEGAL_NAME",
-        "PROVIDER_FIRST_NAME",
-        "PROVIDER_MIDDLE_NAME",
-        "PROVIDER_NAME_PREFIX_TEXT",
-        "PROVIDER_NAME_SUFFIX_TEXT",
-        "PROVIDER_CREDENTIAL_TEXT",
-        "PROVIDER_OTHER_LAST_NAME",
-        "PROVIDER_OTHER_FIRST_NAME",
-        "PROVIDER_OTHER_MIDDLE_NAME",
-        "PROVIDER_OTHER_NAME_PREFIX_TEXT",
-        "PROVIDER_OTHER_NAME_SUFFIX_TEXT",
-        "PROVIDER_OTHER_CREDENTIAL_TEXT",
-        "PROVIDER_OTHER_LAST_NAME_TYPE_CODE",
-        "PROVIDER_GENDER_CODE",
-        "IS_SOLE_PROPRIETOR",
-    }
-    organizational_only = {
-        "EMPLOYER_IDENTIFICATION_NUMBER_EIN",
-        "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
-        "PROVIDER_OTHER_ORGANIZATION_NAME",
-        "PROVIDER_OTHER_ORGANIZATION_NAME_TYPE_CODE",
-        "IS_ORGANIZATION_SUBPART",
-        "PARENT_ORGANIZATION_LBN",
-        "PARENT_ORGANIZATION_TIN",
-        "AUTHORIZED_OFFICIAL_FIRST_NAME",
-        "AUTHORIZED_OFFICIAL_MIDDLE_NAME",
-        "AUTHORIZED_OFFICIAL_LAST_NAME",
-        "AUTHORIZED_OFFICIAL_TITLE_OR_POSITION",
-        "AUTHORIZED_OFFICIAL_NAME_PREFIX_TEXT",
-        "AUTHORIZED_OFFICIAL_NAME_SUFFIX_TEXT",
-        "AUTHORIZED_OFFICIAL_CREDENTIAL_TEXT",
-        "AUTHORIZED_OFFICIAL_TELEPHONE_NUMBER",
-    }
-    excluded = organizational_only if code == "1" else individual_only
+    excluded = _ORGANIZATIONAL_ONLY_FIELDS if code == "1" else _INDIVIDUAL_ONLY_FIELDS
     return {name: value for name, value in record.items() if name not in excluded}
 
 
@@ -243,6 +256,7 @@ def generate_records(
     seed: int,
     individual_count: int | None = None,
     organizational_count: int | None = None,
+    ingestion_date: str | None = None,
 ) -> list[dict[str, object]]:
     """Generate standalone NPPES records with unique NPIs."""
     if count < 1:
@@ -259,6 +273,8 @@ def generate_records(
     used_npis: set[str] = set()
     for index, code in enumerate(codes):
         record = generate_record(seed, index, code)
+        if ingestion_date is not None:
+            record["INGESTION_DATE"] = ingestion_date
         npi = str(record["NPI"])
         collision = 0
         while npi in used_npis:
@@ -268,6 +284,88 @@ def generate_records(
         used_npis.add(npi)
         records.append(record)
     return records
+
+
+def validate_record(record: Mapping[str, object]) -> None:
+    """Validate one NPPES subtype against its schema and exact emitted layout."""
+    code = str(record.get("ENTITY_TYPE_CODE", ""))
+    if code not in {"1", "2"}:
+        raise ValueError("Generated NPPES record has an invalid ENTITY_TYPE_CODE")
+    profile = "provider-nppes-individual" if code == "1" else "provider-nppes-organizational"
+    try:
+        _nppes_validator(profile).validate(dict(record))
+    except ValidationError as error:
+        path = "$" + "".join(
+            f"[{part}]" if isinstance(part, int) else f".{part}" for part in error.absolute_path
+        )
+        raise ValueError(
+            f"Generated NPPES record failed schema validation at {path}: failed {error.validator}"
+        ) from error
+    if not is_valid_npi(str(record.get("NPI", ""))):
+        raise ValueError("Generated NPPES record has an invalid NPI checksum")
+    layout = load_layout(profile)
+    excluded = _ORGANIZATIONAL_ONLY_FIELDS if code == "1" else _INDIVIDUAL_ONLY_FIELDS
+    expected = {
+        field.name for field in (*layout.headers, *layout.root) if field.name not in excluded
+    }.union(layout.groups)
+    unexpected = sorted(set(record).difference(expected))
+    missing = sorted(expected.difference(record))
+    if unexpected or missing:
+        raise ValueError(
+            "Generated NPPES record does not match its subtype layout; "
+            f"unexpected={unexpected}, missing={missing}"
+        )
+    definitions = {field.name: field for field in (*layout.headers, *layout.root)}
+    for name, definition in definitions.items():
+        if name in record:
+            _validate_layout_value(record[name], definition, f"$.{name}")
+    for group_name, field_definitions in layout.groups.items():
+        rows = record[group_name]
+        if not isinstance(rows, list):
+            raise ValueError(f"Generated NPPES field {group_name!r} must be an array")
+        expected_children = {field.name for field in field_definitions}
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping):
+                raise ValueError(f"Generated NPPES field {group_name}[{index}] must be an object")
+            if set(row) != expected_children:
+                raise ValueError(
+                    f"Generated NPPES field {group_name}[{index}] does not match its layout"
+                )
+            for definition in field_definitions:
+                _validate_layout_value(
+                    row[definition.name], definition, f"$.{group_name}[{index}].{definition.name}"
+                )
+
+
+@lru_cache(maxsize=2)
+def _nppes_validator(profile: str) -> Draft202012Validator:
+    filename = (
+        "provider_nppes_individual.schema.json"
+        if profile == "provider-nppes-individual"
+        else "provider_nppes_organizational.schema.json"
+    )
+    resource = files("test_data_generator").joinpath("schema", "json", "provider", filename)
+    try:
+        schema_text = resource.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # Hatch maps the repository-level schema tree into the installed
+        # package. An editable/source checkout retains that tree at the
+        # repository root, so support both representations just as the main
+        # configuration loader does.
+        source_schema = (
+            Path(__file__).resolve().parents[3] / "schema" / "json" / "provider" / filename
+        )
+        schema_text = source_schema.read_text(encoding="utf-8")
+    schema = json.loads(schema_text)
+    return Draft202012Validator(cast(dict[str, Any], schema))
+
+
+def _validate_layout_value(value: object, field: LayoutField, path: str) -> None:
+    expected_type: type[object] = int if field.type == "integer" else str
+    if not isinstance(value, expected_type) or isinstance(value, bool):
+        raise ValueError(f"Generated NPPES field {path} has the wrong type")
+    if isinstance(value, str) and len(value) > field.max_length:
+        raise ValueError(f"Generated NPPES field {path} exceeds max_length")
 
 
 def _digits(randomizer: Random, length: int) -> str:
