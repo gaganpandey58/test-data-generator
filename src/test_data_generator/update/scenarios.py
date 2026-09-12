@@ -163,6 +163,17 @@ def load_invalid_values(path: Path) -> dict[str, tuple[object, ...]]:
     }
 
 
+def supports_invalid_value(
+    catalog: Mapping[str, tuple[object, ...]], field: str, profile: str
+) -> bool:
+    """Return whether the shared catalog can invalidate one field."""
+    try:
+        _invalid_values_for(catalog, field, profile)
+    except ValueError:
+        return False
+    return True
+
+
 def _invalid_values_for(
     catalog: Mapping[str, tuple[object, ...]], field: str, profile: str
 ) -> tuple[object, ...]:
@@ -321,7 +332,7 @@ def resolve_fields(
     if available_fields is not None:
         unavailable = [field for field in selected if field not in available_fields]
         if unavailable and explicit_selection:
-            if rules.catalog_version != "code-defined":
+            if rules.catalog_version != "code-defined" and not rules.allow_absent_fields:
                 raise ValueError(
                     f"Update field {unavailable[0]!r} is not present in generated record"
                 )
@@ -347,7 +358,9 @@ def resolve_fields(
                 "or MISSING operation"
             )
     if not selected:
-        if rules.catalog_version == "code-defined" and explicit_selection:
+        if (
+            rules.catalog_version == "code-defined" or rules.allow_absent_fields
+        ) and explicit_selection:
             return ()
         raise ValueError("Operation resolved no fields")
     return tuple(dict.fromkeys(selected))

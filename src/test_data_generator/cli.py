@@ -49,7 +49,11 @@ from test_data_generator.entities.provider_cdf import (
 )
 from test_data_generator.entities.provider_nppes import generate_records as generate_nppes_records
 from test_data_generator.update.match_fixtures import generate_match_fixture_matrix
-from test_data_generator.update.rules import load_rule_catalog, rules_for_records
+from test_data_generator.update.rules import (
+    extend_rules_for_records,
+    load_rule_catalog,
+    rules_for_records,
+)
 from test_data_generator.update.scenarios import (
     ExpectedOutcome,
     FailureMode,
@@ -122,6 +126,8 @@ def generate(config: Path, mode: str = "all") -> None:
         }
         for entity in run_config.entities:
             if entity.name in histories:
+                continue
+            if entity.count == 0:
                 continue
             if entity.name == "provider_nppes":
                 if run_config.provider_linked:
@@ -322,6 +328,7 @@ def generate(config: Path, mode: str = "all") -> None:
         if needs_match_fixtures:
             assert rules is not None
             try:
+                _materialize_match_fixture_bases(run_config, entity_counts, generated_records)
                 fixture_paths = generate_match_fixture_matrix(
                     run_config.match_fixture_entities,
                     generated_records,
@@ -342,6 +349,8 @@ def generate(config: Path, mode: str = "all") -> None:
         entities_by_name = {entity.name: entity for entity in run_config.entities}
         propagated_payment_updates: set[str] = set()
         for entity in run_config.entities:
+            if entity.count == 0:
+                continue
             if (
                 entity.name
                 in {
@@ -362,6 +371,10 @@ def generate(config: Path, mode: str = "all") -> None:
                 continue
             rules_entity = entity.source_entity or entity.name
             entity_rules = rules.get(rules_entity)
+            if entity_rules is not None and entity_rules.allow_absent_fields:
+                entity_rules = extend_rules_for_records(
+                    entity_rules, generated_records.get(entity.name, ())
+                )
             if entity_rules is None and entity.name == "provider_nppes":
                 bases = generated_records.get(entity.name, ())
                 entity_rules = rules_for_records(
@@ -612,10 +625,47 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
 
 def _clear_match_fixture_directories(directory: Path, run_config: RunConfig) -> None:
     """Remove only prior match-code folders for the configured source streams."""
+    fixture_root = directory / "match-fixtures"
+    if fixture_root.is_dir():
+        shutil.rmtree(fixture_root)
     for fixture in run_config.match_fixture_entities:
         for candidate in directory.glob(f"{fixture.entity}[0-9]*"):
             if candidate.is_dir() and candidate.name.removeprefix(fixture.entity).isdigit():
                 shutil.rmtree(candidate)
+
+
+def _materialize_match_fixture_bases(
+    run_config: RunConfig,
+    entity_counts: Mapping[str, int],
+    generated_records: dict[str, tuple[Mapping[str, object], ...]],
+) -> None:
+    """Build in-memory source rows for fixture-only, zero-count streams."""
+    entities = {entity.name: entity for entity in run_config.entities}
+    for fixture in run_config.match_fixture_entities:
+        if generated_records.get(fixture.entity):
+            continue
+        entity = entities.get(fixture.entity)
+        if entity is None:
+            raise CommandError(
+                f"Match-fixture entity {fixture.entity!r} has no resolved stream configuration"
+            )
+        if entity.name == "provider_nppes":
+            generated_records[entity.name] = tuple(generate_nppes_records(2, run_config.seed, 1, 1))
+            continue
+        fixture_entity = replace(entity, count=1, source_entity=None)
+        try:
+            generated_records[entity.name] = tuple(
+                build_entity_records(
+                    fixture_entity,
+                    run_config.seed,
+                    {**entity_counts, entity.name: 1},
+                    generated_records,
+                )
+            )
+        except (GenerationError, ValueError) as error:
+            raise CommandError(
+                f"Unable to build match-fixture source for {entity.name!r}: {error}"
+            ) from error
 
 
 def _is_orphan_only_payment(name: str, scenarios: Mapping[str, int]) -> bool:
@@ -966,7 +1016,7 @@ def _remove_disabled_outputs(run_config: RunConfig) -> None:
         run_config: Loaded generation configuration carrying disabled filenames.
     """
     output_directory = run_config.output_directory
-    enabled_filenames = {entity.filename for entity in run_config.entities}
+    enabled_filenames = {entity.filename for entity in run_config.entities if entity.count > 0}
     # NPPES has a code-defined source shape and supports a creation-only
     # shortcut when it has no update operation.  That shortcut deliberately
     # does not add a generic EntityConfig, but its emitted file is still an

@@ -3,6 +3,9 @@
   "source_status": "Draft",
   "source_revision_date": "2026-06-29",
   "domain": "member",
+  "aliases": {
+    "member_mr": "member"
+  },
   "entities": {
     "member": {
       "profile": "member",

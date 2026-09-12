@@ -1,4 +1,4 @@
-"""Emit per-record, per-matchCode JSON fixture matrices.
+"""Emit rule-backed matching fixture matrices.
 
 The normal generator writes production-shaped JSONL streams.  This module is
 an opt-in QA fixture layer: it derives every case from an already-generated
@@ -9,7 +9,8 @@ matching, invalid-catalog, and synchronization engines.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
 from random import Random
@@ -23,12 +24,14 @@ from test_data_generator.update.matching import assess_match, resolve_match_fixt
 from test_data_generator.update.rules import EntityRules, MatchingMethod
 from test_data_generator.update.scenarios import (
     ExpectedOutcome,
+    FailureMode,
     FieldModification,
     OperationType,
     ResolvedUpdate,
     UpdateRequest,
     load_invalid_values,
     resolve_update,
+    supports_invalid_value,
 )
 
 _WEIGHT_OPERATIONS = {
@@ -51,19 +54,14 @@ def generate_match_fixture_matrix(
     output_directory: Path,
     invalid_values_catalog: Path | None,
 ) -> tuple[Path, ...]:
-    """Write one ``<matching-method>.json`` array beneath each source folder.
-
-    Every array entry has both the original record and one derived fixture,
-    together with enough metadata to independently verify the selected method,
-    operation plan, changed fields, matching result, and weight relation.
-    """
+    """Write exact-count unified fixtures while preserving legacy output."""
     paths: list[Path] = []
     invalid_values = (
         load_invalid_values(invalid_values_catalog) if invalid_values_catalog is not None else {}
     )
     for entity_config in fixture_entities:
         records = generated_records.get(entity_config.entity)
-        if records is None:
+        if not records:
             raise ValueError(
                 f"Match-fixture entity {entity_config.entity!r} has no generated source records"
             )
@@ -72,33 +70,517 @@ def generate_match_fixture_matrix(
             raise ValueError(
                 f"Match-fixture entity {entity_config.entity!r} has no update rule catalog"
             )
-        for record_index, base in enumerate(records, start=1):
-            entity_directory = output_directory / f"{entity_config.entity}{record_index}"
-            entity_directory.mkdir(parents=True, exist_ok=True)
-            for match_code in entity_config.match_codes:
-                method = _matching_method(rules, match_code.matching_method)
-                cases = _build_cases(
-                    base,
-                    entity_config.entity,
-                    record_index,
-                    match_code,
-                    rules,
-                    method.mandatory_fields,
-                    seed,
-                    invalid_values,
+        for match_code in entity_config.match_codes:
+            if match_code.legacy_per_record:
+                paths.extend(
+                    _write_legacy_fixtures(
+                        entity_config,
+                        match_code,
+                        records,
+                        rules,
+                        seed,
+                        invalid_values,
+                        output_directory,
+                    )
                 )
-                output_name = (
-                    match_code.matching_method
-                    if match_code.name == match_code.matching_method
-                    else f"{match_code.matching_method}__{match_code.name}"
+                continue
+            method = _matching_method(rules, match_code.matching_method)
+            collision_method = _resolve_collision_method(
+                match_code,
+                entity_config.match_codes,
+                rules,
+                method,
+            )
+            cases = _build_exact_cases(
+                records,
+                entity_config.entity,
+                match_code,
+                rules,
+                method,
+                collision_method,
+                seed,
+                invalid_values,
+            )
+            grouped: defaultdict[str, list[dict[str, object]]] = defaultdict(list)
+            for case in cases:
+                grouped[str(case["operation"])].append(case)
+            for operation, operation_cases in grouped.items():
+                operation_directory = (
+                    output_directory
+                    / "match-fixtures"
+                    / operation.lower().replace("_", "-")
+                    / entity_config.entity
                 )
-                output_path = entity_directory / f"{output_name}.json"
+                operation_directory.mkdir(parents=True, exist_ok=True)
+                suffix = (
+                    f"__against__{collision_method}"
+                    if operation == "COLLISION" and collision_method is not None
+                    else ""
+                )
+                output_path = operation_directory / f"{method.name}{suffix}.json"
                 output_path.write_text(
-                    json.dumps(cases, indent=2, default=_json_default) + "\n",
+                    json.dumps(operation_cases, indent=2, default=_json_default) + "\n",
                     encoding="utf-8",
                 )
                 paths.append(output_path)
     return tuple(paths)
+
+
+def _write_legacy_fixtures(
+    entity_config: MatchFixtureEntityConfig,
+    match_code: MatchFixtureCodeConfig,
+    records: Sequence[Mapping[str, object]],
+    rules: EntityRules,
+    seed: int,
+    invalid_values: Mapping[str, tuple[object, ...]],
+    output_directory: Path,
+) -> list[Path]:
+    """Retain the previous per-source-record files for legacy configurations."""
+    paths: list[Path] = []
+    for record_index, base in enumerate(records, start=1):
+        entity_directory = output_directory / f"{entity_config.entity}{record_index}"
+        entity_directory.mkdir(parents=True, exist_ok=True)
+        method = _matching_method(rules, match_code.matching_method)
+        cases = _build_cases(
+            base,
+            entity_config.entity,
+            record_index,
+            match_code,
+            rules,
+            method.mandatory_fields,
+            seed,
+            invalid_values,
+        )
+        output_name = (
+            match_code.matching_method
+            if match_code.name == match_code.matching_method
+            else f"{match_code.matching_method}__{match_code.name}"
+        )
+        output_path = entity_directory / f"{output_name}.json"
+        output_path.write_text(
+            json.dumps(cases, indent=2, default=_json_default) + "\n",
+            encoding="utf-8",
+        )
+        paths.append(output_path)
+    return paths
+
+
+def _build_exact_cases(
+    records: Sequence[Mapping[str, object]],
+    entity_name: str,
+    match_code: MatchFixtureCodeConfig,
+    rules: EntityRules,
+    method: MatchingMethod,
+    collision_method: str | None,
+    seed: int,
+    invalid_values: Mapping[str, tuple[object, ...]],
+) -> list[dict[str, object]]:
+    """Build exact total counts using deterministic catalog-order selection."""
+    applicable = tuple(
+        (index, record)
+        for index, record in enumerate(records, start=1)
+        if all(_field_present(record, field) for field in method.mandatory_fields)
+    )
+    if not applicable:
+        raise ValueError(
+            f"Matching method {method.name!r} has no applicable {entity_name!r} source record"
+        )
+    result: list[dict[str, object]] = []
+    method_cursor = 0
+    source_cursor = 0
+
+    def next_source(*required_methods: MatchingMethod) -> tuple[int, Mapping[str, object]]:
+        nonlocal source_cursor
+        for offset in range(len(applicable)):
+            candidate_index = (source_cursor + offset) % len(applicable)
+            record_index, record = applicable[candidate_index]
+            if all(
+                all(_field_present(record, field) for field in candidate.mandatory_fields)
+                for candidate in required_methods
+            ):
+                source_cursor = candidate_index + 1
+                return record_index, record
+        names = ", ".join(candidate.name for candidate in required_methods)
+        raise ValueError(f"No {entity_name!r} source record supports matching method(s) {names}")
+
+    for operation in _ordered_operations(match_code.operation_counts):
+        for _ in range(match_code.operation_counts[operation]):
+            record_index, base = next_source(method)
+            modifications: tuple[FieldModification, ...] = ()
+            expected_outcome: ExpectedOutcome | None = None
+            if operation in _ELASTICITY_OPERATIONS:
+                field, method_cursor = _select_elastic_field(base, method, rules, method_cursor)
+                modifications = (FieldModification(OperationType.UPDATE, (field,)),)
+                expected_outcome = (
+                    ExpectedOutcome.NO_MATCH
+                    if operation == "ELASTICITY_OUTSIDE"
+                    else ExpectedOutcome.MATCH
+                )
+            elif operation not in _WEIGHT_OPERATIONS:
+                if operation == "DUPLICATE":
+                    modifications = (FieldModification(OperationType.DUPLICATE, ()),)
+                else:
+                    field, method_cursor = _select_operation_field(
+                        base,
+                        method,
+                        operation,
+                        rules.profile,
+                        invalid_values,
+                        method_cursor,
+                    )
+                    modifications = (FieldModification(OperationType(operation), (field,)),)
+                expected_outcome = _inferred_outcome(modifications, method.mandatory_fields)
+            case_seed = _case_seed(seed, entity_name, method.name, len(result) + 1)
+            if operation in _WEIGHT_OPERATIONS:
+                resolved = _resolve_exact_weight_case(
+                    base,
+                    operation,
+                    method,
+                    rules,
+                    seed,
+                    case_seed,
+                    invalid_values,
+                )
+                expected_outcome = (
+                    ExpectedOutcome.NO_MATCH
+                    if operation == "WEIGHT_BELOW_LIMIT"
+                    else ExpectedOutcome.MATCH
+                )
+            else:
+                resolved = _resolve_case(
+                    base,
+                    operation,
+                    modifications,
+                    expected_outcome,
+                    method.name,
+                    rules,
+                    seed,
+                    case_seed,
+                    invalid_values,
+                )
+            result.append(
+                _case_document(
+                    base,
+                    entity_name,
+                    record_index,
+                    len(result) + 1,
+                    match_code,
+                    operation,
+                    expected_outcome,
+                    resolved,
+                    rules,
+                    method,
+                )
+            )
+
+    if match_code.collision_count:
+        assert collision_method is not None
+        collision = _matching_method(rules, collision_method)
+        for _ in range(match_code.collision_count):
+            record_index, base = next_source(method, collision)
+            resolved = _resolve_case(
+                base,
+                "COLLISION",
+                (),
+                ExpectedOutcome.NO_MATCH,
+                method.name,
+                rules,
+                seed,
+                _case_seed(seed, entity_name, method.name, "collision", len(result) + 1),
+                invalid_values,
+                collision_method,
+            )
+            result.append(
+                _case_document(
+                    base,
+                    entity_name,
+                    record_index,
+                    len(result) + 1,
+                    match_code,
+                    "COLLISION",
+                    ExpectedOutcome.NO_MATCH,
+                    resolved,
+                    rules,
+                    method,
+                    collision_method=collision_method,
+                )
+            )
+
+    for configured_case in match_code.deterministic_cases:
+        raw_modifications = cast(list[Mapping[str, object]], configured_case["modifications"])
+        modifications = tuple(
+            FieldModification(
+                OperationType(str(definition["type"]).upper()),
+                tuple(str(field).strip() for field in cast(list[str], definition["fields"])),
+                str(definition["condition"]) if "condition" in definition else None,
+                cast(Mapping[str, object], definition.get("values"))
+                if isinstance(definition.get("values"), Mapping)
+                else None,
+            )
+            for definition in raw_modifications
+        )
+        expected_value = configured_case.get("expected_outcome")
+        expected_outcome = (
+            ExpectedOutcome(str(expected_value))
+            if expected_value is not None
+            else _inferred_outcome(modifications, method.mandatory_fields)
+        )
+        for _ in range(cast(int, configured_case.get("count", 1))):
+            record_index, base = next_source(method)
+            resolved = _resolve_case(
+                base,
+                "CUSTOM",
+                modifications,
+                expected_outcome,
+                method.name,
+                rules,
+                seed,
+                _case_seed(seed, entity_name, method.name, "custom", len(result) + 1),
+                invalid_values,
+            )
+            result.append(
+                _case_document(
+                    base,
+                    entity_name,
+                    record_index,
+                    len(result) + 1,
+                    match_code,
+                    "CUSTOM",
+                    expected_outcome,
+                    resolved,
+                    rules,
+                    method,
+                    case_name=(str(configured_case["name"]) if "name" in configured_case else None),
+                )
+            )
+    return result
+
+
+def _ordered_operations(counts: Mapping[str, int]) -> tuple[str, ...]:
+    """Return a stable operation order independent of JSON member ordering."""
+    order = (
+        "UPDATE",
+        "INVALID",
+        "MISSING",
+        "EMPTY",
+        "DUPLICATE",
+        "WEIGHT_BELOW_LIMIT",
+        "WEIGHT_AT_LIMIT",
+        "WEIGHT_ABOVE_LIMIT",
+        "ELASTICITY_INSIDE",
+        "ELASTICITY_AT_LIMIT",
+        "ELASTICITY_OUTSIDE",
+    )
+    return tuple(operation for operation in order if counts.get(operation, 0) > 0)
+
+
+def _select_operation_field(
+    base: Mapping[str, object],
+    method: MatchingMethod,
+    operation: str,
+    profile: str,
+    invalid_values: Mapping[str, tuple[object, ...]],
+    cursor: int,
+) -> tuple[str, int]:
+    """Select the next operation-capable method field in catalog order."""
+    for offset in range(len(method.fields)):
+        index = (cursor + offset) % len(method.fields)
+        field = method.fields[index]
+        if not _field_present(base, field):
+            continue
+        if operation == "INVALID" and not supports_invalid_value(invalid_values, field, profile):
+            continue
+        return field, index + 1
+    raise ValueError(f"Matching method {method.name!r} has no field eligible for {operation}")
+
+
+def _select_elastic_field(
+    base: Mapping[str, object],
+    method: MatchingMethod,
+    rules: EntityRules,
+    cursor: int,
+) -> tuple[str, int]:
+    """Select the next mandatory anchor with a supported non-zero elasticity."""
+    for offset in range(len(method.fields)):
+        index = (cursor + offset) % len(method.fields)
+        field = method.fields[index]
+        elasticity = method.elasticity_for(field, rules.fields[field].elasticity)
+        if (
+            field in method.mandatory_fields
+            and _field_present(base, field)
+            and elasticity not in {"", "0", "exact"}
+        ):
+            return field, index + 1
+    raise ValueError(f"Matching method {method.name!r} has no elastic mandatory field")
+
+
+def _resolve_exact_weight_case(
+    base: Mapping[str, object],
+    operation: str,
+    method: MatchingMethod,
+    rules: EntityRules,
+    seed: int,
+    index: int,
+    invalid_values: Mapping[str, tuple[object, ...]],
+) -> ResolvedUpdate:
+    """Create a matching-score boundary fixture for the selected method."""
+    relation = _WEIGHT_OPERATIONS[operation]
+    included, excluded, score = _weight_selection(base, method, rules, relation)
+    if relation == "BELOW_LIMIT" and not excluded:
+        raise ValueError(
+            f"Matching method {method.name!r} cannot generate BELOW_LIMIT "
+            "without a populated optional field to diverge"
+        )
+    expected_outcome = (
+        ExpectedOutcome.NO_MATCH if relation == "BELOW_LIMIT" else ExpectedOutcome.MATCH
+    )
+    modifications = tuple(FieldModification(OperationType.UPDATE, (field,)) for field in excluded)
+    resolved = resolve_match_fixture(
+        base,
+        UpdateRequest(
+            operation=OperationType.DUPLICATE,
+            matching_method=method.name,
+            expected_outcome=expected_outcome,
+            invalid_values=invalid_values,
+            include=included,
+            exclude=excluded,
+            modifications=modifications,
+        ),
+        rules,
+        seed,
+        index,
+    )
+    assessment = assess_match(base, resolved.record, rules, method)
+    if assessment.matched_weight != score:
+        raise ValueError(
+            f"Matching method {method.name!r} produced weight "
+            f"{assessment.matched_weight} instead of planned weight {score}"
+        )
+    return resolved
+
+
+def _weight_selection(
+    base: Mapping[str, object],
+    method: MatchingMethod,
+    rules: EntityRules,
+    relation: str,
+) -> tuple[tuple[str, ...], tuple[str, ...], Decimal]:
+    """Select a deterministic optional-field subset for one score boundary."""
+    available_optional = tuple(
+        field for field in method.optional_fields if _field_present(base, field)
+    )
+    mandatory_weight = sum(
+        (rules.fields[field].weight for field in method.mandatory_fields), Decimal("0")
+    )
+    combinations: dict[Decimal, tuple[str, ...]] = {mandatory_weight: ()}
+    for field in available_optional:
+        field_weight = rules.fields[field].weight
+        additions = {
+            weight + field_weight: selected + (field,) for weight, selected in combinations.items()
+        }
+        for weight, selected in additions.items():
+            combinations.setdefault(weight, selected)
+    if relation == "BELOW_LIMIT":
+        candidates = tuple(weight for weight in combinations if weight < method.needed_weight)
+        score = max(candidates) if candidates else None
+    elif relation == "AT_LIMIT":
+        score = method.needed_weight if method.needed_weight in combinations else None
+    else:
+        candidates = tuple(weight for weight in combinations if weight > method.needed_weight)
+        score = min(candidates) if candidates else None
+    if score is None:
+        raise ValueError(
+            f"Matching method {method.name!r} cannot generate {relation}: "
+            f"required weight is {method.needed_weight}"
+        )
+    included = combinations[score]
+    excluded = tuple(field for field in available_optional if field not in included)
+    return included, excluded, score
+
+
+def _resolve_collision_method(
+    match_code: MatchFixtureCodeConfig,
+    configured_codes: Sequence[MatchFixtureCodeConfig],
+    rules: EntityRules,
+    target: MatchingMethod,
+) -> str | None:
+    """Resolve and validate one explicit or deterministic automatic collision target."""
+    if match_code.collision_count == 0:
+        return None
+    candidates: tuple[MatchingMethod, ...]
+    if match_code.collision_method is not None:
+        candidates = (_matching_method(rules, match_code.collision_method),)
+    else:
+        configured_names = {
+            item.matching_method for item in configured_codes if item.matching_method != target.name
+        }
+        candidates = tuple(
+            method
+            for method in sorted(rules.methods, key=lambda item: item.priority)
+            if method.name in configured_names
+        )
+    for candidate in candidates:
+        if candidate.name == target.name:
+            continue
+        if any(field not in candidate.mandatory_fields for field in target.mandatory_fields):
+            return candidate.name
+    requested = match_code.collision_method or "another configured method"
+    raise ValueError(
+        f"Matching method {target.name!r} cannot produce a collision against {requested!r}"
+    )
+
+
+def _case_document(
+    base: Mapping[str, object],
+    entity_name: str,
+    record_index: int,
+    case_index: int,
+    match_code: MatchFixtureCodeConfig,
+    operation: str,
+    expected_outcome: ExpectedOutcome | None,
+    resolved: ResolvedUpdate,
+    rules: EntityRules,
+    method: MatchingMethod,
+    *,
+    collision_method: str | None = None,
+    case_name: str | None = None,
+) -> dict[str, object]:
+    """Create one self-describing existing/incoming fixture envelope."""
+    assessment = assess_match(base, resolved.record, rules, method)
+    all_assessments = tuple(
+        assess_match(base, resolved.record, rules, candidate) for candidate in rules.methods
+    )
+    threshold_relation = resolved.threshold_relation
+    if operation in _WEIGHT_OPERATIONS:
+        threshold_relation = _WEIGHT_OPERATIONS[operation].lower().removesuffix("_limit")
+    result: dict[str, object] = {
+        "case_id": case_index,
+        "entity": entity_name,
+        "entity_record": record_index,
+        "match_code": match_code.matching_method,
+        "matching_method": match_code.matching_method,
+        "operation": operation,
+        "expected_outcome": expected_outcome.value if expected_outcome is not None else None,
+        "actual_match": assessment.matched,
+        "matched_methods": [item.method_id for item in all_assessments if item.matched],
+        "unexpected_methods": list(resolved.unexpected_methods),
+        "changed_fields": list(resolved.changed_fields),
+        "removed_fields": list(resolved.removed_fields),
+        "synchronized_fields": list(resolved.synchronized_fields),
+        "total_weight": str(resolved.total_weight),
+        "match_weight": str(assessment.matched_weight),
+        "required_weight": str(method.needed_weight),
+        "threshold_relation": threshold_relation,
+        "expected_apply": resolved.expected_apply,
+        "modification_plan": [_plan_item(item) for item in resolved.modification_plan],
+        "existing": dict(base),
+        "record": resolved.record,
+    }
+    if collision_method is not None:
+        result["collision_method"] = collision_method
+    if case_name is not None:
+        result["case_name"] = case_name
+    return result
 
 
 def _build_cases(
@@ -228,6 +710,7 @@ def _resolve_case(
     seed: int,
     index: int,
     invalid_values: Mapping[str, tuple[object, ...]],
+    collision_method: str | None = None,
 ) -> ResolvedUpdate:
     """Use match verification for field plans and native selection for weights."""
     if operation in _WEIGHT_OPERATIONS:
@@ -245,15 +728,17 @@ def _resolve_case(
         )
     if operation in _ELASTICITY_OPERATIONS:
         method = _matching_method(rules, matching_method)
-        field = next(
-            (
-                candidate
-                for candidate in method.mandatory_fields
-                if method.elasticity_for(candidate, rules.fields[candidate].elasticity)
-                not in {"", "0", "exact"}
-            ),
-            None,
-        )
+        field = modifications[0].fields[0] if modifications else None
+        if field is None:
+            field = next(
+                (
+                    candidate
+                    for candidate in method.mandatory_fields
+                    if method.elasticity_for(candidate, rules.fields[candidate].elasticity)
+                    not in {"", "0", "exact"}
+                ),
+                None,
+            )
         if field is None:
             raise ValueError(f"Matching method {matching_method!r} has no elastic mandatory field")
         assert expected_outcome is not None
@@ -266,6 +751,23 @@ def _resolve_case(
                 invalid_values=invalid_values,
                 failure_field=field,
                 elasticity_boundary=_ELASTICITY_OPERATIONS[operation],
+            ),
+            rules,
+            seed,
+            index,
+        )
+    if operation == "COLLISION":
+        if collision_method is None:
+            raise ValueError("COLLISION requires a collision matching method")
+        return resolve_match_fixture(
+            base,
+            UpdateRequest(
+                operation=OperationType.DUPLICATE,
+                matching_method=matching_method,
+                expected_outcome=ExpectedOutcome.NO_MATCH,
+                failure_mode=FailureMode.CROSS_METHOD_COLLISION,
+                collision_method=collision_method,
+                invalid_values=invalid_values,
             ),
             rules,
             seed,

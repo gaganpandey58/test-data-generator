@@ -151,12 +151,19 @@ MR block has no explicit operation, no MR update file is produced, even when
 updates are enabled for another entity; the creation roster remains an exact
 834-derived copy.
 
-`count` is exact: `{"member": {"count": 10}}` writes exactly ten member objects. Operation quantities and operation maps are not accepted. The only exception is a same-run `REPLACEMENT` Payment paired with one automatically generated Claim: the Claim stream emits the required original and replacement pair (two Claims). Claims may run alone: their linked member and provider IDs are generated deterministically. When member/provider streams are selected too, the claim IDs link to the corresponding generated records. A Payment stream requires either its corresponding enabled Claim stream or an explicit `source_claims` file only when it has a claim-backed scenario (`MATCHED`, `REVERSAL`, `REPLACEMENT`, or `STALE`); an `ORPHAN`-only stream is valid without Claims.
+`count` is the exact number of ordinary creation rows. It does not multiply
+`match_codes.*.generate` counts: `{"UPDATE": 2, "INVALID": 1}` always creates
+two UPDATE fixtures and one INVALID fixture for that method. `count` may be
+omitted when a stream is used only for match fixtures; the generator builds an
+in-memory source row but does not publish a normal creation JSONL file. The
+only creation-count exception is a same-run `REPLACEMENT` Payment paired with
+one automatically generated Claim: the Claim stream emits the required
+original and replacement pair (two Claims).
 
-An entity with `count: 0` is treated as disabled. It is accepted by the
-configuration schema, skipped by both creation and update generation, and its
-stale known output files are removed after a successful run. This allows a
-configuration to generate only the entities with positive counts.
+An entity with `count: 0` is skipped by ordinary creation and update
+generation, and its stale known JSONL files are removed after a successful
+run. If the same stream has `match_codes`, only the requested matching fixtures
+are generated.
 
 `seed` is not a business date or source-layout version. Reusing the same
 configuration and explicit seed produces the same test records; changing it
@@ -609,45 +616,107 @@ independent fields whose original values differ are not synchronized.
 
 ### Verified match fixtures
 
-An update request can opt into a paired matching fixture. The normal creation
-JSONL is the existing record set and the normal update JSONL is the incoming
-record set; no auxiliary metadata file is written. The generator verifies the
-requested outcome and cross-method collisions before it publishes the update.
+`operations` and `match_codes` are independent:
+
+- Stream-level `operations` create the normal `.update.jsonl` stream and use
+  explicitly listed fields.
+- `match_codes` create self-describing matching fixtures. Each key is an actual
+  method ID from the rule catalog; users do not repeat the method's fields.
+- Both may be present, in which case both output families are generated.
+
+The built-in field selector walks each method's eligible fields in catalog
+order and wraps around deterministically. INVALID skips fields that have no
+entry in `invalid-values.json`. No `match_defaults` setting is required.
 
 ```json
 {
-  "claims": {
-    "professional": {
-      "count": 1,
-      "matching_method": "professional_claim_fallback",
-      "expected_outcome": "MATCH",
-      "operations": [
-        {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]},
-        {"type": "DUPLICATE"}
-      ]
+  "member": {
+    "count": 2,
+    "operations": [
+      {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
+    ],
+    "match_codes": {
+      "member_id_dob_gender": {
+        "generate": {
+          "operations": {
+            "UPDATE": 2,
+            "INVALID": 1,
+            "MISSING": 1,
+            "EMPTY": 1,
+            "DUPLICATE": 1
+          }
+        }
+      },
+      "configured_weighted_c": {
+        "generate": {
+          "weight": {
+            "BELOW_LIMIT": 1,
+            "AT_LIMIT": 1,
+            "ABOVE_LIMIT": 1
+          },
+          "collisions": {
+            "count": 1,
+            "against": "member_id_dob_gender"
+          }
+        },
+        "cases": [
+          {
+            "name": "combined-negative-case",
+            "modifications": [
+              {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
+              {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
+            ],
+            "expected_outcome": "NO_MATCH"
+          }
+        ]
+      },
+      "configured_weighted_f": {
+        "generate": {
+          "elasticity": {
+            "INSIDE": 1,
+            "AT_LIMIT": 1,
+            "OUTSIDE": 1
+          }
+        }
+      }
     }
   }
 }
 ```
 
-`expected_outcome` is either `MATCH` or `NO_MATCH`. A `NO_MATCH` fixture must
-declare `failure_mode`: `MANDATORY_BREAK_EXACT`,
-`MANDATORY_BREAK_BOUNDARY`, `INVALID_VALUE`, `MISSING_VALUE`, `WEIGHT_MISS`,
-or `CROSS_METHOD_COLLISION`. Use `failure_field` for the target mandatory
-anchor, `collision_method` for an intended cross-method collision, and
-`elasticity_boundary` (`INSIDE`, `AT`, or `OUTSIDE`) for date-tolerance tests.
-`INVALID`, `MISSING`, and `EMPTY` cannot modify a mandatory target anchor in a
-positive fixture. Independent non-anchor operations are declared through
-`operations`; each entry has a `type` and optional `fields` list. `UPDATE`
-always supplies a valid value different from the existing record.
-`INVALID` values are always read from the shared
-[`invalid-values.json`](src/test_data_generator/configuration/invalid-values.json)
-catalog, first by exact field and then by configured field type; no invalid
-value is fabricated by the generator.
-For a weighted method, `include` keeps only the selected optional anchors
-matched and deliberately varies the remaining optional anchors; `exclude`
-forces the named optional anchors to differ. The evaluator then verifies that
-the configured needed weight is still reached.
+`generate.operations` counts are exact totals and do not depend on entity
+`count`. `generate.weight` selects matching optional fields to place the score
+below, exactly at, or above the method's required weight. `generate.elasticity`
+selects elastic mandatory anchors and produces just-inside, exactly-at, or
+just-outside values. Weight and elasticity are independent. Requesting a
+boundary that the method cannot represent is an error.
+
+`generate.collisions` creates a NO_MATCH record for the target method that
+still matches `against`. Without `against`, the first compatible method also
+configured on the stream is selected deterministically. A collision is not a
+duplicate: DUPLICATE matches the target method unchanged, whereas COLLISION
+breaks the target and verifies the alternate method.
+
+`cases` is optional and is only for custom multi-field combinations. Automatic
+operations, weights, elasticity, and collisions do not require it. Multiple
+method keys run in one invocation.
+
+Fixtures are grouped by operation, entity stream, and method:
+
+```text
+output/update-test-data/match-fixtures/
+├── update/member/member_id_dob_gender.json
+├── weight-at-limit/member/configured_weighted_c.json
+├── elasticity-inside/member/configured_weighted_f.json
+├── collision/member/configured_weighted_c__against__member_id_dob_gender.json
+└── custom/member/configured_weighted_c.json
+```
+
+Each JSON file is an array of envelopes containing `existing`, `record`, the
+modification plan, selected method, expected/actual result, matched methods,
+changed/removed/synchronized fields, matching score, required weight, and
+threshold relation. Legacy `matching_method` plus `operation_counts` remains
+accepted temporarily and keeps the older per-record output structure.
 
 The domain rule files explicitly describe method anchors, mandatory/optional
 classification, needed weight, field-level elasticity, and

@@ -4,10 +4,129 @@
       {"type": "UPDATE", "fields": ["CH_PATIENT_FIRST_NAME"]}
     ],
     "professional": {
-      "count": 7
+      "count": 7,
+      "match_codes": {
+        "professional_claim_primary": {
+          "generate": {
+            "operations": {
+              "UPDATE": 2,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "professional_claim_fallback"
+            }
+          }
+        },
+        "professional_claim_fallback": {
+          "generate": {
+            "operations": {
+              "UPDATE": 1,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            }
+          }
+        }
+      }
     },
     "institutional": {
-      "count": 7
+      "count": 7,
+      "match_codes": {
+        "institutional_claim_primary": {
+          "generate": {
+            "operations": {
+              "UPDATE": 2,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "institutional_claim_fallback"
+            }
+          }
+        },
+        "institutional_claim_fallback": {
+          "generate": {
+            "operations": {
+              "UPDATE": 1,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            }
+          }
+        }
+      }
+    },
+    "claims_history": {
+      "operations": [
+        {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}
+      ],
+      "professional": {
+        "count": 7,
+        "linked": true,
+        "match_codes": {
+          "professional_claim_primary": {
+            "generate": {
+              "operations": {
+                "UPDATE": 1,
+                "INVALID": 1,
+                "MISSING": 1,
+                "EMPTY": 1,
+                "DUPLICATE": 1
+              },
+              "collisions": {
+                "count": 1,
+                "against": "professional_claim_fallback"
+              }
+            }
+          },
+          "professional_claim_fallback": {
+            "generate": {
+              "operations": {
+                "UPDATE": 1,
+                "DUPLICATE": 1
+              }
+            }
+          }
+        }
+      },
+      "institutional": {
+        "count": 7,
+        "linked": true,
+        "match_codes": {
+          "institutional_claim_primary": {
+            "generate": {
+              "operations": {
+                "UPDATE": 1,
+                "INVALID": 1,
+                "MISSING": 1,
+                "EMPTY": 1,
+                "DUPLICATE": 1
+              },
+              "collisions": {
+                "count": 1,
+                "against": "institutional_claim_fallback"
+              }
+            }
+          },
+          "institutional_claim_fallback": {
+            "generate": {
+              "operations": {
+                "UPDATE": 1,
+                "DUPLICATE": 1
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -144,10 +144,10 @@
     "match_fixture_code": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["matching_method"],
       "properties": {
         "matching_method": {"type": "string", "minLength": 1},
         "operation_counts": {"$ref": "#/$defs/operation_counts"},
+        "generate": {"$ref": "#/$defs/match_fixture_generate"},
         "cases": {
           "type": "array",
           "items": {"$ref": "#/$defs/match_fixture_case"}
@@ -158,10 +158,82 @@
         }
       },
       "anyOf": [
+        {"required": ["generate"]},
         {"required": ["operation_counts"]},
         {"required": ["cases"]},
         {"required": ["deterministic_cases"]}
       ]
+    },
+    "match_fixture_generate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operations": {"$ref": "#/$defs/standard_operation_counts"},
+        "weight": {
+          "oneOf": [
+            {"$ref": "#/$defs/weight_counts"},
+            {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"]}
+            }
+          ]
+        },
+        "elasticity": {
+          "oneOf": [
+            {"$ref": "#/$defs/elasticity_counts"},
+            {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["INSIDE", "AT_LIMIT", "OUTSIDE"]}
+            }
+          ]
+        },
+        "collisions": {
+          "oneOf": [
+            {"type": "integer", "minimum": 0, "maximum": 1000000},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["count"],
+              "properties": {
+                "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+                "against": {"type": "string", "minLength": 1}
+              }
+            }
+          ]
+        }
+      },
+      "minProperties": 1
+    },
+    "standard_operation_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "UPDATE": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "INVALID": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "MISSING": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "EMPTY": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "DUPLICATE": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "weight_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "BELOW_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "AT_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "ABOVE_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "elasticity_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "INSIDE": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "AT_LIMIT": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "OUTSIDE": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
     },
     "operation_counts": {
       "type": "object",
@@ -185,6 +257,7 @@
       "additionalProperties": false,
       "required": ["modifications"],
       "properties": {
+        "name": {"type": "string", "minLength": 1},
         "count": {"type": "integer", "minimum": 1, "maximum": 1000000},
         "expected_outcome": {"enum": ["MATCH", "NO_MATCH"]},
         "modifications": {
@@ -199,7 +272,7 @@
         {"$ref": "#/$defs/entity"},
         {"not": {"required": ["mr"]}},
         {"not": {"required": ["additional_count"]}},
-        {"anyOf": [{"required": ["count"]}, {"required": ["nppes"]}, {"required": ["cdf"]}]}
+        {"anyOf": [{"required": ["count"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["match_codes"]}]}
       ]
     },
     "ingestion_date_override": {
@@ -219,7 +292,7 @@
     "counted_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"required": ["count"]},
+        {"anyOf": [{"required": ["count"]}, {"required": ["match_codes"]}]},
         {"not": {"required": ["mr"]}},
         {"not": {"required": ["additional_count"]}}
       ]
@@ -227,7 +300,7 @@
     "claim_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"required": ["count"]},
+        {"anyOf": [{"required": ["count"]}, {"required": ["match_codes"]}]},
         {"not": {"required": ["mr"]}},
         {"not": {"required": ["additional_count"]}}
       ]
@@ -236,20 +309,20 @@
       "allOf": [
         {"$ref": "#/$defs/entity"},
         {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["history"]}]}},
-        {"anyOf": [{"required": ["count"]}, {"required": ["individual"]}, {"required": ["organizational"]}]}
+        {"anyOf": [{"required": ["count"]}, {"required": ["individual"]}, {"required": ["organizational"]}, {"required": ["match_codes"]}]}
       ]
     },
     "cdf_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"required": ["additional_count"]},
+        {"anyOf": [{"required": ["additional_count"]}, {"required": ["match_codes"]}]},
         {"not": {"anyOf": [{"required": ["count"]}, {"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}]}}
       ]
     },
     "history_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"required": ["count"]},
+        {"anyOf": [{"required": ["count"]}, {"required": ["match_codes"]}]},
         {"not": {"anyOf": [{"required": ["mr"]}, {"required": ["nppes"]}, {"required": ["cdf"]}, {"required": ["history"]}, {"required": ["additional_count"]}]}}
       ]
     },
@@ -272,7 +345,7 @@
     "member_entity": {
       "allOf": [
         {"$ref": "#/$defs/entity"},
-        {"required": ["count"]},
+        {"anyOf": [{"required": ["count"]}, {"required": ["match_codes"]}, {"required": ["mr"]}]},
         {"not": {"required": ["additional_count"]}}
       ]
     },
@@ -290,7 +363,7 @@
         "mr": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["count"],
+          "anyOf": [{"required": ["count"]}, {"required": ["match_codes"]}],
           "properties": {
             "count": {"type": "integer", "minimum": 0, "maximum": 1000000},
             "output_order": {

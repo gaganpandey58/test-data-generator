@@ -233,6 +233,153 @@
           "survivorship": "source_driven"
         }
       }
+    },
+    "provider_nppes": {
+      "profile": "provider",
+      "allow_absent_fields": true,
+      "source_fields": [
+        "NPI",
+        "PROVIDER_FIRST_NAME",
+        "PROVIDER_LAST_NAME_LEGAL_NAME",
+        "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+        "EMPLOYER_IDENTIFICATION_NUMBER_EIN",
+        "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS",
+        "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE"
+      ],
+      "keys": [
+        "NPI"
+      ],
+      "matching_methods": [
+        {
+          "name": "nppes_npi",
+          "needed_weight": 1,
+          "fields": [
+            "NPI"
+          ],
+          "priority": 1,
+          "mandatory_fields": [
+            "NPI"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "nppes_individual_identity",
+          "needed_weight": 3,
+          "fields": [
+            "NPI",
+            "PROVIDER_FIRST_NAME",
+            "PROVIDER_LAST_NAME_LEGAL_NAME"
+          ],
+          "priority": 2,
+          "mandatory_fields": [
+            "NPI",
+            "PROVIDER_FIRST_NAME",
+            "PROVIDER_LAST_NAME_LEGAL_NAME"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "nppes_organizational_identity",
+          "needed_weight": 3,
+          "fields": [
+            "NPI",
+            "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+            "EMPLOYER_IDENTIFICATION_NUMBER_EIN"
+          ],
+          "priority": 3,
+          "mandatory_fields": [
+            "NPI",
+            "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+            "EMPLOYER_IDENTIFICATION_NUMBER_EIN"
+          ],
+          "optional_fields": [],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "nppes_individual_weighted",
+          "needed_weight": 3,
+          "fields": [
+            "PROVIDER_FIRST_NAME",
+            "PROVIDER_LAST_NAME_LEGAL_NAME",
+            "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS",
+            "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE"
+          ],
+          "priority": 4,
+          "mandatory_fields": [
+            "PROVIDER_FIRST_NAME",
+            "PROVIDER_LAST_NAME_LEGAL_NAME"
+          ],
+          "optional_fields": [
+            "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS",
+            "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE"
+          ],
+          "higher_priority_methods": []
+        },
+        {
+          "name": "nppes_organizational_weighted",
+          "needed_weight": 2,
+          "fields": [
+            "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME",
+            "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS",
+            "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE"
+          ],
+          "priority": 5,
+          "mandatory_fields": [
+            "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME"
+          ],
+          "optional_fields": [
+            "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS",
+            "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE"
+          ],
+          "higher_priority_methods": []
+        }
+      ],
+      "fields": {
+        "NPI": {
+          "required": true,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "preserve_key"
+        },
+        "PROVIDER_FIRST_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "PROVIDER_LAST_NAME_LEGAL_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "PROVIDER_ORGANIZATION_NAME_LEGAL_BUSINESS_NAME": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "EMPLOYER_IDENTIFICATION_NUMBER_EIN": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "PROVIDER_FIRST_LINE_BUSINESS_MAILING_ADDRESS": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        },
+        "PROVIDER_BUSINESS_MAILING_ADDRESS_POSTAL_CODE": {
+          "required": false,
+          "weight": 1,
+          "elasticity": "0",
+          "survivorship": "source_driven"
+        }
+      }
     }
   }
 }

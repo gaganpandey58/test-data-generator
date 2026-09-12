@@ -178,6 +178,25 @@ def generate_record(
     return {name: value for name, value in record.items() if name not in excluded}
 
 
+def generate_entity_record(
+    seed: int,
+    index: int,
+    counts: Mapping[str, int],
+    client_headers: Mapping[str, object],
+    client_values: Mapping[str, object],
+    profile: str,
+) -> dict[str, object]:
+    """Adapt NPPES generation to the shared entity-engine call contract.
+
+    Normal linked NPPES generation still uses :func:`generate_records` so its
+    configured Individual/Organizational counts remain authoritative.  This
+    adapter is used when the generic engine needs an in-memory NPPES source
+    record for field-operation coverage or fixture-only match generation.
+    """
+    del counts, client_headers, client_values, profile
+    return generate_record(seed, index)
+
+
 def generate_record_from_cdf(cdf: Mapping[str, object], index: int, seed: int) -> dict[str, object]:
     """Generate a type-specific NPPES record linked to one CDF provider."""
     code = "1" if str(cdf.get("CP_PROVIDER_RECORD_TYPE")) in {"1", "I", "P"} else "2"

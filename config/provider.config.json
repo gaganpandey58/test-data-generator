@@ -1,13 +1,96 @@
 {
   "provider": {
     "nppes": {
-      "count": 10
+      "count": 2,
+      "individual": 1,
+      "organizational": 1,
+      "operations": [
+        {"type": "UPDATE", "fields": ["PROVIDER_FIRST_NAME"]}
+      ],
+      "match_codes": {
+        "nppes_npi": {
+          "generate": {
+            "operations": {
+              "UPDATE": 2,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            }
+          }
+        },
+        "nppes_individual_weighted": {
+          "generate": {
+            "weight": {
+              "BELOW_LIMIT": 1,
+              "AT_LIMIT": 1,
+              "ABOVE_LIMIT": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "nppes_npi"
+            }
+          }
+        },
+        "nppes_organizational_weighted": {
+          "generate": {
+            "weight": {
+              "BELOW_LIMIT": 1,
+              "AT_LIMIT": 1,
+              "ABOVE_LIMIT": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "nppes_npi"
+            }
+          }
+        }
+      }
     },
     "cdf": {
-      "additional_count": 90,
+      "additional_count": 2,
       "operations": [
         {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
-      ]
+      ],
+      "match_codes": {
+        "provider_id": {
+          "generate": {
+            "operations": {
+              "UPDATE": 2,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            }
+          }
+        },
+        "provider_individual_weighted": {
+          "generate": {
+            "weight": {
+              "BELOW_LIMIT": 1,
+              "AT_LIMIT": 1,
+              "ABOVE_LIMIT": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "provider_id"
+            }
+          }
+        },
+        "provider_organization_weighted": {
+          "generate": {
+            "weight": {
+              "BELOW_LIMIT": 1,
+              "AT_LIMIT": 1,
+              "ABOVE_LIMIT": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "provider_id"
+            }
+          }
+        }
+      }
     }
   }
 }

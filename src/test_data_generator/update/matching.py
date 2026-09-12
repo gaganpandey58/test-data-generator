@@ -116,7 +116,21 @@ def resolve_match_fixture(
         _apply_failure(result, original, request, rules, method, randomizer, changed, removed)
     elif request.elasticity_boundary is not None:
         _apply_match_boundary(result, original, request, rules, method, changed)
-    _break_higher_priority_matches(result, original, rules, method, randomizer, changed)
+    preserved_methods = (
+        frozenset({request.collision_method})
+        if request.failure_mode == FailureMode.CROSS_METHOD_COLLISION
+        and request.collision_method is not None
+        else frozenset()
+    )
+    _break_higher_priority_matches(
+        result,
+        original,
+        rules,
+        method,
+        randomizer,
+        changed,
+        preserved_methods,
+    )
 
     synchronized = synchronize_record(original, result, tuple(dict.fromkeys(changed + removed)))
     target = assess_match(original, result, rules, method)
@@ -368,10 +382,15 @@ def _break_higher_priority_matches(
     target: MatchingMethod,
     randomizer: Random,
     changed: list[str],
+    preserved_methods: frozenset[str] = frozenset(),
 ) -> None:
     method_by_name = {method.name: method for method in rules.methods}
     for higher in sorted(
-        (method_by_name[name] for name in target.higher_priority_methods),
+        (
+            method_by_name[name]
+            for name in target.higher_priority_methods
+            if name not in preserved_methods
+        ),
         key=lambda method: method.priority,
     ):
         if not assess_match(original, result, rules, higher).matched:

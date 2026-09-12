@@ -10,10 +10,74 @@
       }
     },
     "professional": {
-      "count": 7
+      "count": 7,
+      "operations": [
+        {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}
+      ],
+      "match_codes": {
+        "claim_method_1": {
+          "generate": {
+            "operations": {
+              "UPDATE": 2,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "claim_method_2"
+            }
+          }
+        },
+        "payment_835_method_1": {
+          "generate": {
+            "operations": {
+              "UPDATE": 1,
+              "DUPLICATE": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "payment_835_method_2"
+            }
+          }
+        }
+      }
     },
     "institutional": {
-      "count": 7
+      "count": 7,
+      "operations": [
+        {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}
+      ],
+      "match_codes": {
+        "claim_method_1": {
+          "generate": {
+            "operations": {
+              "UPDATE": 2,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "claim_method_2"
+            }
+          }
+        },
+        "payment_835_method_1": {
+          "generate": {
+            "operations": {
+              "UPDATE": 1,
+              "DUPLICATE": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "payment_835_method_2"
+            }
+          }
+        }
+      }
     }
   }
 }

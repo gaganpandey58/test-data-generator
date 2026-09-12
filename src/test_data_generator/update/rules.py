@@ -59,6 +59,7 @@ class EntityRules:
     fields: dict[str, FieldRule]
     methods: tuple[MatchingMethod, ...]
     catalog_version: str = "unknown"
+    allow_absent_fields: bool = False
 
 
 def rules_for_records(
@@ -90,6 +91,24 @@ def rules_for_records(
         fields=fields,
         methods=(),
         catalog_version="code-defined",
+    )
+
+
+def extend_rules_for_records(
+    rules: EntityRules, records: Iterable[Mapping[str, object]]
+) -> EntityRules:
+    """Add fields from polymorphic emitted shapes without changing match rules."""
+    discovered = rules_for_records(rules.entity, rules.profile, records, keys=rules.keys)
+    fields = dict(discovered.fields)
+    fields.update(rules.fields)
+    return EntityRules(
+        entity=rules.entity,
+        profile=rules.profile,
+        keys=rules.keys,
+        fields=fields,
+        methods=rules.methods,
+        catalog_version=rules.catalog_version,
+        allow_absent_fields=rules.allow_absent_fields,
     )
 
 
@@ -189,6 +208,11 @@ def _parse_rule_catalog(raw: dict[str, object]) -> dict[str, EntityRules]:
         profile = str(value.get("profile", entity))
         _add_layout_fields(fields, profile)
         methods = _methods(value.get("matching_methods"), fields, entity)
+        allow_absent_fields = value.get("allow_absent_fields", False)
+        if not isinstance(allow_absent_fields, bool):
+            raise ConfigurationError(
+                f"Update rules for {entity!r}.allow_absent_fields must be a boolean"
+            )
         result[entity] = EntityRules(
             entity=entity,
             profile=profile,
@@ -196,6 +220,7 @@ def _parse_rule_catalog(raw: dict[str, object]) -> dict[str, EntityRules]:
             fields=fields,
             methods=methods,
             catalog_version=str(raw.get("catalog_version", "unknown")),
+            allow_absent_fields=allow_absent_fields,
         )
     aliases = raw.get("aliases", {})
     if not isinstance(aliases, dict):
@@ -213,6 +238,7 @@ def _parse_rule_catalog(raw: dict[str, object]) -> dict[str, EntityRules]:
             fields=dict(source.fields),
             methods=source.methods,
             catalog_version=source.catalog_version,
+            allow_absent_fields=source.allow_absent_fields,
         )
     return result
 

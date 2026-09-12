@@ -89,18 +89,20 @@ class IngestionDateOverride:
 
 @dataclass(frozen=True)
 class MatchFixtureCodeConfig:
-    """Describe one named, rule-backed match-fixture matrix.
+    """Describe one rule-backed match-fixture matrix.
 
-    ``name`` is deliberately a public label rather than an internal matching
-    method identifier.  This lets a QA configuration expose stable names such
-    as ``matchCode1`` while selecting any current catalog method through
-    ``matching_method``.
+    New configurations use the rule-catalog method id as the ``match_codes``
+    key.  ``name`` remains separate only so the legacy label plus
+    ``matching_method`` spelling can be read during migration.
     """
 
     name: str
     matching_method: str
     operation_counts: Mapping[str, int]
     deterministic_cases: tuple[Mapping[str, object], ...] = ()
+    collision_count: int = 0
+    collision_method: str | None = None
+    legacy_per_record: bool = False
 
 
 @dataclass(frozen=True)
@@ -324,6 +326,10 @@ def load_config(path: Path) -> RunConfig:
         filename = raw_entity["filename"]
         _validate_filename(name, filename, output_directory)
         record_count = _effective_record_count(name, raw_entity, raw_entities)
+        if record_count == 0:
+            # A fixture-only stream stays internally enabled so its generator
+            # and rule catalog are available, but it owns no creation file.
+            disabled_filenames.append(filename)
         source_entity = (
             str(raw_entity["source_entity"])
             if isinstance(raw_entity.get("source_entity"), str)
@@ -427,6 +433,8 @@ _MATCH_FIXTURE_OPERATIONS = frozenset(
 _MATCH_FIXTURE_MUTATION_OPERATIONS = frozenset(
     {"UPDATE", "INVALID", "MISSING", "EMPTY", "DUPLICATE"}
 )
+_MATCH_FIXTURE_WEIGHT_BOUNDARIES = frozenset({"BELOW_LIMIT", "AT_LIMIT", "ABOVE_LIMIT"})
+_MATCH_FIXTURE_ELASTICITY_BOUNDARIES = frozenset({"INSIDE", "AT_LIMIT", "OUTSIDE"})
 
 
 def _match_fixture_config(
@@ -457,21 +465,28 @@ def _match_fixture_config(
             _validate_fixture_filename(code_name, "matchCode")
             if not isinstance(code_value, Mapping):
                 raise ConfigurationError(f"matchCode {code_name!r} must be an object")
-            method = code_value.get("matching_method")
-            if not isinstance(method, str) or not method.strip():
-                raise ConfigurationError(f"matchCode {code_name!r} requires matching_method")
+            configured_method = code_value.get("matching_method")
+            if configured_method is not None and (
+                not isinstance(configured_method, str) or not configured_method.strip()
+            ):
+                raise ConfigurationError(
+                    f"matchCode {code_name!r}.matching_method must be a non-empty string"
+                )
+            method = configured_method.strip() if isinstance(configured_method, str) else code_name
             operation_counts = _match_fixture_operation_counts(code_name, code_value)
             deterministic_cases = _match_fixture_cases(code_name, code_value)
-            if not operation_counts and not deterministic_cases:
-                raise ConfigurationError(
-                    f"matchCode {code_name!r} needs operation_counts or deterministic_cases"
-                )
+            collision_count, collision_method = _match_fixture_collisions(code_name, code_value)
+            if not operation_counts and not deterministic_cases and collision_count == 0:
+                raise ConfigurationError(f"matchCode {code_name!r} needs generate or cases")
             code_configs.append(
                 MatchFixtureCodeConfig(
                     code_name,
                     method,
                     operation_counts,
                     deterministic_cases,
+                    collision_count,
+                    collision_method,
+                    "matching_method" in code_value or "operation_counts" in code_value,
                 )
             )
         result.append(MatchFixtureEntityConfig(entity_name, tuple(code_configs)))
@@ -481,10 +496,49 @@ def _match_fixture_config(
 def _match_fixture_operation_counts(
     code_name: str, configured: Mapping[str, object]
 ) -> Mapping[str, int]:
-    """Normalize operation-count aliases without constraining matchCode names."""
-    value = configured.get("operation_counts", {})
-    if not isinstance(value, Mapping):
-        raise ConfigurationError(f"matchCode {code_name!r}.operation_counts must be an object")
+    """Normalize legacy counts and the unified ``generate`` categories."""
+    if "operation_counts" in configured:
+        value = configured.get("operation_counts", {})
+        if not isinstance(value, Mapping):
+            raise ConfigurationError(f"matchCode {code_name!r}.operation_counts must be an object")
+        return _validated_match_fixture_counts(code_name, value)
+
+    generate = configured.get("generate", {})
+    if not isinstance(generate, Mapping):
+        raise ConfigurationError(f"matchCode {code_name!r}.generate must be an object")
+    result: dict[str, int] = {}
+    operations = generate.get("operations", {})
+    if not isinstance(operations, Mapping):
+        raise ConfigurationError(f"matchCode {code_name!r}.generate.operations must be an object")
+    standard = _validated_match_fixture_counts(code_name, operations)
+    unsupported = set(standard).difference(_MATCH_FIXTURE_MUTATION_OPERATIONS)
+    if unsupported:
+        raise ConfigurationError(
+            f"matchCode {code_name!r}.generate.operations has unsupported operation "
+            f"{sorted(unsupported)[0]!r}"
+        )
+    result.update(standard)
+    for operation, count in _boundary_counts(
+        code_name,
+        "weight",
+        generate.get("weight", {}),
+        _MATCH_FIXTURE_WEIGHT_BOUNDARIES,
+    ).items():
+        result[f"WEIGHT_{operation}"] = count
+    for operation, count in _boundary_counts(
+        code_name,
+        "elasticity",
+        generate.get("elasticity", {}),
+        _MATCH_FIXTURE_ELASTICITY_BOUNDARIES,
+    ).items():
+        result[f"ELASTICITY_{operation}"] = count
+    return result
+
+
+def _validated_match_fixture_counts(
+    code_name: str, value: Mapping[object, object]
+) -> dict[str, int]:
+    """Validate exact generated-case counts using the shared operation vocabulary."""
     result: dict[str, int] = {}
     for raw_operation, count in value.items():
         operation = _normalize_match_fixture_operation(raw_operation)
@@ -504,6 +558,73 @@ def _match_fixture_operation_counts(
     return result
 
 
+def _boundary_counts(
+    code_name: str,
+    category: str,
+    value: object,
+    supported: frozenset[str],
+) -> dict[str, int]:
+    """Accept an exact-count object or the one-each array shorthand."""
+    if value is None:
+        return {}
+    if isinstance(value, list):
+        configured: Mapping[object, object] = {item: 1 for item in value}
+    elif isinstance(value, Mapping):
+        configured = value
+    else:
+        raise ConfigurationError(
+            f"matchCode {code_name!r}.generate.{category} must be an object or array"
+        )
+    result: dict[str, int] = {}
+    for raw_boundary, count in configured.items():
+        boundary = str(raw_boundary).strip().upper().replace("-", "_")
+        if boundary not in supported:
+            raise ConfigurationError(
+                f"matchCode {code_name!r}.generate.{category} has unsupported boundary "
+                f"{raw_boundary!r}"
+            )
+        if (
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= MAX_RECORD_COUNT
+        ):
+            raise ConfigurationError(
+                f"matchCode {code_name!r}.generate.{category}.{boundary} must be a "
+                "non-negative integer"
+            )
+        result[boundary] = count
+    return result
+
+
+def _match_fixture_collisions(
+    code_name: str, configured: Mapping[str, object]
+) -> tuple[int, str | None]:
+    """Read automatic or explicitly targeted collision requests."""
+    generate = configured.get("generate", {})
+    if not isinstance(generate, Mapping):
+        return 0, None
+    value = generate.get("collisions", 0)
+    against: object | None = None
+    if isinstance(value, Mapping):
+        count = value.get("count", 0)
+        against = value.get("against")
+    else:
+        count = value
+    if not isinstance(count, int) or isinstance(count, bool) or not 0 <= count <= MAX_RECORD_COUNT:
+        raise ConfigurationError(
+            f"matchCode {code_name!r}.generate.collisions count must be non-negative"
+        )
+    if against is not None and (not isinstance(against, str) or not against.strip()):
+        raise ConfigurationError(
+            f"matchCode {code_name!r}.generate.collisions.against must be a method id"
+        )
+    if count == 0 and against is not None:
+        raise ConfigurationError(
+            f"matchCode {code_name!r}.generate.collisions.against requires a positive count"
+        )
+    return count, against.strip() if isinstance(against, str) else None
+
+
 def _match_fixture_cases(
     code_name: str, configured: Mapping[str, object]
 ) -> tuple[Mapping[str, object], ...]:
@@ -516,6 +637,12 @@ def _match_fixture_cases(
         if not isinstance(case, Mapping):
             raise ConfigurationError(
                 f"matchCode {code_name!r} deterministic case {case_index} must be an object"
+            )
+        case_name = case.get("name")
+        if case_name is not None and (not isinstance(case_name, str) or not case_name.strip()):
+            raise ConfigurationError(
+                f"matchCode {code_name!r} deterministic case {case_index} name must be "
+                "a non-empty string"
             )
         count = case.get("count", 1)
         if (
@@ -911,8 +1038,8 @@ def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
             entities[name] = _selected_entity(entities[name], selection)
             if name == "member" and isinstance(value.get("mr"), dict):
                 mr_selection = cast(Mapping[str, object], value["mr"])
-                mr_count = mr_selection.get("count")
-                member_count = selection.get("count")
+                mr_count = mr_selection.get("count", 0)
+                member_count = selection.get("count", 0)
                 if not isinstance(mr_count, int) or isinstance(mr_count, bool):
                     raise ConfigurationError("Member Roster selection count must be an integer")
                 if not isinstance(member_count, int) or isinstance(member_count, bool):
@@ -1017,10 +1144,11 @@ def _nppes_total(value: object) -> int:
 
 
 def _has_explicit_update_selection(selection: Mapping[str, object]) -> bool:
-    """Return whether NPPES needs the generic update-entity execution path."""
+    """Return whether NPPES needs a generic entity or fixture execution path."""
     update = selection.get("updates")
-    return isinstance(update, Mapping) and bool(
-        {"operation", "expected_outcome", "modifications"}.intersection(update)
+    return "match_codes" in selection or (
+        isinstance(update, Mapping)
+        and bool({"operation", "expected_outcome", "modifications"}.intersection(update))
     )
 
 
@@ -1040,11 +1168,15 @@ def _selected_entity(
     Returns:
         Enabled internal entity definition with the requested layout profile.
     """
-    count_value = selection.get("count")
+    count_value = selection.get("count", 0)
     if not isinstance(count_value, int):
         raise ConfigurationError("Entity selection count must be an integer")
     count = count_value
-    result = {**defaults, "enabled": count > 0, "count": count}
+    result = {
+        **defaults,
+        "enabled": count > 0 or "match_codes" in selection,
+        "count": count,
+    }
     if isinstance(selection.get("updates"), dict):
         updates = cast(dict[str, object], selection["updates"])
         result["updates"] = {str(key): value for key, value in updates.items()}
@@ -1109,7 +1241,14 @@ def _payment_source_path(
         filename = source_entity.get("filename")
         if isinstance(filename, str) and filename:
             return creation_directory / filename
-    if raw_entity.get("enabled") and _payment_requires_claim_source(entity, raw_entity):
+    count = raw_entity.get("count", 0)
+    if (
+        raw_entity.get("enabled")
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and count > 0
+        and _payment_requires_claim_source(entity, raw_entity)
+    ):
         supported_sources = " or ".join(repr(name) for name in source_entity_names)
         raise ConfigurationError(
             f"Payment stream {entity!r} requires source_claims or an enabled "

@@ -363,7 +363,11 @@ def _load_generator(module_name: str) -> Callable[..., dict[str, object]]:
         module = importlib.import_module(module_name)
     except (ImportError, ModuleNotFoundError) as error:
         raise GenerationError(f"Could not import entity module {module_name!r}") from error
-    generate_record = getattr(module, "generate_record", None)
+    # Polymorphic source streams may retain a smaller public generator while
+    # exposing an adapter for the shared six-argument entity-engine contract.
+    generate_record = getattr(module, "generate_entity_record", None)
+    if generate_record is None:
+        generate_record = getattr(module, "generate_record", None)
     if not callable(generate_record):
         raise GenerationError(f"Entity module {module_name!r} must expose callable generate_record")
     return cast(Callable[..., dict[str, object]], generate_record)

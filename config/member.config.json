@@ -1,14 +1,94 @@
 {
   "member": {
-    "count": 1,
+    "count": 2,
     "operations": [
-      {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]}
+      {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
     ],
+    "match_codes": {
+      "member_id_dob_gender": {
+        "generate": {
+          "operations": {
+            "UPDATE": 2,
+            "INVALID": 1,
+            "MISSING": 1,
+            "EMPTY": 1,
+            "DUPLICATE": 1
+          }
+        }
+      },
+      "configured_weighted_c": {
+        "generate": {
+          "weight": {
+            "BELOW_LIMIT": 1,
+            "AT_LIMIT": 1,
+            "ABOVE_LIMIT": 1
+          },
+          "collisions": {
+            "count": 1,
+            "against": "member_id_dob_gender"
+          }
+        },
+        "cases": [
+          {
+            "name": "combined-negative-case",
+            "modifications": [
+              {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
+              {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
+            ],
+            "expected_outcome": "NO_MATCH"
+          }
+        ]
+      },
+      "configured_weighted_f": {
+        "generate": {
+          "elasticity": {
+            "INSIDE": 1,
+            "AT_LIMIT": 1,
+            "OUTSIDE": 1
+          }
+        }
+      }
+    },
     "mr": {
-      "count": 1,
+      "count": 2,
       "operations": [
         {"type": "UPDATE", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
-      ]
+      ],
+      "match_codes": {
+        "member_id_dob_gender": {
+          "generate": {
+            "operations": {
+              "UPDATE": 1,
+              "INVALID": 1,
+              "MISSING": 1,
+              "EMPTY": 1,
+              "DUPLICATE": 1
+            }
+          }
+        },
+        "configured_weighted_c": {
+          "generate": {
+            "weight": {
+              "BELOW_LIMIT": 1,
+              "AT_LIMIT": 1,
+              "ABOVE_LIMIT": 1
+            },
+            "collisions": {
+              "count": 1,
+              "against": "member_id_dob_gender"
+            }
+          }
+        },
+        "configured_weighted_f": {
+          "generate": {
+            "elasticity": {
+              "INSIDE": 1,
+              "AT_LIMIT": 1,
+              "OUTSIDE": 1
+            }
+          }
+        }
+      }
     }
   }
 }

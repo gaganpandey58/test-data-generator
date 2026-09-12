@@ -282,9 +282,14 @@ The global properties are the top-level properties in `runconfig.json`; their pa
 
 ### 6.3 Domain counts
 
-Counts are integers from `0` through `1,000,000`.
+Creation counts are integers from `0` through `1,000,000`.
 
 - `count: 0` disables/skips that stream without error.
+- `count` may be omitted for a stream that defines only `match_codes`. The
+  generator creates an in-memory existing record for the fixture pair but does
+  not publish that stream's normal creation JSONL file.
+- Counts under `match_codes.*.generate` are exact fixture totals. They are not
+  multiplied by the stream's creation `count`.
 - A successful run removes stale known output for a disabled stream.
 - Unrelated files in the output directory are not deleted.
 - Member Roster count cannot exceed Member count.
@@ -297,7 +302,7 @@ Public entity/stream properties are:
 
 | Property | Applies to | Meaning |
 | --- | --- | --- |
-| `count` | Provider, NPPES, Member, MR, Claims, History, Payments | Exact requested count, subject to relationship guardrails. |
+| `count` | Provider, NPPES, Member, MR, Claims, History, Payments | Exact ordinary creation count; optional for fixture-only streams. |
 | `nppes.count` | Linked Provider | Total NPPES rows; split automatically by type. |
 | `nppes.individual` / `nppes.organizational` | Linked Provider | Explicit type counts; their sum is the NPPES total. |
 | `cdf.additional_count` | Linked Provider | CDF-only rows whose NPIs do not exist in NPPES. It does not increase NPPES output count. |
@@ -403,61 +408,313 @@ Useful tool-level variables are optional, not project contracts. For example, in
 UV_CACHE_DIR=/tmp/test-data-generator-uv-cache uv run generate-data
 ```
 
-### 6.9 Per-record match-code cases
+### 6.9 Unified method-keyed match fixtures
 
-Put `match_codes` directly on the entity or variant being tested. The generator derives each case from every created source record and writes one JSON array per matching method and match-code label under that entity record's folder.
+Put `match_codes` directly on the stream being tested. Each key is the actual
+matching-method ID from that stream's rule catalog. Multiple keys are allowed
+and all configured methods run in one invocation. There is no required suite
+label, duplicated `method` property, field list, `match_defaults`, or separate
+matching configuration file.
 
 ```json
 {
   "member": {
     "count": 2,
+    "operations": [
+      {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
+    ],
     "match_codes": {
-      "matchCode1": {
-        "matching_method": "configured_weighted_c",
-        "operation_counts": {
-          "UPDATE": 2,
-          "INVALID": 3,
-          "MISSING": 1,
-          "EMPTY": 2,
-          "DUPLICATE": 4,
-          "WEIGHT_BELOW_LIMIT": 1,
-          "WEIGHT_AT_LIMIT": 2,
-          "WEIGHT_ABOVE_LIMIT": 3,
-          "ELASTICITY_INSIDE": 1,
-          "ELASTICITY_AT_LIMIT": 1,
-          "ELASTICITY_OUTSIDE": 1
+      "member_id_dob_gender": {
+        "generate": {
+          "operations": {
+            "UPDATE": 2,
+            "INVALID": 1,
+            "MISSING": 1,
+            "EMPTY": 1,
+            "DUPLICATE": 1
+          }
+        }
+      },
+      "configured_weighted_c": {
+        "generate": {
+          "weight": {
+            "BELOW_LIMIT": 1,
+            "AT_LIMIT": 1,
+            "ABOVE_LIMIT": 1
+          },
+          "collisions": {
+            "count": 1,
+            "against": "member_id_dob_gender"
+          }
         },
         "cases": [
           {
+            "name": "combined-negative-case",
             "modifications": [
-              {"type": "UPDATE", "fields": ["CM_MEMBER_FIRST_NAME"]},
               {"type": "EMPTY", "fields": ["CM_MEMBER_STATE"]},
-              {"type": "INVALID", "fields": ["CM_MEMBER_ZIP"]},
               {"type": "MISSING", "fields": ["CM_MEMBER_LAST_NAME"]}
-            ]
+            ],
+            "expected_outcome": "NO_MATCH"
           }
         ]
+      },
+      "configured_weighted_f": {
+        "generate": {
+          "elasticity": {
+            "INSIDE": 1,
+            "AT_LIMIT": 1,
+            "OUTSIDE": 1
+          }
+        }
       }
     }
   }
 }
 ```
 
-`matching_method` is the rule-catalog method; `matchCode1` is a QA-friendly label. Counts create randomized cases using the method's current eligible fields. `cases` creates an explicit, multi-field plan; legacy `deterministic_cases` remains accepted during migration. A case's optional `count` repeats it and optional `expected_outcome` (`MATCH` or `NO_MATCH`) overrides its inferred outcome. Invalid values come only from `invalid-values.json`.
+#### Entity operations versus generated matching operations
 
-Weight counts dynamically select the configured method's weighted fields for below, exact, or above the threshold. Elasticity counts generate just-inside, exactly-at, and just-outside configured tolerances. The engine records the modifications, expected outcome, matching collisions, changed/removed/synchronized fields, total weight, and final record in every output JSON.
+The two `operations` locations serve different outputs:
 
-For two generated Members, this configuration writes:
+| Location | Purpose | Field source | Output |
+| --- | --- | --- | --- |
+| Stream-level `operations` array | Normal update/invalid/missing/empty data for that stream. | Explicit `fields` in each item. | `<stream>.update.jsonl` |
+| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | `match-fixtures/<operation>/<stream>/<method>.json` |
 
-```text
-output/update-test-data/
-  member1/
-    configured_weighted_c__matchCode1.json
-  member2/
-    configured_weighted_c__matchCode1.json
+Neither is required by the other. If both are present, both outputs are
+generated. If `generate.operations` is absent, no standard automatic operation
+fixtures are generated, but configured weight, elasticity, collision, and
+custom cases still run independently.
+
+#### Automatic field selection
+
+The selector is built in and deterministic:
+
+1. Read the method's ordered `fields` from the rule catalog.
+2. Keep only fields present in the current source shape and eligible for the
+   requested operation.
+3. For INVALID, also require a usable exact-field or field-type entry in
+   `invalid-values.json`.
+4. Select in catalog order and continue from the next field for the next case.
+5. Wrap to the first eligible field when requested counts exceed the available
+   fields.
+
+For method fields `FIRST_NAME, LAST_NAME, DOB, GENDER`, `UPDATE: 2` selects
+FIRST_NAME and LAST_NAME. A following `INVALID: 1` tries DOB and advances to
+GENDER if DOB has no invalid catalog value. Users do not repeat these fields in
+the scenario configuration.
+
+The generated record is copied from an existing row. Changing a mandatory
+anchor normally produces NO_MATCH; changing a non-anchor/optional field may
+remain MATCH. The verifier evaluates the actual result and records other
+methods that also match.
+
+#### Exact count behavior
+
+`generate` counts mean final fixture counts, not counts per source row:
+
+```json
+"generate": {"operations": {"UPDATE": 2, "INVALID": 1}}
 ```
 
-The entity is always the folder. If the match-code label equals the matching-method name, the filename is `<matching-method>.json`; otherwise it is `<matching-method>__<match-code>.json`. Cases run in `all` or `creation` mode, are transactionally published in the normal update directory, and do not create a separate match-plan or fixture directory.
+always emits three fixtures for that method. `count: 2` independently emits
+two normal creation rows and provides a rotating source pool for the three
+fixtures. It does not emit six fixtures. If `count` is omitted, an in-memory
+source is built and only the three fixture records are published.
+
+#### Weight boundaries
+
+Weight scenarios use the selected matching method's `needed_weight`, mandatory
+fields, optional fields, and field weights. Mandatory anchors remain exact.
+The generator computes a deterministic optional-field subset whose resulting
+match score is:
+
+- `BELOW_LIMIT`: the highest representable score below the required weight;
+- `AT_LIMIT`: exactly the required weight;
+- `ABOVE_LIMIT`: the lowest representable score above the required weight.
+
+The emitted metadata includes `match_weight`, `required_weight`, and
+`threshold_relation`. If a strict method has no optional fields, or its weights
+cannot represent a requested boundary, generation fails clearly. Weight
+generation does not depend on elasticity.
+
+#### Elasticity boundaries
+
+Elasticity generation examines only mandatory method fields with non-zero
+configured elasticity. It selects eligible fields with the same deterministic
+rotation and creates:
+
+- `INSIDE`: just inside the allowed tolerance, expected to MATCH;
+- `AT_LIMIT`: exactly at the tolerance, expected to MATCH;
+- `OUTSIDE`: just beyond the tolerance, expected to NO_MATCH.
+
+Requesting elasticity for a method with no supported elastic mandatory field is
+an error. It is never ignored or downgraded to a warning. For Member examples,
+`configured_weighted_f` supports DOB elasticity; `configured_weighted_c` does
+not.
+
+#### Collisions and duplicates
+
+```json
+"collisions": {"count": 1, "against": "member_id_dob_gender"}
+```
+
+creates one additional incoming fixture. It deliberately breaks a mandatory
+anchor of the target method that is not required by the alternate method, then
+verifies target NO_MATCH and alternate MATCH. The existing row is not modified.
+If `against` is omitted, the first compatible method also configured on that
+stream is selected in rule-catalog priority order. An unknown, self-referential,
+or structurally impossible collision fails generation.
+
+`DUPLICATE` is different: it copies a related incoming row with the target
+method still matching. A collision is stored under the collision operation and
+records `collision_method`, `matched_methods`, and `unexpected_methods`.
+
+#### Optional custom cases
+
+`cases` is not required for standard operations, weight boundaries, elasticity,
+or collisions. Use it only when several exact modifications must be applied to
+the same incoming record. Each case supports optional `name`, positive `count`,
+and `expected_outcome`; `modifications` is an ordered non-empty array. Automatic
+generation and custom cases are additive when both are present.
+
+#### Entity and stream examples
+
+Provider NPPES and CDF remain separate because their fields and methods differ:
+
+```json
+{
+  "provider": {
+    "nppes": {
+      "count": 2,
+      "individual": 1,
+      "organizational": 1,
+      "operations": [{"type": "UPDATE", "fields": ["PROVIDER_FIRST_NAME"]}],
+      "match_codes": {
+        "nppes_npi": {"generate": {"operations": {"UPDATE": 2, "INVALID": 1}}},
+        "nppes_individual_weighted": {
+          "generate": {
+            "weight": {"BELOW_LIMIT": 1, "AT_LIMIT": 1, "ABOVE_LIMIT": 1},
+            "collisions": {"count": 1, "against": "nppes_npi"}
+          }
+        }
+      }
+    },
+    "cdf": {
+      "additional_count": 2,
+      "operations": [{"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}],
+      "match_codes": {
+        "provider_id": {"generate": {"operations": {"UPDATE": 2, "DUPLICATE": 1}}},
+        "provider_individual_weighted": {
+          "generate": {"weight": {"AT_LIMIT": 1}}
+        }
+      }
+    }
+  }
+}
+```
+
+Member Roster uses Member methods but owns its own operations and match counts:
+
+```json
+"mr": {
+  "count": 2,
+  "operations": [{"type": "UPDATE", "fields": ["CM_MEMBER_MIDDLE_NAME"]}],
+  "match_codes": {
+    "member_id_dob_gender": {
+      "generate": {"operations": {"UPDATE": 1, "EMPTY": 1}}
+    }
+  }
+}
+```
+
+Claims and Claims History place methods on each Professional/Institutional
+stream. History reuses the corresponding Claim method IDs:
+
+```json
+{
+  "claims": {
+    "professional": {
+      "count": 2,
+      "match_codes": {
+        "professional_claim_primary": {
+          "generate": {
+            "operations": {"UPDATE": 2, "INVALID": 1},
+            "collisions": {"count": 1, "against": "professional_claim_fallback"}
+          }
+        },
+        "professional_claim_fallback": {
+          "generate": {"operations": {"DUPLICATE": 1}}
+        }
+      }
+    },
+    "claims_history": {
+      "professional": {
+        "count": 2,
+        "linked": true,
+        "match_codes": {
+          "professional_claim_primary": {
+            "generate": {"operations": {"UPDATE": 1}}
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Payment lifecycle scenarios remain separate from Payment matching fixtures:
+
+```json
+{
+  "payments": {
+    "defaults": {
+      "scenarios": {"MATCHED": 4, "REVERSAL": 1, "REPLACEMENT": 1, "STALE": 1, "ORPHAN": 0}
+    },
+    "professional": {
+      "count": 7,
+      "operations": [{"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}],
+      "match_codes": {
+        "claim_method_1": {
+          "generate": {
+            "operations": {"UPDATE": 2, "INVALID": 1, "DUPLICATE": 1},
+            "collisions": {"count": 1, "against": "claim_method_2"}
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+The same shapes apply to organizational NPPES, Institutional Claims,
+Institutional History, and Institutional Payments using their catalog method
+IDs. The checked-in four domain configuration files contain complete runnable
+examples for every stream.
+
+#### Output layout and migration
+
+New method-keyed fixtures are grouped by operation, entity stream, and method:
+
+```text
+output/update-test-data/match-fixtures/
+├── update/member/member_id_dob_gender.json
+├── invalid/provider_nppes/nppes_npi.json
+├── weight-at-limit/provider/provider_individual_weighted.json
+├── elasticity-inside/member_mr/configured_weighted_f.json
+├── collision/claim_professional/professional_claim_primary__against__professional_claim_fallback.json
+└── custom/member/configured_weighted_c.json
+```
+
+Every file is a JSON array. Every element contains `existing`, `record`,
+`matching_method`, `operation`, `expected_outcome`, `actual_match`,
+`matched_methods`, `unexpected_methods`, `changed_fields`, `removed_fields`,
+`synchronized_fields`, `modification_plan`, `match_weight`, `required_weight`,
+and `threshold_relation`.
+
+The legacy shape with a QA label, `matching_method`, and `operation_counts`
+remains accepted during migration and preserves its old per-source-record
+folders. New configurations should use the method ID as the key plus `generate`.
 
 ## 7. Entity reference
 
@@ -895,6 +1152,21 @@ Methods F and G allow DOB variation of less than one month. Method B has configu
 
 `provider_npi_weighted` allows configured flexibility for First Name. Provider methods are alternative business contracts; the rule file does not infer unsupported subset relationships merely from similar fields.
 
+NPPES has its own method IDs because its source fields differ from CDF:
+
+| Method | Mandatory anchors | Optional anchors | Needed weight |
+| --- | --- | --- | --- |
+| `nppes_npi` | NPI | None | 1 |
+| `nppes_individual_identity` | NPI, First Name, Legal Last Name | None | 3 |
+| `nppes_organizational_identity` | NPI, Legal Organization Name, EIN | None | 3 |
+| `nppes_individual_weighted` | First Name, Legal Last Name | Mailing Street, Mailing ZIP | 3 |
+| `nppes_organizational_weighted` | Legal Organization Name | Mailing Street, Mailing ZIP | 2 |
+
+Individual-only and organization-only NPPES fields are conditionally present.
+An entity-level operation changes that field only on applicable records and
+never creates it on the other subtype. Match fixtures select a source row whose
+shape contains all mandatory fields for the chosen method.
+
 ### 10.3 Professional Claim methods
 
 `professional_claim_primary` requires:
@@ -1116,21 +1388,33 @@ Each JSONL line is one complete JSON object.
 
 ### Match-code cases
 
-When an entity's `match_codes` is configured, an additional JSON case tree is written inside the normal update directory:
+When a stream's `match_codes` is configured, an additional JSON case tree is
+written inside the normal update directory. The hierarchy is operation, entity
+stream, then matching method:
 
 ```text
-output/update-test-data/
-├── member1/
-│   ├── configured_weighted_c__matchCode1.json
-│   └── configured_weighted_f__matchCode2.json
-├── member2/
-│   ├── configured_weighted_c__matchCode1.json
-│   └── configured_weighted_f__matchCode2.json
-└── provider1/
-    └── deterministic_provider.json
+output/update-test-data/match-fixtures/
+├── update/
+│   ├── member/member_id_dob_gender.json
+│   ├── provider/provider_id.json
+│   └── claim_professional/professional_claim_primary.json
+├── invalid/
+│   └── provider_nppes/nppes_npi.json
+├── weight-at-limit/
+│   └── member/configured_weighted_c.json
+├── elasticity-inside/
+│   └── member_mr/configured_weighted_f.json
+├── collision/
+│   └── claim_professional/
+│       └── professional_claim_primary__against__professional_claim_fallback.json
+└── custom/
+    └── member/configured_weighted_c.json
 ```
 
-The entity record owns the folder. Each file is an array of derived cases, not a single raw record. Every case includes `existing`, `record`, the applied operation plan, changed/removed/synchronized fields, actual matching methods, expected outcome, and weight information. There is no separate fixture directory or per-entity match-plan file.
+Each file is an array of derived cases, not a single raw record. Operation
+counts are exact totals across the rotating source pool. There is no
+per-entity match-plan file. The legacy `matching_method`/`operation_counts`
+syntax temporarily retains its older `<entity><record-number>` folders.
 
 ## 15. Running scenarios yourself
 
@@ -1363,16 +1647,22 @@ Expected:
 - The first 10 CDF NPIs match NPPES NPIs.
 - The remaining two are unique CDF-only NPIs.
 
-### 15.13 Generate per-record match-code cases
+### 15.13 Generate method-keyed match fixtures
 
-Add `match_codes` to the relevant entity configuration as shown in [section 6.9](#69-per-record-match-code-cases), ensure that entity has a positive count, and run creation:
+Add `match_codes` to the relevant stream as shown in
+[section 6.9](#69-unified-method-keyed-match-fixtures). A positive `count`
+also writes ordinary creation rows; omit `count` for fixture-only generation.
+Run creation:
 
 ```sh
 uv run python -m test_data_generator generate \
   --config runconfig.json --mode creation
 ```
 
-Use the domain name in `runconfig.json` (`member`, `provider`, `claims`, or `payments`). `matching_method` must be a method defined for the selected entity in the update-rule catalog. The output folders are under `output/update-test-data/<entity><record-number>/`.
+Use the domain name in `runconfig.json` (`member`, `provider`, `claims`, or
+`payments`). Every `match_codes` key must be a method defined for that stream in
+the update-rule catalog. Output is under
+`output/update-test-data/match-fixtures/<operation>/<internal-stream>/<method>.json`.
 
 ## 16. Verification cookbook
 
@@ -1395,7 +1685,7 @@ This checks JSON syntax, not schema validity.
 ### 16.3 Inspect match-code case results
 
 ```sh
-find output/update-test-data -type f -path '*/*[0-9]/*.json' -print | sort
+find output/update-test-data/match-fixtures -type f -name '*.json' -print | sort
 jq '.[0] | {
   match_code,
   matching_method,
@@ -1404,16 +1694,21 @@ jq '.[0] | {
   actual_match,
   changed_fields,
   removed_fields,
+  match_weight,
+  required_weight,
   total_weight,
   threshold_relation
-}' output/update-test-data/member1/configured_weighted_c__matchCode1.json
+}' output/update-test-data/match-fixtures/weight-at-limit/member/configured_weighted_c.json
 ```
 
-For a deterministic field plan, compare the `existing` and `record` values and confirm the named fields appear in `changed_fields` or `removed_fields`. For random operation-count cases, confirm the file contains exactly the configured count of each `operation`:
+For a custom field plan, compare `existing` and `record`, then confirm the named
+fields appear in `changed_fields` or `removed_fields`. For automatic operation
+counts, each operation has its own file; its array length is the exact requested
+count:
 
 ```sh
-jq 'group_by(.operation) | map({operation: .[0].operation, count: length})' \
-  output/update-test-data/member1/configured_weighted_c__matchCode1.json
+jq '{operation: .[0].operation, count: length}' \
+  output/update-test-data/match-fixtures/update/member/member_id_dob_gender.json
 ```
 
 ### 16.4 Validate normal creation output against schemas
