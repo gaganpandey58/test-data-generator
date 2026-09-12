@@ -632,6 +632,7 @@ entry in `invalid-values.json`. No `match_defaults` setting is required.
 {
   "member": {
     "count": 2,
+    "variation": {"fields_per_record": 5},
     "operations": [
       {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
     ],
@@ -700,6 +701,47 @@ breaks the target and verifies the alternate method.
 `cases` is optional and is only for custom multi-field combinations. Automatic
 operations, weights, elasticity, and collisions do not require it. Multiple
 method keys run in one invocation.
+
+`variation.fields_per_record` adds valid incidental differences to every
+match fixture for that stream. Users provide only the number of fields; the
+generator discovers and randomly selects `applied_fields` automatically. The
+selection is reproducible when `seed` is fixed and differs across fixture
+cases because each case has its own derived seed.
+
+The safe candidate set contains only populated scalar fields in the emitted
+record. It excludes the union of fields used by every matching method, matching
+keys, relationship identifiers, structural discriminators, metadata/envelope
+fields, amounts, dates, constrained codes/statuses, derived targets, and all
+fields named by stream-level operations or touched by the active match
+operation, weight, elasticity, collision, or custom case. Synchronization
+dependencies are protected as a group. Each
+candidate receives the existing field-specific valid UPDATE value and must
+preserve the schema-error set and every matching method's assessment. If the
+requested number cannot be applied safely, generation fails instead of
+silently reducing the count or using a risky field.
+
+Every case records what actually happened:
+
+```json
+{
+  "variation": {
+    "requested_count": 5,
+    "applied_fields": [
+      "CM_MEMBER_MIDDLE_NAME",
+      "CM_MEMBER_EMAIL",
+      "CM_MEMBER_PHONE",
+      "CM_MEMBER_ADDRESS_02",
+      "CM_MEMBER_CITY"
+    ]
+  }
+}
+```
+
+The same stream-level setting is supported by Provider NPPES and CDF, Member
+and MR, Professional/Institutional Claims and Claims History, and
+Professional/Institutional Payments. Omit `variation`, or set
+`fields_per_record` to `0`, to disable it. Variation applies to `match_codes`
+fixtures and therefore requires at least one `match_codes` entry on the stream.
 
 Fixtures are grouped by operation, entity stream, and method:
 

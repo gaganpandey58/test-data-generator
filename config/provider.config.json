@@ -4,6 +4,7 @@
       "count": 2,
       "individual": 1,
       "organizational": 1,
+      "variation": {"fields_per_record": 3},
       "operations": [
         {"type": "UPDATE", "fields": ["PROVIDER_FIRST_NAME"]}
       ],
@@ -49,6 +50,7 @@
     },
     "cdf": {
       "additional_count": 2,
+      "variation": {"fields_per_record": 3},
       "operations": [
         {"type": "UPDATE", "fields": ["CP_PROVIDER_FIRST_NAME"]}
       ],

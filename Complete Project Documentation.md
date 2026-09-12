@@ -313,6 +313,7 @@ Public entity/stream properties are:
 | `output_order.headers` | Any normal entity stream | Overrides global `source`, `first`, or `last` header ordering. |
 | `operations` / `modifications` | Any update-capable stream | Direct ordered mutation plan for that domain or variant. |
 | `match_codes` | Any update-capable stream | Per-method operation counts and deterministic cases. |
+| `variation.fields_per_record` | Any stream with `match_codes` | Exact number of automatically selected safe non-matching fields to vary in each fixture. Omit or use `0` to disable. |
 | `source_claims` | Payments | Read-only external Claim/CH JSONL source. |
 | `scenarios` | Payments | MATCHED/REVERSAL/REPLACEMENT/STALE/ORPHAN counts. |
 | `claim_frequency` | Claims | One deterministic frequency: `1`, `7`, or `8`. |
@@ -420,6 +421,7 @@ matching configuration file.
 {
   "member": {
     "count": 2,
+    "variation": {"fields_per_record": 5},
     "operations": [
       {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
     ],
@@ -521,6 +523,86 @@ always emits three fixtures for that method. `count: 2` independently emits
 two normal creation rows and provides a rotating source pool for the three
 fixtures. It does not emit six fixtures. If `count` is omitted, an in-memory
 source is built and only the three fixture records are published.
+
+#### Automatic safe non-matching-field variation
+
+Add one optional setting to the stream that owns the `match_codes`:
+
+```json
+"variation": {
+  "fields_per_record": 5
+}
+```
+
+No field list is required. `fields_per_record` becomes
+`variation.requested_count` in every emitted case. The generator calculates
+`variation.applied_fields` separately for each record using a seeded-random
+selection, so a fixed run seed is reproducible while different cases can use
+different safe fields.
+
+Candidate resolution is performed against the actual emitted record and the
+complete rule catalog for that stream. A candidate must be present, populated,
+scalar, and supported by the field-specific valid UPDATE value resolver. The
+following are excluded:
+
+- every field used by any matching method for the stream;
+- matching keys, claim/member/provider/payment relationship identifiers, and
+  structural discriminators;
+- envelope and `cotiviti.*` metadata;
+- dates/timestamps, financial amounts, codes, statuses, indicators,
+  qualifiers, counts, scores, units, and other business-sensitive values;
+- empty, null, missing, container, inapplicable, and derived-only fields;
+- fields directly modified by the active standard operation, weight boundary,
+  elasticity boundary, collision, or custom case, plus fields named by the
+  stream-level `operations` plan;
+- the dependency/equivalence closure of every protected field, including name
+  composites, CH/CD equivalents, Provider NPI equivalents, and NPPES entity
+  type derivation.
+
+For each selected candidate, the generator applies a realistic field-specific
+replacement, reruns relationship synchronization, and rejects the candidate if
+it introduces or changes a schema error. After all requested changes, it
+re-evaluates every matching method—not only the target method—and requires the
+full assessment to be identical to the pre-variation assessment. This keeps
+MATCH/NO_MATCH, collision behavior, weights, and elasticity boundaries intact.
+Identity and relationship fields are never incidental variation targets, which
+preserves linked Claim, History, Payment, Provider, Member, and MR semantics.
+
+The fixture envelope records the exact result:
+
+```json
+{
+  "variation": {
+    "requested_count": 5,
+    "applied_fields": [
+      "CM_MEMBER_MIDDLE_NAME",
+      "CM_MEMBER_EMAIL",
+      "CM_MEMBER_PHONE",
+      "CM_MEMBER_ADDRESS_02",
+      "CM_MEMBER_CITY"
+    ]
+  }
+}
+```
+
+Those field names are examples only. The actual list is automatic and can
+differ by entity, stream, subtype, source record, scenario, and seed. If five
+fields are requested but fewer than five can be changed safely, generation
+fails with the requested and available counts. It never silently emits fewer
+variations or relaxes the safety rules.
+
+The option is implemented consistently on:
+
+- `provider.nppes` (Individual and Organizational shapes) and `provider.cdf`;
+- `member` and `member.mr`;
+- `claims.professional`, `claims.institutional`, and both Claims History
+  streams;
+- `payments.professional` and `payments.institutional`.
+
+Variation is a match-fixture feature, so a non-zero request requires
+`match_codes` on the same resolved stream. It does not alter ordinary creation
+JSONL or stream-level `.update.jsonl` records. Omit the block or set
+`fields_per_record` to `0` to disable it.
 
 #### Weight boundaries
 
@@ -1415,6 +1497,9 @@ Each file is an array of derived cases, not a single raw record. Operation
 counts are exact totals across the rotating source pool. There is no
 per-entity match-plan file. The legacy `matching_method`/`operation_counts`
 syntax temporarily retains its older `<entity><record-number>` folders.
+Each envelope also contains `variation.requested_count` and the automatically
+selected `variation.applied_fields`; both are `0`/empty when variation is
+disabled.
 
 ## 15. Running scenarios yourself
 

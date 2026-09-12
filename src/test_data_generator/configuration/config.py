@@ -106,11 +106,20 @@ class MatchFixtureCodeConfig:
 
 
 @dataclass(frozen=True)
+class MatchVariationConfig:
+    """Configure safe, automatic non-matching-field variation per fixture."""
+
+    requested_count: int = 0
+    protected_fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class MatchFixtureEntityConfig:
     """Describe fixture matrices emitted from records of one enabled entity."""
 
     entity: str
     match_codes: tuple[MatchFixtureCodeConfig, ...]
+    variation: MatchVariationConfig = field(default_factory=MatchVariationConfig)
 
 
 @dataclass(frozen=True)
@@ -451,8 +460,15 @@ def _match_fixture_config(
     for entity_name, source_entity in raw_entities.items():
         if not isinstance(source_entity, Mapping) or not source_entity.get("enabled"):
             continue
+        variation = _match_variation_config(
+            entity_name,
+            source_entity.get("variation"),
+            _configured_update_fields(source_entity.get("updates")),
+        )
         codes = source_entity.get("match_codes")
         if codes is None:
+            if variation.requested_count:
+                raise ConfigurationError(f"Entity {entity_name!r}.variation requires match_codes")
             continue
         if not isinstance(codes, Mapping) or not codes:
             raise ConfigurationError(
@@ -489,8 +505,43 @@ def _match_fixture_config(
                     "matching_method" in code_value or "operation_counts" in code_value,
                 )
             )
-        result.append(MatchFixtureEntityConfig(entity_name, tuple(code_configs)))
+        result.append(MatchFixtureEntityConfig(entity_name, tuple(code_configs), variation))
     return tuple(result)
+
+
+def _match_variation_config(
+    entity_name: str, value: object, protected_fields: tuple[str, ...]
+) -> MatchVariationConfig:
+    """Normalize the stream-level automatic variation request."""
+    if value is None:
+        return MatchVariationConfig(protected_fields=protected_fields)
+    if not isinstance(value, Mapping):
+        raise ConfigurationError(f"Entity {entity_name!r}.variation must be an object")
+    count = value.get("fields_per_record", 0)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        raise ConfigurationError(
+            f"Entity {entity_name!r}.variation.fields_per_record must be a non-negative integer"
+        )
+    return MatchVariationConfig(count, protected_fields)
+
+
+def _configured_update_fields(value: object) -> tuple[str, ...]:
+    """Collect direct stream-operation fields that variation must not reuse."""
+    if not isinstance(value, Mapping):
+        return ()
+    fields: list[str] = []
+    direct = value.get("fields")
+    if isinstance(direct, list):
+        fields.extend(str(field).strip() for field in direct)
+    operation = value.get("operation")
+    if isinstance(operation, Mapping) and isinstance(operation.get("fields"), list):
+        fields.extend(str(field).strip() for field in operation["fields"])
+    modifications = value.get("modifications")
+    if isinstance(modifications, list):
+        for modification in modifications:
+            if isinstance(modification, Mapping) and isinstance(modification.get("fields"), list):
+                fields.extend(str(field).strip() for field in modification["fields"])
+    return tuple(dict.fromkeys(field for field in fields if field))
 
 
 def _match_fixture_operation_counts(
@@ -791,6 +842,7 @@ _DOMAIN_SCENARIO_ATTRIBUTES = frozenset(
         "include",
         "exclude",
         "linked",
+        "variation",
     }
 )
 
@@ -1146,10 +1198,19 @@ def _nppes_total(value: object) -> int:
 def _has_explicit_update_selection(selection: Mapping[str, object]) -> bool:
     """Return whether NPPES needs a generic entity or fixture execution path."""
     update = selection.get("updates")
-    return "match_codes" in selection or (
-        isinstance(update, Mapping)
-        and bool({"operation", "expected_outcome", "modifications"}.intersection(update))
+    return (
+        "match_codes" in selection
+        or _variation_requested(selection)
+        or (
+            isinstance(update, Mapping)
+            and bool({"operation", "expected_outcome", "modifications"}.intersection(update))
+        )
     )
+
+
+def _variation_requested(selection: Mapping[str, object]) -> bool:
+    variation = selection.get("variation")
+    return isinstance(variation, Mapping) and bool(variation.get("fields_per_record", 0))
 
 
 def _selected_entity(
@@ -1174,7 +1235,7 @@ def _selected_entity(
     count = count_value
     result = {
         **defaults,
-        "enabled": count > 0 or "match_codes" in selection,
+        "enabled": count > 0 or "match_codes" in selection or _variation_requested(selection),
         "count": count,
     }
     if isinstance(selection.get("updates"), dict):
@@ -1182,6 +1243,8 @@ def _selected_entity(
         result["updates"] = {str(key): value for key, value in updates.items()}
     if "match_codes" in selection:
         result["match_codes"] = deepcopy(selection["match_codes"])
+    if "variation" in selection:
+        result["variation"] = deepcopy(selection["variation"])
     if "source_claims" in selection:
         result["source_claims"] = selection["source_claims"]
     if "scenarios" in selection:

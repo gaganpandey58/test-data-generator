@@ -29,6 +29,56 @@ def synchronize_record(
     return tuple(sorted(synchronized))
 
 
+def synchronization_field_closure(record: Mapping[str, object], fields: set[str]) -> set[str]:
+    """Return fields connected through the synchronizer's dependency graph.
+
+    Variation uses the undirected closure deliberately: if either side of a
+    derived/equivalent relationship is protected, no incidental variation may
+    alter the other side and flow back into the protected logical value.
+    """
+    available = _field_names(record)
+    relationships: list[set[str]] = []
+
+    for field in available:
+        if not field.endswith(("_FIRST_NAME", "_MIDDLE_NAME", "_LAST_NAME")):
+            continue
+        prefix = field.rsplit("_", 2)[0]
+        group = {
+            name
+            for name in (
+                f"{prefix}_FIRST_NAME",
+                f"{prefix}_MIDDLE_NAME",
+                f"{prefix}_LAST_NAME",
+                f"{prefix}_FULL_NAME",
+            )
+            if name in available
+        }
+        if len(group) > 1:
+            relationships.append(group)
+
+    for field in available:
+        if field.startswith("CH_") and f"CD_{field[3:]}" in available:
+            relationships.append({field, f"CD_{field[3:]}"})
+
+    for relationship in (
+        {"CP_PROVIDER_NPI", "CP_PRESCRIBING_PROVIDER_NPI"},
+        {"ENTITY_TYPE_CODE", "ENTITY_TYPE_DESCRIPTION"},
+    ):
+        present = relationship.intersection(available)
+        if len(present) > 1:
+            relationships.append(present)
+
+    result = set(fields)
+    changed = True
+    while changed:
+        changed = False
+        for relationship in relationships:
+            if result.intersection(relationship) and not relationship.issubset(result):
+                result.update(relationship)
+                changed = True
+    return result
+
+
 def _synchronize_nppes_entity_type(
     original: Mapping[str, object], updated: dict[str, object], changed: set[str]
 ) -> set[str]:

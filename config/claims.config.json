@@ -5,6 +5,7 @@
     ],
     "professional": {
       "count": 7,
+      "variation": {"fields_per_record": 3},
       "match_codes": {
         "professional_claim_primary": {
           "generate": {
@@ -36,6 +37,7 @@
     },
     "institutional": {
       "count": 7,
+      "variation": {"fields_per_record": 3},
       "match_codes": {
         "institutional_claim_primary": {
           "generate": {
@@ -72,6 +74,7 @@
       "professional": {
         "count": 7,
         "linked": true,
+        "variation": {"fields_per_record": 3},
         "match_codes": {
           "professional_claim_primary": {
             "generate": {
@@ -101,6 +104,7 @@
       "institutional": {
         "count": 7,
         "linked": true,
+        "variation": {"fields_per_record": 3},
         "match_codes": {
           "institutional_claim_primary": {
             "generate": {

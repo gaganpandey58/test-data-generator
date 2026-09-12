@@ -11,6 +11,7 @@
     },
     "professional": {
       "count": 7,
+      "variation": {"fields_per_record": 0},
       "operations": [
         {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}
       ],
@@ -46,6 +47,7 @@
     },
     "institutional": {
       "count": 7,
+      "variation": {"fields_per_record": 0},
       "operations": [
         {"type": "UPDATE", "fields": ["CH_PAYER_ORGANIZATION_NAME"]}
       ],

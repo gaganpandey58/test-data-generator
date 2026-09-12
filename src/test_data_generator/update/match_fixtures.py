@@ -100,6 +100,8 @@ def generate_match_fixture_matrix(
                 collision_method,
                 seed,
                 invalid_values,
+                entity_config.variation.requested_count,
+                entity_config.variation.protected_fields,
             )
             grouped: defaultdict[str, list[dict[str, object]]] = defaultdict(list)
             for case in cases:
@@ -150,6 +152,8 @@ def _write_legacy_fixtures(
             method.mandatory_fields,
             seed,
             invalid_values,
+            entity_config.variation.requested_count,
+            entity_config.variation.protected_fields,
         )
         output_name = (
             match_code.matching_method
@@ -174,6 +178,8 @@ def _build_exact_cases(
     collision_method: str | None,
     seed: int,
     invalid_values: Mapping[str, tuple[object, ...]],
+    variation_count: int,
+    variation_protected_fields: tuple[str, ...],
 ) -> list[dict[str, object]]:
     """Build exact total counts using deterministic catalog-order selection."""
     applicable = tuple(
@@ -240,6 +246,8 @@ def _build_exact_cases(
                     seed,
                     case_seed,
                     invalid_values,
+                    variation_count,
+                    variation_protected_fields,
                 )
                 expected_outcome = (
                     ExpectedOutcome.NO_MATCH
@@ -257,6 +265,8 @@ def _build_exact_cases(
                     seed,
                     case_seed,
                     invalid_values,
+                    variation_count=variation_count,
+                    variation_protected_fields=variation_protected_fields,
                 )
             result.append(
                 _case_document(
@@ -289,6 +299,8 @@ def _build_exact_cases(
                 _case_seed(seed, entity_name, method.name, "collision", len(result) + 1),
                 invalid_values,
                 collision_method,
+                variation_count,
+                variation_protected_fields,
             )
             result.append(
                 _case_document(
@@ -337,6 +349,8 @@ def _build_exact_cases(
                 seed,
                 _case_seed(seed, entity_name, method.name, "custom", len(result) + 1),
                 invalid_values,
+                variation_count=variation_count,
+                variation_protected_fields=variation_protected_fields,
             )
             result.append(
                 _case_document(
@@ -422,6 +436,8 @@ def _resolve_exact_weight_case(
     seed: int,
     index: int,
     invalid_values: Mapping[str, tuple[object, ...]],
+    variation_count: int,
+    variation_protected_fields: tuple[str, ...],
 ) -> ResolvedUpdate:
     """Create a matching-score boundary fixture for the selected method."""
     relation = _WEIGHT_OPERATIONS[operation]
@@ -445,6 +461,8 @@ def _resolve_exact_weight_case(
             include=included,
             exclude=excluded,
             modifications=modifications,
+            variation_count=variation_count,
+            variation_protected_fields=variation_protected_fields,
         ),
         rules,
         seed,
@@ -573,6 +591,10 @@ def _case_document(
         "threshold_relation": threshold_relation,
         "expected_apply": resolved.expected_apply,
         "modification_plan": [_plan_item(item) for item in resolved.modification_plan],
+        "variation": {
+            "requested_count": resolved.variation_requested_count,
+            "applied_fields": list(resolved.variation_fields),
+        },
         "existing": dict(base),
         "record": resolved.record,
     }
@@ -592,6 +614,8 @@ def _build_cases(
     mandatory_fields: tuple[str, ...],
     seed: int,
     invalid_values: Mapping[str, tuple[object, ...]],
+    variation_count: int,
+    variation_protected_fields: tuple[str, ...],
 ) -> list[dict[str, object]]:
     """Build randomized operation-count cases and explicit multi-field cases."""
     randomizer = Random(_case_seed(seed, entity_name, record_index, match_code.name))
@@ -662,6 +686,8 @@ def _build_cases(
             seed,
             _case_seed(seed, entity_name, record_index, match_code.name, case_index),
             invalid_values,
+            variation_count=variation_count,
+            variation_protected_fields=variation_protected_fields,
         )
         assessment = assess_match(
             base,
@@ -693,6 +719,10 @@ def _build_cases(
                 "threshold_relation": resolved.threshold_relation,
                 "expected_apply": resolved.expected_apply,
                 "modification_plan": [_plan_item(item) for item in resolved.modification_plan],
+                "variation": {
+                    "requested_count": resolved.variation_requested_count,
+                    "applied_fields": list(resolved.variation_fields),
+                },
                 "existing": dict(base),
                 "record": resolved.record,
             }
@@ -711,6 +741,8 @@ def _resolve_case(
     index: int,
     invalid_values: Mapping[str, tuple[object, ...]],
     collision_method: str | None = None,
+    variation_count: int = 0,
+    variation_protected_fields: tuple[str, ...] = (),
 ) -> ResolvedUpdate:
     """Use match verification for field plans and native selection for weights."""
     if operation in _WEIGHT_OPERATIONS:
@@ -721,6 +753,8 @@ def _resolve_case(
                 matching_method=matching_method,
                 condition=_WEIGHT_OPERATIONS[operation],
                 invalid_values=invalid_values,
+                variation_count=variation_count,
+                variation_protected_fields=variation_protected_fields,
             ),
             rules,
             seed,
@@ -751,6 +785,8 @@ def _resolve_case(
                 invalid_values=invalid_values,
                 failure_field=field,
                 elasticity_boundary=_ELASTICITY_OPERATIONS[operation],
+                variation_count=variation_count,
+                variation_protected_fields=variation_protected_fields,
             ),
             rules,
             seed,
@@ -768,6 +804,8 @@ def _resolve_case(
                 failure_mode=FailureMode.CROSS_METHOD_COLLISION,
                 collision_method=collision_method,
                 invalid_values=invalid_values,
+                variation_count=variation_count,
+                variation_protected_fields=variation_protected_fields,
             ),
             rules,
             seed,
@@ -782,6 +820,8 @@ def _resolve_case(
             expected_outcome=expected_outcome,
             invalid_values=invalid_values,
             modifications=modifications,
+            variation_count=variation_count,
+            variation_protected_fields=variation_protected_fields,
         ),
         rules,
         seed,

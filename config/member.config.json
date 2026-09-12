@@ -1,6 +1,7 @@
 {
   "member": {
     "count": 2,
+    "variation": {"fields_per_record": 3},
     "operations": [
       {"type": "UPDATE", "fields": ["CM_MEMBER_EMAIL"]}
     ],
@@ -51,6 +52,7 @@
     },
     "mr": {
       "count": 2,
+      "variation": {"fields_per_record": 3},
       "operations": [
         {"type": "UPDATE", "fields": ["CM_MEMBER_MIDDLE_NAME"]}
       ],

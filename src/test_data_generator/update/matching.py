@@ -25,6 +25,7 @@ from test_data_generator.update.scenarios import (
     _normalize_fields,
 )
 from test_data_generator.update.synchronization import synchronize_record
+from test_data_generator.update.variation import apply_safe_variation
 
 _MISSING = object()
 
@@ -132,15 +133,43 @@ def resolve_match_fixture(
         preserved_methods,
     )
 
-    synchronized = synchronize_record(original, result, tuple(dict.fromkeys(changed + removed)))
-    target = assess_match(original, result, rules, method)
+    synchronized = list(
+        synchronize_record(original, result, tuple(dict.fromkeys(changed + removed)))
+    )
+    scenario_changed = tuple(dict.fromkeys(changed))
+    scenario_removed = tuple(dict.fromkeys(removed))
+    pre_variation_assessments = tuple(
+        assess_match(original, result, rules, candidate) for candidate in rules.methods
+    )
+    variation = apply_safe_variation(
+        result,
+        rules,
+        request.variation_count,
+        seed * 1_000_003 + index * 97 + 977,
+        set(scenario_changed).union(scenario_removed, request.variation_protected_fields),
+    )
+    result = variation.record
+    changed.extend(variation.applied_fields)
+    synchronized.extend(variation.synchronized_fields)
+    assessments = tuple(
+        assess_match(original, result, rules, candidate) for candidate in rules.methods
+    )
+    if assessments != pre_variation_assessments:
+        changed_methods = sorted(
+            after.method_id
+            for before, after in zip(pre_variation_assessments, assessments, strict=True)
+            if before != after
+        )
+        raise ValueError(
+            "Safe variation changed matching assessment for method(s): "
+            + ", ".join(changed_methods)
+        )
+
+    target = next(item for item in assessments if item.method_id == method.name)
     if target.matched != (outcome == ExpectedOutcome.MATCH):
         raise ValueError(
             f"Generated fixture did not produce {outcome} for matching method {method.name!r}"
         )
-    assessments = tuple(
-        assess_match(original, result, rules, candidate) for candidate in rules.methods
-    )
     matched_methods = tuple(
         assessment.method_id for assessment in assessments if assessment.matched
     )
@@ -157,13 +186,14 @@ def resolve_match_fixture(
         if request.collision_method not in unexpected:
             raise ValueError("CROSS_METHOD_COLLISION did not match the configured collision_method")
     total = sum(
-        (rules.fields[field].weight for field in changed if field in rules.fields), Decimal("0")
+        (rules.fields[field].weight for field in scenario_changed if field in rules.fields),
+        Decimal("0"),
     )
     applied_plan = plan
-    if changed:
-        applied_plan += (FieldModification(OperationType.UPDATE, tuple(dict.fromkeys(changed))),)
-    if removed:
-        applied_plan += (FieldModification(OperationType.MISSING, tuple(dict.fromkeys(removed))),)
+    if scenario_changed:
+        applied_plan += (FieldModification(OperationType.UPDATE, scenario_changed),)
+    if scenario_removed:
+        applied_plan += (FieldModification(OperationType.MISSING, scenario_removed),)
     return ResolvedUpdate(
         record=result,
         changed_fields=tuple(dict.fromkeys(changed)),
@@ -175,13 +205,15 @@ def resolve_match_fixture(
         threshold_relation="match" if target.matched else "no_match",
         expected_match=target.matched,
         expected_apply=target.matched,
-        synchronized_fields=synchronized,
+        synchronized_fields=tuple(dict.fromkeys(synchronized)),
         method_id=method.name,
         expected_outcome=outcome,
         failure_mode=request.failure_mode,
         matched_methods=matched_methods,
         unexpected_methods=unexpected,
         modification_plan=applied_plan,
+        variation_requested_count=request.variation_count,
+        variation_fields=variation.applied_fields,
     )
 
 

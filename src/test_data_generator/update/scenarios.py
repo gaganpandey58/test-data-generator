@@ -235,6 +235,8 @@ class UpdateRequest:
     collision_method: str | None = None
     elasticity_boundary: str | None = None
     modifications: tuple["FieldModification", ...] = ()
+    variation_count: int = 0
+    variation_protected_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -266,6 +268,8 @@ class ResolvedUpdate:
     matched_methods: tuple[str, ...] = ()
     unexpected_methods: tuple[str, ...] = ()
     modification_plan: tuple[FieldModification, ...] = ()
+    variation_requested_count: int = 0
+    variation_fields: tuple[str, ...] = ()
 
 
 def may_violate_schema(request: UpdateRequest) -> bool:
@@ -485,8 +489,24 @@ def resolve_update(
                 _replace_field(result, field, new)
                 if new != old:
                     changed.append(field)
-    synchronized = synchronize_record(original, result, tuple(changed + removed))
-    total = sum((rules.fields[field].weight for field in changed), Decimal("0"))
+    synchronized = list(synchronize_record(original, result, tuple(changed + removed)))
+    scenario_changed = tuple(dict.fromkeys(changed))
+    variation_fields: tuple[str, ...] = ()
+    if request.variation_count:
+        from test_data_generator.update.variation import apply_safe_variation
+
+        variation = apply_safe_variation(
+            result,
+            rules,
+            request.variation_count,
+            seed * 1_000_003 + index * 97 + 977,
+            set(scenario_changed).union(removed, request.variation_protected_fields),
+        )
+        result = variation.record
+        changed.extend(variation.applied_fields)
+        synchronized.extend(variation.synchronized_fields)
+        variation_fields = variation.applied_fields
+    total = sum((rules.fields[field].weight for field in scenario_changed), Decimal("0"))
     threshold = _weight_threshold(request, rules)
     relation = _relation(total, threshold)
     condition = request.condition
@@ -514,7 +534,9 @@ def resolve_update(
         expected_match=not invalidated,
         expected_apply=not (operation == OperationType.WEIGHT_CHANGE and condition == "ABOVE_LIMIT")
         and not invalidated,
-        synchronized_fields=synchronized,
+        synchronized_fields=tuple(dict.fromkeys(synchronized)),
+        variation_requested_count=request.variation_count,
+        variation_fields=variation_fields,
     )
 
 
@@ -563,8 +585,24 @@ def _resolve_modification_plan(
         total += resolved.total_weight
         relation = resolved.threshold_relation
         expected_apply = expected_apply and resolved.expected_apply
+    result = dict(current)
+    variation_fields: tuple[str, ...] = ()
+    if request.variation_count:
+        from test_data_generator.update.variation import apply_safe_variation
+
+        variation = apply_safe_variation(
+            result,
+            rules,
+            request.variation_count,
+            seed * 1_000_003 + index * 97 + 977,
+            set(changed).union(removed, request.variation_protected_fields),
+        )
+        result = variation.record
+        changed.extend(variation.applied_fields)
+        synchronized.extend(variation.synchronized_fields)
+        variation_fields = variation.applied_fields
     return ResolvedUpdate(
-        record=dict(current),
+        record=result,
         changed_fields=tuple(dict.fromkeys(changed)),
         removed_fields=tuple(dict.fromkeys(removed)),
         invalidated_keys=tuple(dict.fromkeys(invalidated)),
@@ -574,6 +612,8 @@ def _resolve_modification_plan(
         expected_apply=expected_apply and not invalidated,
         synchronized_fields=tuple(dict.fromkeys(synchronized)),
         modification_plan=request.modifications,
+        variation_requested_count=request.variation_count,
+        variation_fields=variation_fields,
     )
 
 
