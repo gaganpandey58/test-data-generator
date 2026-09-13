@@ -54,7 +54,7 @@ def generate_match_fixture_matrix(
     output_directory: Path,
     invalid_values_catalog: Path | None,
 ) -> tuple[Path, ...]:
-    """Write exact-count unified fixtures while preserving legacy output."""
+    """Write entity-only fixtures and separate matching metadata."""
     paths: list[Path] = []
     invalid_values = (
         load_invalid_values(invalid_values_catalog) if invalid_values_catalog is not None else {}
@@ -106,25 +106,25 @@ def generate_match_fixture_matrix(
             grouped: defaultdict[str, list[dict[str, object]]] = defaultdict(list)
             for case in cases:
                 grouped[str(case["operation"])].append(case)
+            match_code_directory = (
+                output_directory
+                / "matchCodes"
+                / entity_config.entity
+                / _match_code_output_name(match_code, method)
+            )
             for operation, operation_cases in grouped.items():
-                operation_directory = (
-                    output_directory
-                    / "match-fixtures"
-                    / operation.lower().replace("_", "-")
-                    / entity_config.entity
-                )
-                operation_directory.mkdir(parents=True, exist_ok=True)
                 suffix = (
                     f"__against__{collision_method}"
                     if operation == "COLLISION" and collision_method is not None
                     else ""
                 )
-                output_path = operation_directory / f"{method.name}{suffix}.json"
-                output_path.write_text(
-                    json.dumps(operation_cases, indent=2, default=_json_default) + "\n",
-                    encoding="utf-8",
+                paths.append(
+                    _write_fixture_pair(
+                        match_code_directory,
+                        f"{operation.lower().replace('_', '-')}{suffix}.json",
+                        operation_cases,
+                    )
                 )
-                paths.append(output_path)
     return tuple(paths)
 
 
@@ -137,12 +137,16 @@ def _write_legacy_fixtures(
     invalid_values: Mapping[str, tuple[object, ...]],
     output_directory: Path,
 ) -> list[Path]:
-    """Retain the previous per-source-record files for legacy configurations."""
+    """Retain legacy case counts while using the current separated output shape."""
     paths: list[Path] = []
+    method = _matching_method(rules, match_code.matching_method)
+    match_code_directory = (
+        output_directory
+        / "matchCodes"
+        / entity_config.entity
+        / _match_code_output_name(match_code, method)
+    )
     for record_index, base in enumerate(records, start=1):
-        entity_directory = output_directory / f"{entity_config.entity}{record_index}"
-        entity_directory.mkdir(parents=True, exist_ok=True)
-        method = _matching_method(rules, match_code.matching_method)
         cases = _build_cases(
             base,
             entity_config.entity,
@@ -155,18 +159,55 @@ def _write_legacy_fixtures(
             entity_config.variation.requested_count,
             entity_config.variation.protected_fields,
         )
-        output_name = (
-            match_code.matching_method
-            if match_code.name == match_code.matching_method
-            else f"{match_code.matching_method}__{match_code.name}"
+        paths.append(
+            _write_fixture_pair(
+                match_code_directory,
+                f"record-{record_index}.json",
+                cases,
+            )
         )
-        output_path = entity_directory / f"{output_name}.json"
-        output_path.write_text(
-            json.dumps(cases, indent=2, default=_json_default) + "\n",
-            encoding="utf-8",
-        )
-        paths.append(output_path)
     return paths
+
+
+def _match_code_output_name(
+    match_code: MatchFixtureCodeConfig,
+    method: MatchingMethod,
+) -> str:
+    """Return a stable directory name without losing an explicit legacy label."""
+    if match_code.name == method.name:
+        return method.name
+    return f"{method.name}__{match_code.name}"
+
+
+def _write_fixture_pair(
+    match_code_directory: Path,
+    file_name: str,
+    cases: Sequence[Mapping[str, object]],
+) -> Path:
+    """Write raw entity records and their case metadata to separate JSON files."""
+    records: list[dict[str, object]] = []
+    metadata: list[dict[str, object]] = []
+    for case in cases:
+        record = case.get("record")
+        if not isinstance(record, Mapping):
+            raise ValueError("Match fixture case has no generated entity record")
+        records.append(dict(record))
+        metadata.append({key: value for key, value in case.items() if key != "record"})
+
+    match_code_directory.mkdir(parents=True, exist_ok=True)
+    metadata_directory = match_code_directory / "metadata"
+    metadata_directory.mkdir(parents=True, exist_ok=True)
+    data_path = match_code_directory / file_name
+    metadata_path = metadata_directory / file_name
+    data_path.write_text(
+        json.dumps(records, indent=2, default=_json_default) + "\n",
+        encoding="utf-8",
+    )
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, default=_json_default) + "\n",
+        encoding="utf-8",
+    )
+    return data_path
 
 
 def _build_exact_cases(

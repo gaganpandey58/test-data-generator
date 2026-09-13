@@ -745,22 +745,40 @@ Professional/Institutional Payments. Omit `variation`, or set
 `fields_per_record` to `0`, to disable it. Variation applies to `match_codes`
 fixtures and therefore requires at least one `match_codes` entry on the stream.
 
-Fixtures are grouped by operation, entity stream, and method:
+Fixtures are grouped by entity stream and matching method. Operation names are
+the JSON filenames:
 
 ```text
-output/update-test-data/match-fixtures/
-├── update/member/member_id_dob_gender.json
-├── weight-at-limit/member/configured_weighted_c.json
-├── elasticity-inside/member/configured_weighted_f.json
-├── collision/member/configured_weighted_c__against__member_id_dob_gender.json
-└── custom/member/configured_weighted_c.json
+output/update-test-data/matchCodes/
+├── member/
+│   ├── member_id_dob_gender/
+│   │   ├── update.json
+│   │   └── metadata/update.json
+│   ├── configured_weighted_c/
+│   │   ├── weight-at-limit.json
+│   │   ├── collision__against__member_id_dob_gender.json
+│   │   └── metadata/
+│   │       ├── weight-at-limit.json
+│   │       └── collision__against__member_id_dob_gender.json
+│   └── configured_weighted_f/
+│       ├── elasticity-inside.json
+│       └── metadata/elasticity-inside.json
+└── member_mr/
+    ├── member_id_dob_gender/
+    ├── configured_weighted_c/
+    └── configured_weighted_f/
 ```
 
-Each JSON file is an array of envelopes containing `existing`, `record`, the
-modification plan, selected method, expected/actual result, matched methods,
-changed/removed/synchronized fields, matching score, required weight, and
-threshold relation. Legacy `matching_method` plus `operation_counts` remains
-accepted temporarily and keeps the older per-record output structure.
+Each operation JSON directly under a method directory is an array of complete
+entity records. It has no fixture envelope or matching metadata. The mirrored
+file under `metadata/` contains `case_id`, the existing record, modification
+plan, selected method, expected/actual result, matched methods,
+changed/removed/synchronized fields, variation details, matching score,
+required weight, and threshold relation. Data and metadata arrays have the same
+length and order, so metadata element `n` describes data element `n`. Legacy
+`matching_method` plus `operation_counts` remains accepted temporarily; its
+data is written as `record-<n>.json` with mirrored metadata in the same new
+entity/method hierarchy.
 
 The domain rule files explicitly describe method anchors, mandatory/optional
 classification, needed weight, field-level elasticity, and
@@ -832,11 +850,39 @@ Each line is a complete JSON object. Records are validated against their JSON Sc
 
 ## Verify the generator
 
-Run the source lint, format, and type checks:
+Run the fast source-quality gate and the 143 behavioral project tests:
 
 ```sh
 make verify
 ```
+
+Run the complete regression gate:
+
+```sh
+make regression
+```
+
+`make regression` runs Ruff, the Ruff formatting check, strict mypy,
+`git diff --check` for staged and unstaged changes, all 143 project tests, and
+the extended regression suite. A test-inventory guard fails if discovery drops
+below 143 focused tests or 15 extended tests. The extended suite permanently
+covers:
+
+- The 529-check remediation matrix.
+- A 5,000-record unique/checksum-valid NPPES stress run.
+- An 850-record integrated generation with schema, relationship, identifier,
+  and Payment financial validation.
+- A 1,000-case match-fixture load run.
+- Five concurrent dual-process publication runs.
+- Clean wheel build, isolated installation, packaged-resource checks, and an
+  installed-package NPPES smoke run.
+- The checked-in final generation contract: 10 creation files, 10 update files,
+  107 entity-data match-fixture files, 107 mirrored metadata files, and zero
+  manifests.
+
+Use `make regression-test` when only the extended runtime tests are needed.
+The clean-wheel check may need access to the configured Python package cache or
+package index on its first run.
 
 ## Project layout
 
@@ -853,6 +899,9 @@ src/test_data_generator/
 ├── layouts/                                  # Current JSON output-selection contracts
 ├── samples/                                  # Sample type patterns and source references
 └── cli.py                                    # Command-line entry point
+tests/
+├── update/                                   # 143 focused behavioral tests
+└── regression/                               # Remediation, load, concurrency, and wheel gates
 ```
 
 ## Current scope

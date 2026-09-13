@@ -482,7 +482,7 @@ The two `operations` locations serve different outputs:
 | Location | Purpose | Field source | Output |
 | --- | --- | --- | --- |
 | Stream-level `operations` array | Normal update/invalid/missing/empty data for that stream. | Explicit `fields` in each item. | `<stream>.update.jsonl` |
-| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | `match-fixtures/<operation>/<stream>/<method>.json` |
+| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | `matchCodes/<stream>/<method>/<operation>.json` plus mirrored `metadata/<operation>.json` |
 
 Neither is required by the other. If both are present, both outputs are
 generated. If `generate.operations` is absent, no standard automatic operation
@@ -777,27 +777,46 @@ examples for every stream.
 
 #### Output layout and migration
 
-New method-keyed fixtures are grouped by operation, entity stream, and method:
+Method-keyed fixtures are grouped by entity stream and method. Each operation
+has an entity-data file and a mirrored metadata file:
 
 ```text
-output/update-test-data/match-fixtures/
-├── update/member/member_id_dob_gender.json
-├── invalid/provider_nppes/nppes_npi.json
-├── weight-at-limit/provider/provider_individual_weighted.json
-├── elasticity-inside/member_mr/configured_weighted_f.json
-├── collision/claim_professional/professional_claim_primary__against__professional_claim_fallback.json
-└── custom/member/configured_weighted_c.json
+output/update-test-data/matchCodes/
+├── member/
+│   ├── member_id_dob_gender/
+│   │   ├── update.json
+│   │   └── metadata/update.json
+│   ├── configured_weighted_c/
+│   │   ├── weight-at-limit.json
+│   │   ├── collision__against__member_id_dob_gender.json
+│   │   └── metadata/
+│   │       ├── weight-at-limit.json
+│   │       └── collision__against__member_id_dob_gender.json
+│   └── configured_weighted_f/
+│       ├── elasticity-inside.json
+│       └── metadata/elasticity-inside.json
+└── member_mr/
+    ├── member_id_dob_gender/
+    ├── configured_weighted_c/
+    └── configured_weighted_f/
 ```
 
-Every file is a JSON array. Every element contains `existing`, `record`,
-`matching_method`, `operation`, `expected_outcome`, `actual_match`,
-`matched_methods`, `unexpected_methods`, `changed_fields`, `removed_fields`,
-`synchronized_fields`, `modification_plan`, `match_weight`, `required_weight`,
-and `threshold_relation`.
+Every operation file directly under a method directory is a JSON array of
+complete entity records. Member files therefore contain member identifiers,
+demographics, address and COB collections, and normal envelope metadata rather
+than a fixture wrapper. They do not contain `case_id`, `entity`, `match_code`,
+matching results, modification details, variation details, or `existing`.
+
+The same filename beneath `metadata/` contains those test-case details,
+including the existing record. Data and metadata arrays are positionally
+aligned: metadata element `n` describes entity-data element `n`. This keeps the
+ingestion-ready entity payload separate from QA diagnostics without losing
+traceability.
 
 The legacy shape with a QA label, `matching_method`, and `operation_counts`
-remains accepted during migration and preserves its old per-source-record
-folders. New configurations should use the method ID as the key plus `generate`.
+remains accepted during migration. It now writes `record-<n>.json` and
+`metadata/record-<n>.json` under the same `matchCodes/<stream>/<method>` tree.
+New configurations should use the method ID as the key plus `generate`.
 
 ## 7. Entity reference
 
@@ -1476,29 +1495,32 @@ written inside the normal update directory. The hierarchy is operation, entity
 stream, then matching method:
 
 ```text
-output/update-test-data/match-fixtures/
-├── update/
-│   ├── member/member_id_dob_gender.json
-│   ├── provider/provider_id.json
-│   └── claim_professional/professional_claim_primary.json
-├── invalid/
-│   └── provider_nppes/nppes_npi.json
-├── weight-at-limit/
-│   └── member/configured_weighted_c.json
-├── elasticity-inside/
-│   └── member_mr/configured_weighted_f.json
-├── collision/
-│   └── claim_professional/
-│       └── professional_claim_primary__against__professional_claim_fallback.json
-└── custom/
-    └── member/configured_weighted_c.json
+output/update-test-data/matchCodes/
+├── member/
+│   ├── member_id_dob_gender/
+│   │   ├── update.json
+│   │   └── metadata/update.json
+│   ├── configured_weighted_c/
+│   │   ├── weight-at-limit.json
+│   │   └── metadata/weight-at-limit.json
+│   └── configured_weighted_f/
+│       ├── elasticity-inside.json
+│       └── metadata/elasticity-inside.json
+├── member_mr/
+├── provider/
+├── provider_nppes/
+├── claim_professional/
+├── claim_institutional/
+├── claim_history_professional/
+├── claim_history_institutional/
+├── payment_professional/
+└── payment_institutional/
 ```
 
-Each file is an array of derived cases, not a single raw record. Operation
-counts are exact totals across the rotating source pool. There is no
-per-entity match-plan file. The legacy `matching_method`/`operation_counts`
-syntax temporarily retains its older `<entity><record-number>` folders.
-Each envelope also contains `variation.requested_count` and the automatically
+Each data file is an array of complete derived entity records. Operation counts
+are exact totals across the rotating source pool. There is no per-entity
+match-plan file. The mirrored metadata file contains the matching and
+test-case information, including `variation.requested_count` and automatically
 selected `variation.applied_fields`; both are `0`/empty when variation is
 disabled.
 
@@ -1748,9 +1770,50 @@ uv run python -m test_data_generator generate \
 Use the domain name in `runconfig.json` (`member`, `provider`, `claims`, or
 `payments`). Every `match_codes` key must be a method defined for that stream in
 the update-rule catalog. Output is under
-`output/update-test-data/match-fixtures/<operation>/<internal-stream>/<method>.json`.
+`output/update-test-data/matchCodes/<internal-stream>/<method>/<operation>.json`.
+The corresponding QA metadata is in
+`output/update-test-data/matchCodes/<internal-stream>/<method>/metadata/<operation>.json`.
 
 ## 16. Verification cookbook
+
+### 16.0 Automated regression gates
+
+Use the fast gate while developing:
+
+```sh
+make verify
+```
+
+It runs Ruff, the Ruff format check, strict mypy, and the 143 focused project
+tests under `tests/update`. Before execution, the inventory guard requires at
+least 143 focused tests and 15 extended tests so an accidentally missing test
+directory cannot produce a false green result.
+
+Before release or handoff, run:
+
+```sh
+make regression
+```
+
+This adds staged and unstaged diff validation plus the permanent extended suite
+under `tests/regression`. The extended suite covers the full 529-check
+remediation matrix, 5,000 NPPES records, an 850-record integrated generation,
+1,000 match fixtures, five dual-process publication races, clean-wheel
+installation, and the exact checked-in output contract of 10 creation files,
+10 update files, 107 entity-data match-fixture files, 107 mirrored metadata
+files, and zero manifests. All generated
+test workspaces are temporary; the checked-in `output/` directory is not used
+by these regression tests.
+
+To run only the extended runtime suite:
+
+```sh
+make regression-test
+```
+
+The wheel test builds the package and installs it with its dependencies into a
+temporary environment. Its first run may require access to the configured uv
+cache or Python package index.
 
 ### 16.1 Count JSONL rows
 
@@ -1771,7 +1834,7 @@ This checks JSON syntax, not schema validity.
 ### 16.3 Inspect match-code case results
 
 ```sh
-find output/update-test-data/match-fixtures -type f -name '*.json' -print | sort
+find output/update-test-data/matchCodes -type f -name '*.json' -print | sort
 jq '.[0] | {
   match_code,
   matching_method,
@@ -1784,17 +1847,20 @@ jq '.[0] | {
   required_weight,
   total_weight,
   threshold_relation
-}' output/update-test-data/match-fixtures/weight-at-limit/member/configured_weighted_c.json
+}' output/update-test-data/matchCodes/member/configured_weighted_c/metadata/weight-at-limit.json
 ```
 
-For a custom field plan, compare `existing` and `record`, then confirm the named
-fields appear in `changed_fields` or `removed_fields`. For automatic operation
-counts, each operation has its own file; its array length is the exact requested
-count:
+For a custom field plan, compare the `existing` object in the metadata entry
+with the entity record at the same array index, then confirm the named fields
+appear in `changed_fields` or `removed_fields`. For automatic operation counts,
+each operation has its own entity-data and metadata file; both array lengths are
+the exact requested count:
 
 ```sh
 jq '{operation: .[0].operation, count: length}' \
-  output/update-test-data/match-fixtures/update/member/member_id_dob_gender.json
+  output/update-test-data/matchCodes/member/member_id_dob_gender/metadata/update.json
+jq '.[0] | {CM_MEMBER_CLIENT_ID, CM_MEMBER_FIRST_NAME, CM_MEMBER_ADDRESSES, CM_MEMBER_COB}' \
+  output/update-test-data/matchCodes/member/member_id_dob_gender/update.json
 ```
 
 ### 16.4 Validate normal creation output against schemas
@@ -2308,7 +2374,9 @@ uv run python -m test_data_generator provider-cdf \
   --output output/provider-cdf --count 10 --unmatched-count 2 --seed 20260909
 
 # Tests and quality checks
-uv run python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests/update -t . -v
 make verify
+make regression-test
+make regression
 
 ```

@@ -1157,7 +1157,7 @@ def _validate_source_relationship(
         if not isinstance(claim_detail, Mapping) or not isinstance(payment_detail, Mapping):
             continue
         for field in rules["line"]:
-            if field in claim_detail and field in payment_detail:
+            if field in claim_detail and field in payment_detail and _present(claim_detail[field]):
                 if not _same_logical_value(claim_detail[field], payment_detail[field]):
                     raise ValueError(
                         f"Payment line relationship field {field!r} differs from the source Claim"

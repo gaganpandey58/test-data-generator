@@ -797,9 +797,10 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
 
 def _clear_match_fixture_directories(directory: Path, run_config: RunConfig) -> None:
     """Remove only prior match-code folders for the configured source streams."""
-    fixture_root = directory / "match-fixtures"
-    if fixture_root.is_dir():
-        shutil.rmtree(fixture_root)
+    for fixture_name in ("match-fixtures", "matchCodes"):
+        fixture_root = directory / fixture_name
+        if fixture_root.is_dir():
+            shutil.rmtree(fixture_root)
     for fixture in run_config.match_fixture_entities:
         for candidate in directory.glob(f"{fixture.entity}[0-9]*"):
             if candidate.is_dir() and candidate.name.removeprefix(fixture.entity).isdigit():
