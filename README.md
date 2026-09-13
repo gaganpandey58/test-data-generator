@@ -745,24 +745,32 @@ Professional/Institutional Payments. Omit `variation`, or set
 `fields_per_record` to `0`, to disable it. Variation applies to `match_codes`
 fixtures and therefore requires at least one `match_codes` entry on the stream.
 
-Fixtures are grouped by entity stream and matching method. Operation names are
-the JSON filenames:
+Fixtures are grouped by entity stream and matching method. Entity records and
+QA metadata use matching relative paths under separate output roots. Operation
+names are the JSON filenames:
 
 ```text
 output/update-test-data/matchCodes/
 ├── member/
 │   ├── member_id_dob_gender/
-│   │   ├── update.json
-│   │   └── metadata/update.json
+│   │   └── update.json
 │   ├── configured_weighted_c/
 │   │   ├── weight-at-limit.json
-│   │   ├── collision__against__member_id_dob_gender.json
-│   │   └── metadata/
-│   │       ├── weight-at-limit.json
-│   │       └── collision__against__member_id_dob_gender.json
+│   │   └── collision__against__member_id_dob_gender.json
 │   └── configured_weighted_f/
-│       ├── elasticity-inside.json
-│       └── metadata/elasticity-inside.json
+│       └── elasticity-inside.json
+└── member_mr/
+    ├── member_id_dob_gender/
+    ├── configured_weighted_c/
+    └── configured_weighted_f/
+
+output/metadata/matchCodes/
+├── member/
+│   ├── member_id_dob_gender/update.json
+│   ├── configured_weighted_c/
+│   │   ├── weight-at-limit.json
+│   │   └── collision__against__member_id_dob_gender.json
+│   └── configured_weighted_f/elasticity-inside.json
 └── member_mr/
     ├── member_id_dob_gender/
     ├── configured_weighted_c/
@@ -771,14 +779,15 @@ output/update-test-data/matchCodes/
 
 Each operation JSON directly under a method directory is an array of complete
 entity records. It has no fixture envelope or matching metadata. The mirrored
-file under `metadata/` contains `case_id`, the existing record, modification
-plan, selected method, expected/actual result, matched methods,
+file under `output/metadata/matchCodes/` contains `case_id`, modification plan,
+selected method, expected/actual result, matched methods,
 changed/removed/synchronized fields, variation details, matching score,
-required weight, and threshold relation. Data and metadata arrays have the same
-length and order, so metadata element `n` describes data element `n`. Legacy
-`matching_method` plus `operation_counts` remains accepted temporarily; its
-data is written as `record-<n>.json` with mirrored metadata in the same new
-entity/method hierarchy.
+required weight, and threshold relation. It does not contain the generated
+entity `record` or an `existing` record snapshot. Data and metadata arrays have
+the same length and order, so metadata element `n` describes data element `n`.
+Legacy `matching_method` plus `operation_counts` remains accepted temporarily;
+its data is written as `record-<n>.json` with metadata at the matching relative
+path under `output/metadata/matchCodes/`.
 
 The domain rule files explicitly describe method anchors, mandatory/optional
 classification, needed weight, field-level elasticity, and

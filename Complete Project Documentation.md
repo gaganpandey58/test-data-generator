@@ -482,7 +482,7 @@ The two `operations` locations serve different outputs:
 | Location | Purpose | Field source | Output |
 | --- | --- | --- | --- |
 | Stream-level `operations` array | Normal update/invalid/missing/empty data for that stream. | Explicit `fields` in each item. | `<stream>.update.jsonl` |
-| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | `matchCodes/<stream>/<method>/<operation>.json` plus mirrored `metadata/<operation>.json` |
+| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | Entity data in `output/update-test-data/matchCodes/<stream>/<method>/<operation>.json`; QA metadata in `output/metadata/matchCodes/<stream>/<method>/<operation>.json` |
 
 Neither is required by the other. If both are present, both outputs are
 generated. If `generate.operations` is absent, no standard automatic operation
@@ -778,23 +778,31 @@ examples for every stream.
 #### Output layout and migration
 
 Method-keyed fixtures are grouped by entity stream and method. Each operation
-has an entity-data file and a mirrored metadata file:
+has an entity-data file and a metadata file at the same relative path under a
+separate root:
 
 ```text
 output/update-test-data/matchCodes/
 ├── member/
 │   ├── member_id_dob_gender/
-│   │   ├── update.json
-│   │   └── metadata/update.json
+│   │   └── update.json
 │   ├── configured_weighted_c/
 │   │   ├── weight-at-limit.json
-│   │   ├── collision__against__member_id_dob_gender.json
-│   │   └── metadata/
-│   │       ├── weight-at-limit.json
-│   │       └── collision__against__member_id_dob_gender.json
+│   │   └── collision__against__member_id_dob_gender.json
 │   └── configured_weighted_f/
-│       ├── elasticity-inside.json
-│       └── metadata/elasticity-inside.json
+│       └── elasticity-inside.json
+└── member_mr/
+    ├── member_id_dob_gender/
+    ├── configured_weighted_c/
+    └── configured_weighted_f/
+
+output/metadata/matchCodes/
+├── member/
+│   ├── member_id_dob_gender/update.json
+│   ├── configured_weighted_c/
+│   │   ├── weight-at-limit.json
+│   │   └── collision__against__member_id_dob_gender.json
+│   └── configured_weighted_f/elasticity-inside.json
 └── member_mr/
     ├── member_id_dob_gender/
     ├── configured_weighted_c/
@@ -807,15 +815,17 @@ demographics, address and COB collections, and normal envelope metadata rather
 than a fixture wrapper. They do not contain `case_id`, `entity`, `match_code`,
 matching results, modification details, variation details, or `existing`.
 
-The same filename beneath `metadata/` contains those test-case details,
-including the existing record. Data and metadata arrays are positionally
+The same relative filename beneath `output/metadata/matchCodes/` contains the
+test-case details. Metadata excludes both the generated `record` and the
+`existing` source-record snapshot. Data and metadata arrays are positionally
 aligned: metadata element `n` describes entity-data element `n`. This keeps the
-ingestion-ready entity payload separate from QA diagnostics without losing
-traceability.
+ingestion-ready entity payload and its update directory separate from QA
+diagnostics without duplicating complete records.
 
 The legacy shape with a QA label, `matching_method`, and `operation_counts`
 remains accepted during migration. It now writes `record-<n>.json` and
-`metadata/record-<n>.json` under the same `matchCodes/<stream>/<method>` tree.
+`record-<n>.json` at the matching relative path under
+`output/metadata/matchCodes/<stream>/<method>`.
 New configurations should use the method ID as the key plus `generate`.
 
 ## 7. Entity reference
@@ -1498,14 +1508,26 @@ stream, then matching method:
 output/update-test-data/matchCodes/
 ├── member/
 │   ├── member_id_dob_gender/
-│   │   ├── update.json
-│   │   └── metadata/update.json
+│   │   └── update.json
 │   ├── configured_weighted_c/
-│   │   ├── weight-at-limit.json
-│   │   └── metadata/weight-at-limit.json
+│   │   └── weight-at-limit.json
 │   └── configured_weighted_f/
-│       ├── elasticity-inside.json
-│       └── metadata/elasticity-inside.json
+│       └── elasticity-inside.json
+├── member_mr/
+├── provider/
+├── provider_nppes/
+├── claim_professional/
+├── claim_institutional/
+├── claim_history_professional/
+├── claim_history_institutional/
+├── payment_professional/
+└── payment_institutional/
+
+output/metadata/matchCodes/
+├── member/
+│   ├── member_id_dob_gender/update.json
+│   ├── configured_weighted_c/weight-at-limit.json
+│   └── configured_weighted_f/elasticity-inside.json
 ├── member_mr/
 ├── provider/
 ├── provider_nppes/
@@ -1519,10 +1541,10 @@ output/update-test-data/matchCodes/
 
 Each data file is an array of complete derived entity records. Operation counts
 are exact totals across the rotating source pool. There is no per-entity
-match-plan file. The mirrored metadata file contains the matching and
+match-plan file. The separate metadata file contains the matching and
 test-case information, including `variation.requested_count` and automatically
 selected `variation.applied_fields`; both are `0`/empty when variation is
-disabled.
+disabled. Metadata never contains `record` or `existing`.
 
 ## 15. Running scenarios yourself
 
@@ -1772,7 +1794,7 @@ Use the domain name in `runconfig.json` (`member`, `provider`, `claims`, or
 the update-rule catalog. Output is under
 `output/update-test-data/matchCodes/<internal-stream>/<method>/<operation>.json`.
 The corresponding QA metadata is in
-`output/update-test-data/matchCodes/<internal-stream>/<method>/metadata/<operation>.json`.
+`output/metadata/matchCodes/<internal-stream>/<method>/<operation>.json`.
 
 ## 16. Verification cookbook
 
@@ -1835,6 +1857,7 @@ This checks JSON syntax, not schema validity.
 
 ```sh
 find output/update-test-data/matchCodes -type f -name '*.json' -print | sort
+find output/metadata/matchCodes -type f -name '*.json' -print | sort
 jq '.[0] | {
   match_code,
   matching_method,
@@ -1847,18 +1870,20 @@ jq '.[0] | {
   required_weight,
   total_weight,
   threshold_relation
-}' output/update-test-data/matchCodes/member/configured_weighted_c/metadata/weight-at-limit.json
+}' output/metadata/matchCodes/member/configured_weighted_c/weight-at-limit.json
 ```
 
-For a custom field plan, compare the `existing` object in the metadata entry
-with the entity record at the same array index, then confirm the named fields
-appear in `changed_fields` or `removed_fields`. For automatic operation counts,
-each operation has its own entity-data and metadata file; both array lengths are
-the exact requested count:
+For a custom field plan, use the metadata entry's `entity_record` to identify
+the corresponding source row when a creation source exists, then compare that
+source row with the entity record at the same array index. Confirm the named
+fields appear in `changed_fields` or `removed_fields`. Metadata intentionally
+does not duplicate the source row under an `existing` key. For automatic
+operation counts, each operation has its own entity-data and metadata file;
+both array lengths are the exact requested count:
 
 ```sh
 jq '{operation: .[0].operation, count: length}' \
-  output/update-test-data/matchCodes/member/member_id_dob_gender/metadata/update.json
+  output/metadata/matchCodes/member/member_id_dob_gender/update.json
 jq '.[0] | {CM_MEMBER_CLIENT_ID, CM_MEMBER_FIRST_NAME, CM_MEMBER_ADDRESSES, CM_MEMBER_COB}' \
   output/update-test-data/matchCodes/member/member_id_dob_gender/update.json
 ```

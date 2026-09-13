@@ -361,6 +361,7 @@ def _generate_loaded(run_config: RunConfig, mode: str) -> None:
                     rules,
                     run_config.seed,
                     run_config.update_directory,
+                    transaction.metadata_directory,
                     run_config.invalid_values_catalog,
                 )
             except ValueError as error:
@@ -717,6 +718,7 @@ class _OutputTransaction:
     temporary: tempfile.TemporaryDirectory[str]
     staged_config: RunConfig
     directory_pairs: tuple[tuple[Path, Path], ...]
+    metadata_directory: Path
 
     def __del__(self) -> None:
         """Clean abandoned staging after a generation exception."""
@@ -767,6 +769,7 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
     temporary_root = Path(temporary.name)
     staged_creation = temporary_root / "creation"
     staged_updates = temporary_root / "updates"
+    staged_metadata = temporary_root / "metadata"
     for source, staged in (
         (run_config.creation_directory, staged_creation),
         (run_config.update_directory, staged_updates),
@@ -777,6 +780,7 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
             staged.mkdir(parents=True)
     if run_config.match_fixture_entities and mode in {"all", "creation"}:
         _clear_match_fixture_directories(staged_updates, run_config)
+        staged_metadata.mkdir(parents=True)
     staged_config = replace(
         run_config,
         output_directory=temporary_root / "legacy",
@@ -792,7 +796,9 @@ def _begin_output_transaction(run_config: RunConfig, mode: str) -> _OutputTransa
         and run_config.match_fixture_entities
     ):
         pairs.append((staged_updates, run_config.update_directory))
-    return _OutputTransaction(temporary, staged_config, tuple(pairs))
+    if mode in {"all", "creation"} and run_config.match_fixture_entities:
+        pairs.append((staged_metadata, run_config.output_directory / "metadata"))
+    return _OutputTransaction(temporary, staged_config, tuple(pairs), staged_metadata)
 
 
 def _clear_match_fixture_directories(directory: Path, run_config: RunConfig) -> None:

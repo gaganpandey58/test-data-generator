@@ -52,6 +52,7 @@ def generate_match_fixture_matrix(
     rules_catalog: Mapping[str, EntityRules],
     seed: int,
     output_directory: Path,
+    metadata_directory: Path,
     invalid_values_catalog: Path | None,
 ) -> tuple[Path, ...]:
     """Write entity-only fixtures and separate matching metadata."""
@@ -81,6 +82,7 @@ def generate_match_fixture_matrix(
                         seed,
                         invalid_values,
                         output_directory,
+                        metadata_directory,
                     )
                 )
                 continue
@@ -112,6 +114,12 @@ def generate_match_fixture_matrix(
                 / entity_config.entity
                 / _match_code_output_name(match_code, method)
             )
+            match_code_metadata_directory = (
+                metadata_directory
+                / "matchCodes"
+                / entity_config.entity
+                / _match_code_output_name(match_code, method)
+            )
             for operation, operation_cases in grouped.items():
                 suffix = (
                     f"__against__{collision_method}"
@@ -121,6 +129,7 @@ def generate_match_fixture_matrix(
                 paths.append(
                     _write_fixture_pair(
                         match_code_directory,
+                        match_code_metadata_directory,
                         f"{operation.lower().replace('_', '-')}{suffix}.json",
                         operation_cases,
                     )
@@ -136,12 +145,19 @@ def _write_legacy_fixtures(
     seed: int,
     invalid_values: Mapping[str, tuple[object, ...]],
     output_directory: Path,
+    metadata_directory: Path,
 ) -> list[Path]:
     """Retain legacy case counts while using the current separated output shape."""
     paths: list[Path] = []
     method = _matching_method(rules, match_code.matching_method)
     match_code_directory = (
         output_directory
+        / "matchCodes"
+        / entity_config.entity
+        / _match_code_output_name(match_code, method)
+    )
+    match_code_metadata_directory = (
+        metadata_directory
         / "matchCodes"
         / entity_config.entity
         / _match_code_output_name(match_code, method)
@@ -162,6 +178,7 @@ def _write_legacy_fixtures(
         paths.append(
             _write_fixture_pair(
                 match_code_directory,
+                match_code_metadata_directory,
                 f"record-{record_index}.json",
                 cases,
             )
@@ -181,6 +198,7 @@ def _match_code_output_name(
 
 def _write_fixture_pair(
     match_code_directory: Path,
+    match_code_metadata_directory: Path,
     file_name: str,
     cases: Sequence[Mapping[str, object]],
 ) -> Path:
@@ -192,13 +210,14 @@ def _write_fixture_pair(
         if not isinstance(record, Mapping):
             raise ValueError("Match fixture case has no generated entity record")
         records.append(dict(record))
-        metadata.append({key: value for key, value in case.items() if key != "record"})
+        metadata.append(
+            {key: value for key, value in case.items() if key not in {"record", "existing"}}
+        )
 
     match_code_directory.mkdir(parents=True, exist_ok=True)
-    metadata_directory = match_code_directory / "metadata"
-    metadata_directory.mkdir(parents=True, exist_ok=True)
+    match_code_metadata_directory.mkdir(parents=True, exist_ok=True)
     data_path = match_code_directory / file_name
-    metadata_path = metadata_directory / file_name
+    metadata_path = match_code_metadata_directory / file_name
     data_path.write_text(
         json.dumps(records, indent=2, default=_json_default) + "\n",
         encoding="utf-8",
