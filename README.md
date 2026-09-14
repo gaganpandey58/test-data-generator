@@ -753,12 +753,12 @@ names are the JSON filenames:
 output/update-test-data/matchCodes/
 ├── member/
 │   ├── member_id_dob_gender/
-│   │   └── update.json
+│   │   └── update.jsonl
 │   ├── configured_weighted_c/
-│   │   ├── weight-at-limit.json
-│   │   └── collision__against__member_id_dob_gender.json
+│   │   ├── weight-at-limit.jsonl
+│   │   └── collision__against__member_id_dob_gender.jsonl
 │   └── configured_weighted_f/
-│       └── elasticity-inside.json
+│       └── elasticity-inside.jsonl
 └── member_mr/
     ├── member_id_dob_gender/
     ├── configured_weighted_c/
@@ -766,27 +766,28 @@ output/update-test-data/matchCodes/
 
 output/metadata/matchCodes/
 ├── member/
-│   ├── member_id_dob_gender/update.json
+│   ├── member_id_dob_gender/update.jsonl
 │   ├── configured_weighted_c/
-│   │   ├── weight-at-limit.json
-│   │   └── collision__against__member_id_dob_gender.json
-│   └── configured_weighted_f/elasticity-inside.json
+│   │   ├── weight-at-limit.jsonl
+│   │   └── collision__against__member_id_dob_gender.jsonl
+│   └── configured_weighted_f/elasticity-inside.jsonl
 └── member_mr/
     ├── member_id_dob_gender/
     ├── configured_weighted_c/
     └── configured_weighted_f/
 ```
 
-Each operation JSON directly under a method directory is an array of complete
-entity records. It has no fixture envelope or matching metadata. The mirrored
-file under `output/metadata/matchCodes/` contains `case_id`, modification plan,
-selected method, expected/actual result, matched methods,
+Each operation JSONL directly under a method directory contains one complete
+entity record per line. It has no fixture envelope or matching metadata. The
+corresponding file under `output/metadata/matchCodes/` contains `case_id`,
+modification plan, selected method, expected/actual result, matched methods,
 changed/removed/synchronized fields, variation details, matching score,
 required weight, and threshold relation. It does not contain the generated
-entity `record` or an `existing` record snapshot. Data and metadata arrays have
-the same length and order, so metadata element `n` describes data element `n`.
+entity `record` or an `existing` record snapshot. Each metadata object is one
+JSONL line. Data and metadata streams have the same length and order, so
+metadata line `n` describes data line `n`.
 Legacy `matching_method` plus `operation_counts` remains accepted temporarily;
-its data is written as `record-<n>.json` with metadata at the matching relative
+its data is written as `record-<n>.jsonl` with metadata at the matching relative
 path under `output/metadata/matchCodes/`.
 
 The domain rule files explicitly describe method anchors, mandatory/optional
@@ -886,8 +887,8 @@ covers:
 - Clean wheel build, isolated installation, packaged-resource checks, and an
   installed-package NPPES smoke run.
 - The checked-in final generation contract: 10 creation files, 10 update files,
-  107 entity-data match-fixture files, 107 mirrored metadata files, and zero
-  manifests.
+  107 entity-data match-fixture JSONL files, 107 separately rooted metadata
+  JSONL files, and zero manifests.
 
 Use `make regression-test` when only the extended runtime tests are needed.
 The clean-wheel check may need access to the configured Python package cache or

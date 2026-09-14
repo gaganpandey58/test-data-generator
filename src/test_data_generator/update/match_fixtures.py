@@ -130,7 +130,7 @@ def generate_match_fixture_matrix(
                     _write_fixture_pair(
                         match_code_directory,
                         match_code_metadata_directory,
-                        f"{operation.lower().replace('_', '-')}{suffix}.json",
+                        f"{operation.lower().replace('_', '-')}{suffix}.jsonl",
                         operation_cases,
                     )
                 )
@@ -179,7 +179,7 @@ def _write_legacy_fixtures(
             _write_fixture_pair(
                 match_code_directory,
                 match_code_metadata_directory,
-                f"record-{record_index}.json",
+                f"record-{record_index}.jsonl",
                 cases,
             )
         )
@@ -202,7 +202,7 @@ def _write_fixture_pair(
     file_name: str,
     cases: Sequence[Mapping[str, object]],
 ) -> Path:
-    """Write raw entity records and their case metadata to separate JSON files."""
+    """Write raw entity records and case metadata as separate JSONL streams."""
     records: list[dict[str, object]] = []
     metadata: list[dict[str, object]] = []
     for case in cases:
@@ -219,11 +219,11 @@ def _write_fixture_pair(
     data_path = match_code_directory / file_name
     metadata_path = match_code_metadata_directory / file_name
     data_path.write_text(
-        json.dumps(records, indent=2, default=_json_default) + "\n",
+        "".join(f"{json.dumps(record, default=_json_default)}\n" for record in records),
         encoding="utf-8",
     )
     metadata_path.write_text(
-        json.dumps(metadata, indent=2, default=_json_default) + "\n",
+        "".join(f"{json.dumps(case, default=_json_default)}\n" for case in metadata),
         encoding="utf-8",
     )
     return data_path

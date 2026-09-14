@@ -482,7 +482,7 @@ The two `operations` locations serve different outputs:
 | Location | Purpose | Field source | Output |
 | --- | --- | --- | --- |
 | Stream-level `operations` array | Normal update/invalid/missing/empty data for that stream. | Explicit `fields` in each item. | `<stream>.update.jsonl` |
-| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | Entity data in `output/update-test-data/matchCodes/<stream>/<method>/<operation>.json`; QA metadata in `output/metadata/matchCodes/<stream>/<method>/<operation>.json` |
+| `match_codes.<method>.generate.operations` object | Automatic matching tests for one rule-catalog method. | Method fields from the rule catalog. | Entity data in `output/update-test-data/matchCodes/<stream>/<method>/<operation>.jsonl`; QA metadata in `output/metadata/matchCodes/<stream>/<method>/<operation>.jsonl` |
 
 Neither is required by the other. If both are present, both outputs are
 generated. If `generate.operations` is absent, no standard automatic operation
@@ -785,12 +785,12 @@ separate root:
 output/update-test-data/matchCodes/
 ├── member/
 │   ├── member_id_dob_gender/
-│   │   └── update.json
+│   │   └── update.jsonl
 │   ├── configured_weighted_c/
-│   │   ├── weight-at-limit.json
-│   │   └── collision__against__member_id_dob_gender.json
+│   │   ├── weight-at-limit.jsonl
+│   │   └── collision__against__member_id_dob_gender.jsonl
 │   └── configured_weighted_f/
-│       └── elasticity-inside.json
+│       └── elasticity-inside.jsonl
 └── member_mr/
     ├── member_id_dob_gender/
     ├── configured_weighted_c/
@@ -798,34 +798,35 @@ output/update-test-data/matchCodes/
 
 output/metadata/matchCodes/
 ├── member/
-│   ├── member_id_dob_gender/update.json
+│   ├── member_id_dob_gender/update.jsonl
 │   ├── configured_weighted_c/
-│   │   ├── weight-at-limit.json
-│   │   └── collision__against__member_id_dob_gender.json
-│   └── configured_weighted_f/elasticity-inside.json
+│   │   ├── weight-at-limit.jsonl
+│   │   └── collision__against__member_id_dob_gender.jsonl
+│   └── configured_weighted_f/elasticity-inside.jsonl
 └── member_mr/
     ├── member_id_dob_gender/
     ├── configured_weighted_c/
     └── configured_weighted_f/
 ```
 
-Every operation file directly under a method directory is a JSON array of
-complete entity records. Member files therefore contain member identifiers,
-demographics, address and COB collections, and normal envelope metadata rather
-than a fixture wrapper. They do not contain `case_id`, `entity`, `match_code`,
-matching results, modification details, variation details, or `existing`.
+Every operation file directly under a method directory is a JSONL stream with
+one complete entity record per line. Member files therefore contain member
+identifiers, demographics, address and COB collections, and normal envelope
+metadata rather than a fixture wrapper. They do not contain `case_id`, `entity`,
+`match_code`, matching results, modification details, variation details, or
+`existing`.
 
-The same relative filename beneath `output/metadata/matchCodes/` contains the
-test-case details. Metadata excludes both the generated `record` and the
-`existing` source-record snapshot. Data and metadata arrays are positionally
-aligned: metadata element `n` describes entity-data element `n`. This keeps the
-ingestion-ready entity payload and its update directory separate from QA
-diagnostics without duplicating complete records.
+The same relative filename beneath `output/metadata/matchCodes/` contains one
+test-case metadata object per JSONL line. Metadata excludes both the generated
+`record` and the `existing` source-record snapshot. Data and metadata streams
+are positionally aligned: metadata line `n` describes entity-data line `n`.
+This keeps the ingestion-ready entity payload and its update directory separate
+from QA diagnostics without duplicating complete records.
 
 The legacy shape with a QA label, `matching_method`, and `operation_counts`
-remains accepted during migration. It now writes `record-<n>.json` and
-`record-<n>.json` at the matching relative path under
-`output/metadata/matchCodes/<stream>/<method>`.
+remains accepted during migration. It writes `record-<n>.jsonl` at matching
+relative paths under both `output/update-test-data/matchCodes/` and
+`output/metadata/matchCodes/`.
 New configurations should use the method ID as the key plus `generate`.
 
 ## 7. Entity reference
@@ -1508,11 +1509,11 @@ stream, then matching method:
 output/update-test-data/matchCodes/
 ├── member/
 │   ├── member_id_dob_gender/
-│   │   └── update.json
+│   │   └── update.jsonl
 │   ├── configured_weighted_c/
-│   │   └── weight-at-limit.json
+│   │   └── weight-at-limit.jsonl
 │   └── configured_weighted_f/
-│       └── elasticity-inside.json
+│       └── elasticity-inside.jsonl
 ├── member_mr/
 ├── provider/
 ├── provider_nppes/
@@ -1525,9 +1526,9 @@ output/update-test-data/matchCodes/
 
 output/metadata/matchCodes/
 ├── member/
-│   ├── member_id_dob_gender/update.json
-│   ├── configured_weighted_c/weight-at-limit.json
-│   └── configured_weighted_f/elasticity-inside.json
+│   ├── member_id_dob_gender/update.jsonl
+│   ├── configured_weighted_c/weight-at-limit.jsonl
+│   └── configured_weighted_f/elasticity-inside.jsonl
 ├── member_mr/
 ├── provider/
 ├── provider_nppes/
@@ -1539,8 +1540,8 @@ output/metadata/matchCodes/
 └── payment_institutional/
 ```
 
-Each data file is an array of complete derived entity records. Operation counts
-are exact totals across the rotating source pool. There is no per-entity
+Each data file is a JSONL stream of complete derived entity records. Operation
+counts are exact totals across the rotating source pool. There is no per-entity
 match-plan file. The separate metadata file contains the matching and
 test-case information, including `variation.requested_count` and automatically
 selected `variation.applied_fields`; both are `0`/empty when variation is
@@ -1792,9 +1793,9 @@ uv run python -m test_data_generator generate \
 Use the domain name in `runconfig.json` (`member`, `provider`, `claims`, or
 `payments`). Every `match_codes` key must be a method defined for that stream in
 the update-rule catalog. Output is under
-`output/update-test-data/matchCodes/<internal-stream>/<method>/<operation>.json`.
+`output/update-test-data/matchCodes/<internal-stream>/<method>/<operation>.jsonl`.
 The corresponding QA metadata is in
-`output/metadata/matchCodes/<internal-stream>/<method>/<operation>.json`.
+`output/metadata/matchCodes/<internal-stream>/<method>/<operation>.jsonl`.
 
 ## 16. Verification cookbook
 
@@ -1856,9 +1857,9 @@ This checks JSON syntax, not schema validity.
 ### 16.3 Inspect match-code case results
 
 ```sh
-find output/update-test-data/matchCodes -type f -name '*.json' -print | sort
-find output/metadata/matchCodes -type f -name '*.json' -print | sort
-jq '.[0] | {
+find output/update-test-data/matchCodes -type f -name '*.jsonl' -print | sort
+find output/metadata/matchCodes -type f -name '*.jsonl' -print | sort
+jq -s '.[0] | {
   match_code,
   matching_method,
   operation,
@@ -1870,22 +1871,22 @@ jq '.[0] | {
   required_weight,
   total_weight,
   threshold_relation
-}' output/metadata/matchCodes/member/configured_weighted_c/weight-at-limit.json
+}' output/metadata/matchCodes/member/configured_weighted_c/weight-at-limit.jsonl
 ```
 
 For a custom field plan, use the metadata entry's `entity_record` to identify
 the corresponding source row when a creation source exists, then compare that
-source row with the entity record at the same array index. Confirm the named
+source row with the entity record at the same line index. Confirm the named
 fields appear in `changed_fields` or `removed_fields`. Metadata intentionally
 does not duplicate the source row under an `existing` key. For automatic
 operation counts, each operation has its own entity-data and metadata file;
-both array lengths are the exact requested count:
+both JSONL line counts are the exact requested count:
 
 ```sh
-jq '{operation: .[0].operation, count: length}' \
-  output/metadata/matchCodes/member/member_id_dob_gender/update.json
-jq '.[0] | {CM_MEMBER_CLIENT_ID, CM_MEMBER_FIRST_NAME, CM_MEMBER_ADDRESSES, CM_MEMBER_COB}' \
-  output/update-test-data/matchCodes/member/member_id_dob_gender/update.json
+jq -s '{operation: .[0].operation, count: length}' \
+  output/metadata/matchCodes/member/member_id_dob_gender/update.jsonl
+jq -s '.[0] | {CM_MEMBER_CLIENT_ID, CM_MEMBER_FIRST_NAME, CM_MEMBER_ADDRESSES, CM_MEMBER_COB}' \
+  output/update-test-data/matchCodes/member/member_id_dob_gender/update.jsonl
 ```
 
 ### 16.4 Validate normal creation output against schemas
